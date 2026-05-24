@@ -34,14 +34,23 @@
 - 前端入口：设置页新增“SaaS 云端账号”，支持注册、登录、同步到云端、从云端恢复。
 - 测试覆盖：API 覆盖未登录拒绝、注册、登录、权益、云同步、跨租户隔离；E2E 覆盖设置页账号试用和云同步恢复。
 
+## 第二批已落地
+
+- Postgres 数据层：新增 `pg` 适配器，配置 `DATABASE_URL` 后使用 Postgres，未配置时保留文件存储兜底。
+- 数据库迁移：新增 `migrations/0001_saas_core.sql`，覆盖账号、租户、订阅、学习快照、增量学习实体、一次性 token 和 webhook 幂等表。
+- 账号安全：新增邮箱验证 token 和密码重置 token；服务端只保存 token hash，一次性消费后不可复用。
+- 订阅 webhook：新增 `/api/billing/webhook`，使用 `BILLING_WEBHOOK_SECRET` 的 HMAC 签名校验，并记录 webhook event 防止重复处理。
+- 增量同步：新增 `/api/cloud/learning-entities`，按 `studyGoal`、`practiceSession`、`attempt`、`reviewItem`、`skillProfile` 增量 upsert 和拉取。
+- API 测试：新增邮箱验证、密码重置、订阅签名、订阅幂等、权益变更、增量同步和跨租户隔离用例。
+
 ## 仍需完成的商业化能力
 
 | 优先级 | 能力 | 上线意义 | 建议实现 |
 | --- | --- | --- | --- |
-| P0 | 正式数据库 | 文件存储不能承载真实多用户生产流量 | Postgres + migration + 数据访问适配器 |
-| P0 | 账号安全增强 | 商业化账号需要可恢复、可审计 | 邮箱验证、忘记密码、刷新 token、会话撤销 |
-| P0 | 订阅计费 | 商业化闭环必须能收费和限制权益 | Stripe/Creem 等支付集成、webhook、订阅状态同步 |
-| P0 | 云端增量同步 | 当前是整包快照，长期会变大 | 按 goal/session/attempt/review/profile 分表同步 |
+| P0 | 真实 Postgres 验证 | 本地没有真实数据库实例 | 在部署环境配置 `DATABASE_URL`，执行冷启动 smoke 和备份策略 |
+| P0 | 真实邮件服务 | 当前开发环境直接返回 token | 接入 Resend/SendGrid/SMTP，发送验证和重置邮件 |
+| P0 | 真实支付供应商 | 当前是标准化 webhook 入口 | Stripe/Creem 等支付集成、provider payload 映射、退款/取消处理 |
+| P0 | 会话治理 | 当前是 7 天 Bearer token | refresh token、会话撤销、设备列表、异常登录提醒 |
 | P1 | 内容授权后台 | 避免题库版权和内容质量风险 | 题材库、版本、来源、授权状态、下架机制 |
 | P1 | 团队/学校管理 | 面向 B 端销售必须可管理席位 | 成员邀请、班级、学习报表、角色权限 |
 | P1 | 运营后台 | 商业上线需要服务健康和用户漏斗 | 管理员仪表盘、AI 成本、错误率、活跃度 |
@@ -60,6 +69,9 @@
 - 可以把本地学习数据同步到服务端。
 - 可以从服务端恢复学习数据。
 - 未登录和跨账号不能读取他人学习数据。
+- 可以通过签名 webhook 更新订阅权益。
+- 可以按增量实体同步学习目标、练习记录、作答、错因复习和能力画像。
+- 可以用一次性 token 完成邮箱验证和密码重置。
 
 不可对外宣传口径：
 

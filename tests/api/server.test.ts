@@ -1,7 +1,7 @@
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import { buildContentSecurityPolicy, createApp } from '../../server';
-import { createInMemorySaasStore } from '../../src/server/saas';
+import { createInMemorySaasStore, signBillingWebhookPayload } from '../../src/server/saas';
 
 describe('server API', () => {
   const app = createApp();
@@ -188,6 +188,207 @@ describe('server API', () => {
       .expect(200);
 
     expect(secondCloud.body.snapshot).toBeNull();
+  });
+
+  it('supports email verification and one-time password reset without leaking raw passwords', async () => {
+    const saasApp = createApp({
+      saasStore: createInMemorySaasStore(),
+      saasSessionSecret: 'auth-hardening-secret',
+    });
+
+    const registerResponse = await request(saasApp)
+      .post('/api/auth/register')
+      .send({
+        email: 'verify-reset@example.com',
+        password: 'secure-password-1',
+        name: '安全学习者',
+        organizationName: '认证安全团队',
+      })
+      .expect(201);
+
+    expect(registerResponse.body.account.user.emailVerified).toBe(false);
+
+    const verificationRequest = await request(saasApp)
+      .post('/api/auth/email-verification/request')
+      .set('Authorization', `Bearer ${registerResponse.body.token}`)
+      .expect(200);
+
+    expect(verificationRequest.body.token).toEqual(expect.any(String));
+
+    const verifiedResponse = await request(saasApp)
+      .post('/api/auth/email-verification/confirm')
+      .send({ token: verificationRequest.body.token })
+      .expect(200);
+
+    expect(verifiedResponse.body.account.user.emailVerified).toBe(true);
+
+    await request(saasApp)
+      .post('/api/auth/email-verification/confirm')
+      .send({ token: verificationRequest.body.token })
+      .expect(400);
+
+    const resetRequest = await request(saasApp)
+      .post('/api/auth/password-reset/request')
+      .send({ email: 'verify-reset@example.com' })
+      .expect(200);
+
+    expect(resetRequest.body.token).toEqual(expect.any(String));
+
+    await request(saasApp)
+      .post('/api/auth/password-reset/confirm')
+      .send({ token: resetRequest.body.token, password: 'new-secure-password-2' })
+      .expect(200);
+
+    await request(saasApp)
+      .post('/api/auth/login')
+      .send({ email: 'verify-reset@example.com', password: 'secure-password-1' })
+      .expect(401);
+
+    await request(saasApp)
+      .post('/api/auth/login')
+      .send({ email: 'verify-reset@example.com', password: 'new-secure-password-2' })
+      .expect(200);
+  });
+
+  it('applies signed billing webhooks and rejects unsigned subscription changes', async () => {
+    const saasApp = createApp({
+      saasStore: createInMemorySaasStore(),
+      saasSessionSecret: 'billing-auth-secret',
+      billingWebhookSecret: 'billing-webhook-secret',
+    });
+
+    const registerResponse = await request(saasApp)
+      .post('/api/auth/register')
+      .send({
+        email: 'billing@example.com',
+        password: 'secure-password-1',
+        name: '付费学习者',
+        organizationName: '付费租户',
+      })
+      .expect(201);
+
+    const organizationId = registerResponse.body.account.organization.id as string;
+    const event = {
+      eventId: 'evt_subscription_001',
+      provider: 'manual-test',
+      type: 'subscription.updated',
+      organizationId,
+      tier: 'team',
+      status: 'active',
+      seats: 8,
+      aiMonthlyCredits: 12000,
+      providerCustomerId: 'cus_test_001',
+      providerSubscriptionId: 'sub_test_001',
+      currentPeriodEndsAt: new Date(Date.now() + 30 * 86400000).toISOString(),
+    };
+
+    await request(saasApp)
+      .post('/api/billing/webhook')
+      .send(event)
+      .expect(401);
+
+    const signedResponse = await request(saasApp)
+      .post('/api/billing/webhook')
+      .set('x-english-billing-signature', signBillingWebhookPayload(JSON.stringify(event), 'billing-webhook-secret'))
+      .send(event)
+      .expect(200);
+
+    expect(signedResponse.body.subscription).toMatchObject({
+      tier: 'team',
+      status: 'active',
+      seats: 8,
+      aiMonthlyCredits: 12000,
+    });
+
+    const entitlements = await request(saasApp)
+      .get('/api/billing/entitlements')
+      .set('Authorization', `Bearer ${registerResponse.body.token}`)
+      .expect(200);
+
+    expect(entitlements.body.account.entitlements).toMatchObject({
+      cloudSync: true,
+      teamSeats: 8,
+      licensedContent: true,
+      adminConsole: true,
+    });
+
+    const duplicateResponse = await request(saasApp)
+      .post('/api/billing/webhook')
+      .set('x-english-billing-signature', signBillingWebhookPayload(JSON.stringify(event), 'billing-webhook-secret'))
+      .send(event)
+      .expect(200);
+
+    expect(duplicateResponse.body.duplicate).toBe(true);
+  });
+
+  it('syncs incremental learning entities and only returns the authenticated tenant data', async () => {
+    const saasApp = createApp({
+      saasStore: createInMemorySaasStore(),
+      saasSessionSecret: 'incremental-sync-secret',
+    });
+
+    const first = await request(saasApp)
+      .post('/api/auth/register')
+      .send({
+        email: 'incremental-first@example.com',
+        password: 'secure-password-1',
+        name: '增量学习者一',
+        organizationName: '增量租户一',
+      })
+      .expect(201);
+
+    const second = await request(saasApp)
+      .post('/api/auth/register')
+      .send({
+        email: 'incremental-second@example.com',
+        password: 'secure-password-1',
+        name: '增量学习者二',
+        organizationName: '增量租户二',
+      })
+      .expect(201);
+
+    const updatedAt = new Date().toISOString();
+    await request(saasApp)
+      .put('/api/cloud/learning-entities')
+      .set('Authorization', `Bearer ${first.body.token}`)
+      .send({
+        entities: [
+          {
+            entityType: 'studyGoal',
+            entityId: 'goal-cet4-primary',
+            updatedAt,
+            payload: {
+              id: 'goal-cet4-primary',
+              targetScore: 580,
+            },
+          },
+          {
+            entityType: 'skillProfile',
+            entityId: 'cet4-reading-core',
+            updatedAt,
+            payload: {
+              id: 'cet4-reading-core',
+              score: 76,
+            },
+          },
+        ],
+      })
+      .expect(200);
+
+    const firstEntities = await request(saasApp)
+      .get('/api/cloud/learning-entities')
+      .set('Authorization', `Bearer ${first.body.token}`)
+      .expect(200);
+
+    expect(firstEntities.body.entities).toHaveLength(2);
+    expect(firstEntities.body.entities[0]).not.toHaveProperty('passwordHash');
+
+    const secondEntities = await request(saasApp)
+      .get('/api/cloud/learning-entities')
+      .set('Authorization', `Bearer ${second.body.token}`)
+      .expect(200);
+
+    expect(secondEntities.body.entities).toHaveLength(0);
   });
 
   it('returns exam registry', async () => {

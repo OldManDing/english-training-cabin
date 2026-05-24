@@ -13,6 +13,7 @@ export interface SaasUserRecord {
   passwordHash: string;
   organizationId: string;
   role: OrganizationRole;
+  emailVerifiedAt?: string;
   createdAt: string;
   updatedAt: string;
   lastLoginAt?: string;
@@ -32,6 +33,9 @@ export interface SaasSubscriptionRecord {
   status: SubscriptionStatus;
   seats: number;
   aiMonthlyCredits: number;
+  provider?: string;
+  providerCustomerId?: string;
+  providerSubscriptionId?: string;
   trialEndsAt?: string;
   currentPeriodEndsAt?: string;
   createdAt: string;
@@ -58,12 +62,45 @@ export interface CloudLearningSnapshotRecord {
   updatedAt: string;
 }
 
+export type LearningEntityType = 'studyGoal' | 'practiceSession' | 'attempt' | 'reviewItem' | 'skillProfile';
+
+export interface CloudLearningEntityRecord {
+  organizationId: string;
+  userId: string;
+  entityType: LearningEntityType;
+  entityId: string;
+  payload: unknown;
+  updatedAt: string;
+  deletedAt?: string;
+}
+
+export interface SaasOneTimeTokenRecord {
+  id: string;
+  userId: string;
+  tokenHash: string;
+  purpose: 'email_verification' | 'password_reset';
+  expiresAt: string;
+  consumedAt?: string;
+  createdAt: string;
+}
+
+export interface BillingWebhookEventRecord {
+  id: string;
+  provider: string;
+  type: string;
+  organizationId?: string;
+  receivedAt: string;
+}
+
 export interface SaasDatabaseShape {
-  schemaVersion: 1;
+  schemaVersion: 2;
   users: SaasUserRecord[];
   organizations: SaasOrganizationRecord[];
   subscriptions: SaasSubscriptionRecord[];
   learningSnapshots: CloudLearningSnapshotRecord[];
+  learningEntities: CloudLearningEntityRecord[];
+  oneTimeTokens: SaasOneTimeTokenRecord[];
+  billingWebhookEvents: BillingWebhookEventRecord[];
 }
 
 export interface SaasAccountRecord {
@@ -73,7 +110,7 @@ export interface SaasAccountRecord {
 }
 
 export interface SaasStore {
-  kind: 'memory' | 'file';
+  kind: 'memory' | 'file' | 'postgres';
   findUserByEmail(email: string): Promise<SaasUserRecord | undefined>;
   findUserById(userId: string): Promise<SaasUserRecord | undefined>;
   createAccount(input: {
@@ -90,6 +127,30 @@ export interface SaasStore {
     backup: LearningBackupSnapshot;
   }): Promise<CloudLearningSnapshotRecord>;
   getLearningSnapshot(organizationId: string, userId: string): Promise<CloudLearningSnapshotRecord | undefined>;
+  upsertLearningEntities(input: {
+    organizationId: string;
+    userId: string;
+    entities: CloudLearningEntityRecord[];
+  }): Promise<CloudLearningEntityRecord[]>;
+  listLearningEntities(input: {
+    organizationId: string;
+    userId: string;
+    since?: string;
+  }): Promise<CloudLearningEntityRecord[]>;
+  createOneTimeToken(input: {
+    userId: string;
+    purpose: SaasOneTimeTokenRecord['purpose'];
+    expiresAt: string;
+  }): Promise<{ token: string; record: SaasOneTimeTokenRecord }>;
+  consumeOneTimeToken(input: {
+    token: string;
+    purpose: SaasOneTimeTokenRecord['purpose'];
+    now: string;
+  }): Promise<SaasOneTimeTokenRecord | undefined>;
+  markUserEmailVerified(userId: string, at: string): Promise<SaasAccountRecord | undefined>;
+  updateUserPassword(userId: string, passwordHash: string, at: string): Promise<SaasAccountRecord | undefined>;
+  applyBillingEvent(input: BillingEventInput): Promise<SaasSubscriptionRecord>;
+  hasBillingEvent(provider: string, eventId: string): Promise<boolean>;
 }
 
 export interface PublicSaasAccountContext {
@@ -98,6 +159,7 @@ export interface PublicSaasAccountContext {
     email: string;
     name: string;
     role: OrganizationRole;
+    emailVerified: boolean;
   };
   organization: {
     id: string;
@@ -145,13 +207,30 @@ const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 const PASSWORD_MIN_LENGTH = 8;
 const MAX_BACKUP_BYTES = 2 * 1024 * 1024;
 
+export interface BillingEventInput {
+  eventId: string;
+  provider: string;
+  type: 'subscription.updated' | 'subscription.canceled';
+  organizationId: string;
+  tier: SubscriptionTier;
+  status: SubscriptionStatus;
+  seats: number;
+  aiMonthlyCredits: number;
+  providerCustomerId?: string;
+  providerSubscriptionId?: string;
+  currentPeriodEndsAt?: string;
+}
+
 function createEmptyDatabase(): SaasDatabaseShape {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     users: [],
     organizations: [],
     subscriptions: [],
     learningSnapshots: [],
+    learningEntities: [],
+    oneTimeTokens: [],
+    billingWebhookEvents: [],
   };
 }
 
@@ -193,6 +272,10 @@ function assertPassword(value: unknown): string {
     throw new SaasApiError(400, 'weak_password', `密码至少 ${PASSWORD_MIN_LENGTH} 位。`);
   }
   return value;
+}
+
+function hashOneTimeToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('base64url');
 }
 
 function slugifyOrganization(name: string): string {
@@ -349,6 +432,129 @@ function createStoreFromDatabase(options: {
         snapshot.organizationId === organizationId && snapshot.userId === userId,
       ));
     },
+    upsertLearningEntities(input) {
+      return mutate((db) => {
+        const nextEntities = input.entities.map((entity) => ({
+          ...entity,
+          organizationId: input.organizationId,
+          userId: input.userId,
+        }));
+
+        nextEntities.forEach((entity) => {
+          const currentIndex = db.learningEntities.findIndex((item) =>
+            item.organizationId === input.organizationId &&
+            item.userId === input.userId &&
+            item.entityType === entity.entityType &&
+            item.entityId === entity.entityId,
+          );
+          if (currentIndex >= 0) db.learningEntities[currentIndex] = entity;
+          else db.learningEntities.push(entity);
+        });
+
+        return nextEntities;
+      });
+    },
+    listLearningEntities(input) {
+      return read((db) => db.learningEntities
+        .filter((entity) =>
+          entity.organizationId === input.organizationId &&
+          entity.userId === input.userId &&
+          (!input.since || entity.updatedAt > input.since),
+        )
+        .sort((left, right) => left.updatedAt.localeCompare(right.updatedAt)));
+    },
+    createOneTimeToken(input) {
+      return mutate((db) => {
+        const token = crypto.randomBytes(32).toString('base64url');
+        const now = new Date().toISOString();
+        const record: SaasOneTimeTokenRecord = {
+          id: crypto.randomUUID(),
+          userId: input.userId,
+          tokenHash: hashOneTimeToken(token),
+          purpose: input.purpose,
+          expiresAt: input.expiresAt,
+          createdAt: now,
+        };
+        db.oneTimeTokens.push(record);
+        return { token, record };
+      });
+    },
+    consumeOneTimeToken(input) {
+      return mutate((db) => {
+        const tokenHash = hashOneTimeToken(input.token);
+        const record = db.oneTimeTokens.find((item) =>
+          item.tokenHash === tokenHash &&
+          item.purpose === input.purpose &&
+          !item.consumedAt &&
+          item.expiresAt > input.now,
+        );
+        if (!record) return undefined;
+        record.consumedAt = input.now;
+        return record;
+      });
+    },
+    markUserEmailVerified(userId, at) {
+      return mutate((db) => {
+        const user = db.users.find((item) => item.id === userId);
+        if (!user) return undefined;
+        user.emailVerifiedAt = user.emailVerifiedAt ?? at;
+        user.updatedAt = at;
+        const organization = db.organizations.find((item) => item.id === user.organizationId);
+        const subscription = db.subscriptions.find((item) => item.organizationId === user.organizationId);
+        if (!organization || !subscription) return undefined;
+        return { user, organization, subscription };
+      });
+    },
+    updateUserPassword(userId, passwordHash, at) {
+      return mutate((db) => {
+        const user = db.users.find((item) => item.id === userId);
+        if (!user) return undefined;
+        user.passwordHash = passwordHash;
+        user.updatedAt = at;
+        const organization = db.organizations.find((item) => item.id === user.organizationId);
+        const subscription = db.subscriptions.find((item) => item.organizationId === user.organizationId);
+        if (!organization || !subscription) return undefined;
+        return { user, organization, subscription };
+      });
+    },
+    applyBillingEvent(input) {
+      return mutate((db) => {
+        if (db.billingWebhookEvents.some((event) => event.id === input.eventId && event.provider === input.provider)) {
+          const existing = db.subscriptions.find((subscription) => subscription.organizationId === input.organizationId);
+          if (!existing) {
+            throw new SaasApiError(404, 'organization_not_found', '订阅所属租户不存在。');
+          }
+          return existing;
+        }
+
+        const existing = db.subscriptions.find((subscription) => subscription.organizationId === input.organizationId);
+        if (!existing) {
+          throw new SaasApiError(404, 'organization_not_found', '订阅所属租户不存在。');
+        }
+
+        const now = new Date().toISOString();
+        existing.tier = input.tier;
+        existing.status = input.status;
+        existing.seats = input.seats;
+        existing.aiMonthlyCredits = input.aiMonthlyCredits;
+        existing.provider = input.provider;
+        existing.providerCustomerId = input.providerCustomerId;
+        existing.providerSubscriptionId = input.providerSubscriptionId;
+        existing.currentPeriodEndsAt = input.currentPeriodEndsAt;
+        existing.updatedAt = now;
+        db.billingWebhookEvents.push({
+          id: input.eventId,
+          provider: input.provider,
+          type: input.type,
+          organizationId: input.organizationId,
+          receivedAt: now,
+        });
+        return existing;
+      });
+    },
+    hasBillingEvent(provider, eventId) {
+      return read((db) => db.billingWebhookEvents.some((event) => event.id === eventId && event.provider === provider));
+    },
   };
 }
 
@@ -358,7 +564,7 @@ export function createInMemorySaasStore(initial?: Partial<SaasDatabaseShape>): S
     initial: {
       ...createEmptyDatabase(),
       ...initial,
-      schemaVersion: 1,
+      schemaVersion: 2,
     },
   });
 }
@@ -366,11 +572,14 @@ export function createInMemorySaasStore(initial?: Partial<SaasDatabaseShape>): S
 function normalizeDatabaseShape(value: unknown): SaasDatabaseShape {
   const input = value && typeof value === 'object' ? value as Partial<SaasDatabaseShape> : {};
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     users: Array.isArray(input.users) ? input.users : [],
     organizations: Array.isArray(input.organizations) ? input.organizations : [],
     subscriptions: Array.isArray(input.subscriptions) ? input.subscriptions : [],
     learningSnapshots: Array.isArray(input.learningSnapshots) ? input.learningSnapshots : [],
+    learningEntities: Array.isArray(input.learningEntities) ? input.learningEntities : [],
+    oneTimeTokens: Array.isArray(input.oneTimeTokens) ? input.oneTimeTokens : [],
+    billingWebhookEvents: Array.isArray(input.billingWebhookEvents) ? input.billingWebhookEvents : [],
   };
 }
 
@@ -510,6 +719,81 @@ export async function loginSaasAccount(store: SaasStore, value: unknown): Promis
   return account;
 }
 
+export async function requestEmailVerification(store: SaasStore, userId: string): Promise<{ token: string; expiresAt: string }> {
+  const expiresAt = addDays(new Date(), 1);
+  const result = await store.createOneTimeToken({
+    userId,
+    purpose: 'email_verification',
+    expiresAt,
+  });
+  return {
+    token: result.token,
+    expiresAt,
+  };
+}
+
+export async function confirmEmailVerification(store: SaasStore, token: unknown): Promise<SaasAccountRecord> {
+  if (typeof token !== 'string' || token.length < 24 || token.length > 256) {
+    throw new SaasApiError(400, 'invalid_token', '验证链接无效。');
+  }
+  const now = new Date().toISOString();
+  const record = await store.consumeOneTimeToken({
+    token,
+    purpose: 'email_verification',
+    now,
+  });
+  if (!record) {
+    throw new SaasApiError(400, 'invalid_token', '验证链接无效或已过期。');
+  }
+  const account = await store.markUserEmailVerified(record.userId, now);
+  if (!account) {
+    throw new SaasApiError(404, 'account_not_found', '账号不存在。');
+  }
+  return account;
+}
+
+export async function requestPasswordReset(store: SaasStore, value: unknown): Promise<{ token?: string; expiresAt?: string }> {
+  const input = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const email = normalizeEmail(input.email);
+  const user = await store.findUserByEmail(email);
+  if (!user) return {};
+
+  const expiresAt = addDays(new Date(), 1);
+  const result = await store.createOneTimeToken({
+    userId: user.id,
+    purpose: 'password_reset',
+    expiresAt,
+  });
+  return {
+    token: result.token,
+    expiresAt,
+  };
+}
+
+export async function confirmPasswordReset(store: SaasStore, value: unknown): Promise<SaasAccountRecord> {
+  const input = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const token = typeof input.token === 'string' ? input.token : '';
+  const password = assertPassword(input.password);
+  if (token.length < 24 || token.length > 256) {
+    throw new SaasApiError(400, 'invalid_token', '重置链接无效。');
+  }
+
+  const now = new Date().toISOString();
+  const record = await store.consumeOneTimeToken({
+    token,
+    purpose: 'password_reset',
+    now,
+  });
+  if (!record) {
+    throw new SaasApiError(400, 'invalid_token', '重置链接无效或已过期。');
+  }
+  const account = await store.updateUserPassword(record.userId, hashPassword(password), now);
+  if (!account) {
+    throw new SaasApiError(404, 'account_not_found', '账号不存在。');
+  }
+  return account;
+}
+
 export function toPublicAccountContext(account: SaasAccountRecord): PublicSaasAccountContext {
   return {
     user: {
@@ -517,6 +801,7 @@ export function toPublicAccountContext(account: SaasAccountRecord): PublicSaasAc
       email: account.user.email,
       name: account.user.name,
       role: account.user.role,
+      emailVerified: Boolean(account.user.emailVerifiedAt),
     },
     organization: {
       id: account.organization.id,
@@ -532,6 +817,109 @@ export function toPublicAccountContext(account: SaasAccountRecord): PublicSaasAc
     },
     entitlements: buildEntitlements(account.subscription),
   };
+}
+
+const VALID_LEARNING_ENTITY_TYPES: LearningEntityType[] = ['studyGoal', 'practiceSession', 'attempt', 'reviewItem', 'skillProfile'];
+
+function validateLearningEntityType(value: unknown): LearningEntityType {
+  if (typeof value === 'string' && VALID_LEARNING_ENTITY_TYPES.includes(value as LearningEntityType)) {
+    return value as LearningEntityType;
+  }
+  throw new SaasApiError(400, 'invalid_learning_entity', '学习数据类型不支持。');
+}
+
+function validateEntityId(value: unknown): string {
+  if (typeof value !== 'string' || value.trim().length < 1 || value.length > 160) {
+    throw new SaasApiError(400, 'invalid_learning_entity', '学习数据 ID 不正确。');
+  }
+  return value.trim();
+}
+
+function validateIsoDate(value: unknown, fallback = new Date().toISOString()): string {
+  if (typeof value !== 'string') return fallback;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return date.toISOString();
+}
+
+export function validateLearningEntities(value: unknown, organizationId: string, userId: string): CloudLearningEntityRecord[] {
+  const input = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const rawEntities = Array.isArray(input.entities) ? input.entities : [];
+  if (rawEntities.length === 0 || rawEntities.length > 200) {
+    throw new SaasApiError(400, 'invalid_learning_entities', '学习数据实体数量需为 1-200。');
+  }
+
+  return rawEntities.map((item, index) => {
+    const entity = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+    const payload = entity.payload;
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw new SaasApiError(400, 'invalid_learning_entity', `entities[${index}].payload 必须是对象。`);
+    }
+    return {
+      organizationId,
+      userId,
+      entityType: validateLearningEntityType(entity.entityType),
+      entityId: validateEntityId(entity.entityId),
+      payload,
+      updatedAt: validateIsoDate(entity.updatedAt),
+      deletedAt: typeof entity.deletedAt === 'string' ? validateIsoDate(entity.deletedAt) : undefined,
+    };
+  });
+}
+
+function validateSubscriptionTier(value: unknown): SubscriptionTier {
+  if (value === 'free' || value === 'pro' || value === 'team' || value === 'enterprise') return value;
+  throw new SaasApiError(400, 'invalid_billing_event', '订阅套餐不支持。');
+}
+
+function validateSubscriptionStatus(value: unknown): SubscriptionStatus {
+  if (value === 'trialing' || value === 'active' || value === 'past_due' || value === 'canceled') return value;
+  throw new SaasApiError(400, 'invalid_billing_event', '订阅状态不支持。');
+}
+
+export function validateBillingEvent(value: unknown): BillingEventInput {
+  const input = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const type = input.type === 'subscription.canceled' ? 'subscription.canceled' : 'subscription.updated';
+  const organizationId = typeof input.organizationId === 'string' ? input.organizationId : '';
+  if (!organizationId) {
+    throw new SaasApiError(400, 'invalid_billing_event', '缺少 organizationId。');
+  }
+  const eventId = typeof input.eventId === 'string' ? input.eventId : '';
+  if (!eventId) {
+    throw new SaasApiError(400, 'invalid_billing_event', '缺少 eventId。');
+  }
+
+  return {
+    eventId,
+    provider: typeof input.provider === 'string' ? input.provider : 'manual',
+    type,
+    organizationId,
+    tier: validateSubscriptionTier(input.tier),
+    status: type === 'subscription.canceled' ? 'canceled' : validateSubscriptionStatus(input.status),
+    seats: Math.max(1, Math.min(5000, Math.round(Number(input.seats ?? 1)) || 1)),
+    aiMonthlyCredits: Math.max(0, Math.min(5_000_000, Math.round(Number(input.aiMonthlyCredits ?? 0)) || 0)),
+    providerCustomerId: typeof input.providerCustomerId === 'string' ? input.providerCustomerId : undefined,
+    providerSubscriptionId: typeof input.providerSubscriptionId === 'string' ? input.providerSubscriptionId : undefined,
+    currentPeriodEndsAt: typeof input.currentPeriodEndsAt === 'string' ? validateIsoDate(input.currentPeriodEndsAt) : undefined,
+  };
+}
+
+export function signBillingWebhookPayload(payload: string, secret: string): string {
+  return crypto.createHmac('sha256', secret).update(payload).digest('hex');
+}
+
+export function verifyBillingWebhookSignature(payload: string, signature: string | undefined, secret: string | undefined) {
+  if (!secret) {
+    throw new SaasApiError(503, 'billing_not_configured', '订阅 webhook 密钥未配置。');
+  }
+  if (!signature) {
+    throw new SaasApiError(401, 'invalid_signature', '订阅 webhook 签名缺失。');
+  }
+  const expected = Buffer.from(signBillingWebhookPayload(payload, secret));
+  const actual = Buffer.from(signature);
+  if (expected.length !== actual.length || !crypto.timingSafeEqual(expected, actual)) {
+    throw new SaasApiError(401, 'invalid_signature', '订阅 webhook 签名无效。');
+  }
 }
 
 function assertArray(value: unknown, field: string): unknown[] {

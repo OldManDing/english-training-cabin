@@ -84,12 +84,14 @@ AI_API_KEY=...
 AI_MODEL=gpt-5.4-mini
 SAAS_SESSION_SECRET=change-me-to-a-long-random-secret
 SAAS_DATA_FILE=.data/saas-store.json
+DATABASE_URL=
+BILLING_WEBHOOK_SECRET=change-me-to-a-long-random-billing-webhook-secret
 APP_URL=http://localhost:3000
 ```
 
 推荐环境变量值不加引号，以便直接用于 Docker `--env-file`；服务端也兼容已有的带引号配置。AI 接口按 OpenAI-compatible `/v1/chat/completions` 调用。应用侧 API 使用 `/api/ai/generate-passage` 和 `/api/ai/analyze-speech`；旧版 `/api/gemini/*` 路径仅作为兼容别名保留。没有可用供应商配置时，AI 阅读生成和口语分析接口会返回离线模拟结果，保证核心训练闭环可用。
 
-`SAAS_SESSION_SECRET` 用于签发登录会话，生产环境必须设置为高强度随机字符串；`SAAS_DATA_FILE` 是当前第一阶段 SaaS 基座的服务端账号、租户、订阅和云端学习快照文件存储路径，后续商业化版本应迁移到 Postgres。
+`SAAS_SESSION_SECRET` 用于签发登录会话，生产环境必须设置为高强度随机字符串；`DATABASE_URL` 存在时服务端会使用 Postgres SaaS 存储并自动执行 `0001_saas_core` 扩展迁移，否则使用 `SAAS_DATA_FILE` 文件存储作为本地兜底。`BILLING_WEBHOOK_SECRET` 用于校验订阅 webhook 的 HMAC 签名。
 
 ## SaaS 基座 API
 
@@ -99,7 +101,10 @@ APP_URL=http://localhost:3000
 - `POST /api/auth/login`：登录并返回 Bearer token。
 - `GET /api/auth/me`：读取当前账号、租户和订阅权益。
 - `GET /api/billing/entitlements`：读取当前订阅权益。
+- `POST /api/billing/webhook`：接收带 HMAC 签名的订阅状态变更事件。
 - `PUT /api/cloud/learning-data`：把当前浏览器学习数据备份同步到服务端。
 - `GET /api/cloud/learning-data`：从服务端读取当前用户自己的学习数据快照。
+- `PUT /api/cloud/learning-entities`：按实体增量同步目标、练习、作答、复习和能力画像。
+- `GET /api/cloud/learning-entities`：按用户和租户读取增量学习实体。
 
-当前云同步是整包学习快照，适合从 MVP 迁移到 SaaS 的第一阶段验证；正式商业化应升级为 Postgres 分表、增量同步、支付 webhook 和团队权限体系。
+当前已具备 Postgres schema、整包快照、增量实体同步、订阅 webhook、邮箱验证 token 和密码重置 token 的服务端基础。正式商业化还需要接入真实邮件服务、支付供应商控制台、团队邀请和运营后台。

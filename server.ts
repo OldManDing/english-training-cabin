@@ -18,6 +18,8 @@ import {
 } from './src/domain/practice/reports';
 import { MistakeReason, ReviewItem, SkillArea, SkillProfile, StudyGoal } from './src/types';
 import {
+  confirmEmailVerification,
+  confirmPasswordReset,
   createFileSaasStore,
   createInMemorySaasStore,
   getDefaultSaasDataFile,
@@ -25,15 +27,22 @@ import {
   issueSessionToken,
   loginSaasAccount,
   registerSaasAccount,
+  requestEmailVerification,
+  requestPasswordReset,
   SaasAccountRecord,
   SaasApiError,
   SaasSessionPayload,
   SaasStore,
+  signBillingWebhookPayload,
   summarizeLearningSnapshot,
   toPublicAccountContext,
+  validateBillingEvent,
+  validateLearningEntities,
   validateLearningBackup,
+  verifyBillingWebhookSignature,
   verifySessionToken,
 } from './src/server/saas';
+import { createPostgresSaasStore } from './src/server/saas-postgres';
 
 if (process.env.NODE_ENV !== 'test') {
   dotenv.config({ path: ['.env.local', '.env'] });
@@ -656,6 +665,7 @@ function buildMockSubjectiveAnalysis(moduleId: 'writing' | 'translation', answer
 export interface CreateAppOptions {
   saasStore?: SaasStore;
   saasSessionSecret?: string | null;
+  billingWebhookSecret?: string;
 }
 
 type AuthenticatedSaasContext = {
@@ -666,6 +676,10 @@ type AuthenticatedSaasContext = {
 function createDefaultSaasStore(): SaasStore {
   if (process.env.NODE_ENV === 'test') {
     return createInMemorySaasStore();
+  }
+  const databaseUrl = readEnvironmentValue('DATABASE_URL');
+  if (databaseUrl) {
+    return createPostgresSaasStore(databaseUrl);
   }
   return createFileSaasStore(getDefaultSaasDataFile());
 }
@@ -702,6 +716,7 @@ export function createApp(options: CreateAppOptions = {}) {
   const authLimiter = createRateLimiter(15, 60_000);
   const saasStore = options.saasStore ?? createDefaultSaasStore();
   const saasSessionSecret = options.saasSessionSecret ?? getSaasSessionSecret();
+  const billingWebhookSecret = options.billingWebhookSecret ?? readEnvironmentValue('BILLING_WEBHOOK_SECRET');
 
   app.disable('x-powered-by');
   app.use((req, res, next) => {
@@ -800,6 +815,45 @@ export function createApp(options: CreateAppOptions = {}) {
     });
   }));
 
+  app.post('/api/auth/email-verification/request', requireSaasAuth, authLimiter, asyncRoute(async (_req, res) => {
+    const { account } = getSaasContext(res);
+    const result = await requestEmailVerification(saasStore, account.user.id);
+    res.json({
+      delivery: process.env.NODE_ENV === 'production' ? 'email' : 'development-token',
+      expiresAt: result.expiresAt,
+      token: process.env.NODE_ENV === 'production' ? undefined : result.token,
+    });
+  }));
+
+  app.post('/api/auth/email-verification/confirm', authLimiter, asyncRoute(async (req, res) => {
+    const secret = requireSaasSessionSecret(saasSessionSecret);
+    const account = await confirmEmailVerification(saasStore, req.body?.token);
+    const token = issueSessionToken(account, secret);
+    res.json({
+      token,
+      account: toPublicAccountContext(account),
+    });
+  }));
+
+  app.post('/api/auth/password-reset/request', authLimiter, asyncRoute(async (req, res) => {
+    const result = await requestPasswordReset(saasStore, req.body);
+    res.json({
+      delivery: process.env.NODE_ENV === 'production' ? 'email' : 'development-token',
+      expiresAt: result.expiresAt,
+      token: process.env.NODE_ENV === 'production' ? undefined : result.token,
+    });
+  }));
+
+  app.post('/api/auth/password-reset/confirm', authLimiter, asyncRoute(async (req, res) => {
+    const secret = requireSaasSessionSecret(saasSessionSecret);
+    const account = await confirmPasswordReset(saasStore, req.body);
+    const token = issueSessionToken(account, secret);
+    res.json({
+      token,
+      account: toPublicAccountContext(account),
+    });
+  }));
+
   app.get('/api/auth/me', requireSaasAuth, asyncRoute(async (_req, res) => {
     const { account } = getSaasContext(res);
     res.json({ account: toPublicAccountContext(account) });
@@ -813,6 +867,19 @@ export function createApp(options: CreateAppOptions = {}) {
     const { account } = getSaasContext(res);
     res.json({
       account: toPublicAccountContext(account),
+    });
+  }));
+
+  app.post('/api/billing/webhook', asyncRoute(async (req, res) => {
+    const rawPayload = JSON.stringify(req.body ?? {});
+    verifyBillingWebhookSignature(rawPayload, req.get('x-english-billing-signature'), billingWebhookSecret);
+    const event = validateBillingEvent(req.body);
+    const duplicate = await saasStore.hasBillingEvent(event.provider, event.eventId);
+    const subscription = await saasStore.applyBillingEvent(event);
+    res.json({
+      received: true,
+      duplicate,
+      subscription,
     });
   }));
 
@@ -845,6 +912,32 @@ export function createApp(options: CreateAppOptions = {}) {
     res.json({
       snapshot: summarizeLearningSnapshot(snapshot),
     });
+  }));
+
+  app.get('/api/cloud/learning-entities', requireSaasAuth, asyncRoute(async (req, res) => {
+    const { account } = getSaasContext(res);
+    const entities = await saasStore.listLearningEntities({
+      organizationId: account.organization.id,
+      userId: account.user.id,
+      since: typeof req.query.since === 'string' ? req.query.since : undefined,
+    });
+    res.json({ entities });
+  }));
+
+  app.put('/api/cloud/learning-entities', requireSaasAuth, asyncRoute(async (req, res) => {
+    const { account } = getSaasContext(res);
+    const context = toPublicAccountContext(account);
+    if (!context.entitlements.cloudSync) {
+      throw new SaasApiError(403, 'cloud_sync_disabled', '当前订阅暂未开通云同步。');
+    }
+
+    const entities = validateLearningEntities(req.body, account.organization.id, account.user.id);
+    const saved = await saasStore.upsertLearningEntities({
+      organizationId: account.organization.id,
+      userId: account.user.id,
+      entities,
+    });
+    res.json({ entities: saved });
   }));
 
   app.post('/api/study/daily-plan', (req, res) => {
