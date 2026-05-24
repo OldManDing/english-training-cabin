@@ -7,12 +7,12 @@ export default defineConfig({
     timeout: 5_000,
   },
   use: {
-    baseURL: 'http://127.0.0.1:3100',
+    baseURL: 'http://127.0.0.1:3310',
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: 'cmd /c "set PORT=3100&& npm.cmd start"',
-    url: 'http://127.0.0.1:3100/api/health',
+    command: 'cmd /c "set PORT=3310&& npm.cmd start"',
+    url: 'http://127.0.0.1:3310/api/health',
     reuseExistingServer: false,
     timeout: 20_000,
   },

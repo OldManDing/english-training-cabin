@@ -340,7 +340,7 @@ export default function SpeakingTraining({ onUpdateProgress }: SpeakingTrainingP
             )}
             {step === 4 && (
               <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full text-xs font-semibold text-slate-500">
-                <span>📅 2024年5月12日 训练片段</span>
+                <span>本次训练片段</span>
               </div>
             )}
           </div>

@@ -257,7 +257,7 @@ export default function TodayDashboard({
                         词汇与错题巩固
                       </h4>
                       <p className="text-xs text-gray-400 font-bold mt-0.5">
-                        {Math.max(reviewItemCount, reviewTask ? 1 : 0)} 个待处理项目
+                        {reviewItemCount > 0 ? `${reviewItemCount} 个待处理项目` : '完成训练后自动生成复习项'}
                       </p>
                     </div>
                   </div>
@@ -430,7 +430,7 @@ export default function TodayDashboard({
                     <BookMarked className="h-5.5 w-5.5 text-[#003178]" />
                   </div>
                   <span className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white font-black text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-white">
-                    {reviewItemCount || 12}
+                    {reviewItemCount}
                   </span>
                 </div>
                 <div>
@@ -438,7 +438,7 @@ export default function TodayDashboard({
                     待复习词汇/错题
                   </h4>
                   <p className="text-[10px] text-gray-400 font-bold mt-0.5">
-                    建议在今日内完成
+                    {reviewItemCount > 0 ? '建议在今日内完成' : '练习后生成真实错因'}
                   </p>
                 </div>
               </div>
@@ -464,7 +464,7 @@ export default function TodayDashboard({
                 >
                   <div>
                     <h5 className="font-extrabold text-xs text-[#003178]">高效模式</h5>
-                    <p className="text-[10px] text-gray-400 font-semibold mt-0.5">全仿真环境，加入干扰项</p>
+                    <p className="text-[10px] text-gray-400 font-semibold mt-0.5">限时训练，强化干扰项辨析</p>
                   </div>
                   <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
                     strategy === 'efficient' ? 'border-[#003178] bg-[#003178]' : 'border-slate-350 bg-white'

@@ -28,8 +28,8 @@ export default function Sidebar({ activeTab, setActiveTab, examCountdown, onTrig
             学
           </div>
           <div className="overflow-hidden">
-            <h1 className="font-bold text-sm text-[#003178] tracking-tight truncate">学习驾驶员</h1>
-            <p className="text-[11px] text-[#434652] font-medium mt-0.5">Level 12 活跃中</p>
+            <h1 className="font-bold text-sm text-[#003178] tracking-tight truncate">英语训练舱</h1>
+            <p className="text-[11px] text-[#434652] font-medium mt-0.5">本地学习中</p>
           </div>
         </div>
 
@@ -85,7 +85,7 @@ export default function Sidebar({ activeTab, setActiveTab, examCountdown, onTrig
               if (onTriggerModal) {
                 onTriggerModal(
                   "使用帮助",
-                  "本超级智能备考舱全天候为您备战四级！\n\n1. 随时点击右上角的“CET-4 AI 备考教练”或今日标题旁的“AI自适应能力诊断”开启自适应能力测评。\n\n2. 点击左侧导航在各项强化课、精听长对话、口语智能纠错重说和错题库间自由探索。\n\n学习记录默认保存在当前浏览器 IndexedDB 中；启用 AI 分析时会发送必要文本用于生成反馈。祝您顺利攻克大学英语四级考试！"
+                  "英语训练舱当前聚焦 CET-4 首发场景，并按多考试训练系统预留架构。\n\n1. 点击今日标题旁的“AI自适应能力诊断”开启能力测评。\n\n2. 点击左侧导航在专项练习、精听长对话、口语纠错重说和错题复习间切换。\n\n学习记录默认保存在当前浏览器 IndexedDB 中；启用 AI 分析时会发送必要文本用于生成反馈。"
                 );
               }
             }}

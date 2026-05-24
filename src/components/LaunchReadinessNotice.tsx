@@ -5,7 +5,7 @@ interface LaunchReadinessNoticeProps {
   onOpen: (title: string, body: string) => void;
 }
 
-const privacyCopy = `本产品当前是本地优先 MVP：目标、练习记录、错题复习队列和能力画像默认保存在当前浏览器 IndexedDB 中。
+const privacyCopy = `本产品采用本地优先设计：目标、练习记录、错题复习队列和能力画像默认保存在当前浏览器 IndexedDB 中。
 
 AI 阅读生成和口语分析会把必要的题目话题或口语文本发送给已配置的 AI 供应商处理。请不要输入身份证号、手机号、学校账号密码等敏感信息。
 

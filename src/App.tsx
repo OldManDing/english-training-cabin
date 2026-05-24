@@ -61,6 +61,19 @@ export default function App() {
   const [speakingScoreChange, setSpeakingScoreChange] = useState<{ from: number; to: number } | undefined>(undefined);
   const examCountdown = getDaysRemaining(activeGoal?.examDate);
 
+  const refreshStudyState = async () => {
+    const [goal, reviewItems, skillProfiles] = await Promise.all([
+      getOrCreateActiveGoal(),
+      loadReviewItems(),
+      loadSkillProfiles(),
+    ]);
+    setActiveGoal(goal);
+    setTargetScoreLimit(goal.targetScore);
+    setReviewItemCount(reviewItems.length);
+    setPersistedReviewItems(reviewItems);
+    setPersistedSkillProfiles(skillProfiles);
+  };
+
   useEffect(() => {
     if (!activeGoal) return;
 
@@ -125,7 +138,7 @@ export default function App() {
       });
   };
 
-  const handleSaveSettings = (settings: {
+  const handleSaveSettings = async (settings: {
     examType: string;
     examDate: string;
     prepareSpeaking: boolean;
@@ -136,22 +149,22 @@ export default function App() {
       ? ['reading', 'listening', 'speaking']
       : ['reading', 'listening'];
 
-    upsertActiveGoal({
+    try {
+      const goal = await upsertActiveGoal({
       examId: settings.examType === 'CET-4' ? 'cet4' : settings.examType.toLowerCase(),
       examDate: settings.examDate,
       targetScore: settings.targetScore,
       dailyMinutes: settings.dailyTargetMinutes,
       prioritySkills,
-    })
-      .then((goal) => {
-        setActiveGoal(goal);
-        setTargetScoreLimit(goal.targetScore);
-      })
-      .catch((error) => {
-        console.error('Failed to save study settings:', error);
-        trackTelemetry('client_error', { area: 'study_settings_save' });
-        handleTriggerModal('学习计划保存失败', '设置已在当前页面生效，但没有成功写入本地数据库。');
       });
+      setActiveGoal(goal);
+      setTargetScoreLimit(goal.targetScore);
+    } catch (error) {
+      console.error('Failed to save study settings:', error);
+      trackTelemetry('client_error', { area: 'study_settings_save' });
+      handleTriggerModal('学习计划保存失败', '设置已在当前页面生效，但没有成功写入本地数据库。');
+      throw error;
+    }
   };
 
   // Available passages list for the 'practice' tab
@@ -280,7 +293,7 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
                   仔细阅读专项突破库
                 </h2>
                 <p className="text-xs text-gray-500 mt-1">
-                  选择下方核心文章开始真题特训。AI 教练会对你的答对信心及犹豫时长进行全方位诊断。
+                  选择下方原创模拟文章开始训练。系统会记录答题结果、信心和错因，用于生成复习队列。
                 </p>
               </header>
             </div>
@@ -355,6 +368,7 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
             onSave={handleSaveSettings}
             onSetScoreLimit={handleSetGoalTarget}
             onTriggerModal={handleTriggerModal}
+            onDataRestored={refreshStudyState}
           />
         );
       default:
@@ -438,7 +452,7 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
                   className="px-4.5 py-2.5 bg-[#003178] hover:bg-[#07244f] text-white rounded-2xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer border border-[#cfe6f2] shadow-2xs hover:scale-[1.03]"
                 >
                   <GraduationCap className="h-4.5 w-4.5 text-emerald-300 animate-pulse shrink-0" />
-                  <span>CET-4 AI 备考教练</span>
+                  <span>AI 英语能力教练</span>
                 </button>
               </div>
             )}

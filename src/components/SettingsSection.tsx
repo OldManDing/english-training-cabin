@@ -1,16 +1,30 @@
 import React, { useEffect, useState } from 'react';
-import { Flag, LayoutGrid, Target, Calendar, Check, Lock, Sparkles, Sliders, ChevronDown, Save, Sparkle, RefreshCw } from 'lucide-react';
+import { Flag, LayoutGrid, Target, Calendar, Check, Lock, Sparkles, Sliders, ChevronDown, Save, Sparkle, RefreshCw, Database, Download, Upload } from 'lucide-react';
+import { exportLearningData, importLearningData } from '../lib/storage/db';
 
 interface SettingsSectionProps {
-  onSave?: (settings: any) => void;
+  onSave?: (settings: {
+    examType: string;
+    examDate: string;
+    prepareSpeaking: boolean;
+    readingLevel: number;
+    listeningLevel: number;
+    translationLevel: number;
+    writingLevel: number;
+    speakingLevel: number;
+    targetScore: number;
+    dailyTargetMinutes: number;
+    whisperNoiseReduction: boolean;
+  }) => void | Promise<void>;
   targetScoreLimit?: number;
   initialExamDate?: string;
   initialDailyMinutes?: number;
   onSetScoreLimit?: (score: number) => void;
   onTriggerModal?: (title: string, body: string) => void;
+  onDataRestored?: () => Promise<void>;
 }
 
-export default function SettingsSection({ onSave, targetScoreLimit = 550, initialExamDate, initialDailyMinutes, onSetScoreLimit, onTriggerModal }: SettingsSectionProps) {
+export default function SettingsSection({ onSave, targetScoreLimit = 550, initialExamDate, initialDailyMinutes, onSetScoreLimit, onTriggerModal, onDataRestored }: SettingsSectionProps) {
   // Local Settings States matching the screenshot
   const [examType, setExamType] = useState<string>("CET-4");
   const [examDate, setExamDate] = useState<string>(initialExamDate ?? "2026-06-15");
@@ -51,34 +65,89 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
     }, 4000);
   };
 
-  const handleSaveSettings = () => {
-    if (onSetScoreLimit) {
-      onSetScoreLimit(targetScore);
-    }
+  const getSettingsPayload = () => ({
+    examType,
+    examDate,
+    prepareSpeaking,
+    readingLevel,
+    listeningLevel,
+    translationLevel,
+    writingLevel,
+    speakingLevel,
+    targetScore,
+    dailyTargetMinutes,
+    whisperNoiseReduction,
+  });
+
+  const persistCurrentSettings = async () => {
     if (onSave) {
-      onSave({
-        examType,
-        examDate,
-        prepareSpeaking,
-        readingLevel,
-        listeningLevel,
-        translationLevel,
-        writingLevel,
-        speakingLevel,
-        targetScore,
-        dailyTargetMinutes,
-        whisperNoiseReduction
-      });
+      await onSave(getSettingsPayload());
+      return;
     }
-    triggerToast("✨ 备考特征已保存，并成功同步至 AI 自适应强化中心！");
+    onSetScoreLimit?.(targetScore);
   };
 
-  const handleGeneratePlan = () => {
+  const handleSaveSettings = async () => {
+    try {
+      await persistCurrentSettings();
+      triggerToast("训练目标已保存到当前浏览器，今日计划会随目标更新。");
+    } catch (error) {
+      console.error('Failed to save study settings:', error);
+      triggerToast("保存失败：当前浏览器暂时无法写入学习目标。");
+    }
+  };
+
+  const handleGeneratePlan = async () => {
     setIsGeneratingPlan(true);
-    setTimeout(() => {
+    try {
+      await persistCurrentSettings();
+      triggerToast("今日训练计划已根据当前目标、时间和口语开关更新。");
+    } catch (error) {
+      console.error('Failed to regenerate study plan:', error);
+      triggerToast("计划更新失败：请先检查目标设置是否可保存。");
+    } finally {
       setIsGeneratingPlan(false);
-      triggerToast("🚀 AI 备考引擎已成功重新规划并为您生成专属学习大纲！");
-    }, 1500);
+    }
+  };
+
+  const handleExportLearningData = async () => {
+    try {
+      const backup = await exportLearningData();
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      const date = backup.exportedAt.slice(0, 10);
+      anchor.href = url;
+      anchor.download = `英语训练舱-学习数据备份-${date}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      triggerToast('学习数据备份已导出，请妥善保存文件。');
+    } catch (error) {
+      console.error('Failed to export learning data:', error);
+      triggerToast('学习数据导出失败，请稍后重试。');
+    }
+  };
+
+  const handleRestoreLearningData = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      triggerToast('备份文件超过 2 MB，请确认文件是否正确。');
+      return;
+    }
+
+    try {
+      const backup = JSON.parse(await file.text()) as unknown;
+      const restored = await importLearningData(backup);
+      await onDataRestored?.();
+      const summary = `恢复完成：目标 ${restored.studyGoals} 项、练习 ${restored.practiceSessions} 组、错题复习 ${restored.reviewItems} 项、能力画像 ${restored.skillProfiles} 项。`;
+      onTriggerModal?.('学习数据恢复完成', summary);
+      triggerToast('学习数据已恢复到当前浏览器。');
+    } catch (error) {
+      console.error('Failed to restore learning data:', error);
+      triggerToast('恢复失败：请导入由英语训练舱导出的有效 JSON 备份。');
+    }
   };
 
   // Helper arrays
@@ -103,7 +172,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
     intensityText = "强力";
     intensityPercent = 95;
     intensityColor = "bg-rose-600 animate-pulse";
-    intensityStrategy = "狂暴真题超频复习方案";
+    intensityStrategy = "高强度限时训练与错因复盘方案";
   } else if (dailyTargetMinutes >= 60) {
     intensityText = "中等";
     intensityPercent = 65;
@@ -167,8 +236,8 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                       onChange={(e) => setExamType(e.target.value)}
                       className="w-full text-xs font-bold rounded-xl border border-[#c3c6d4] px-4 py-3 bg-[#f8fafc] text-[#003178] appearance-none focus:outline-none focus:ring-1 focus:ring-[#003178] cursor-pointer"
                     >
-                      <option value="CET-4">CET-4 (四级高频词 + 历年精听突破)</option>
-                      <option value="CET-6">CET-6 (六级强化 + 精听真题库)</option>
+                      <option value="CET-4">CET-4 (四级核心能力训练)</option>
+                      <option value="CET-6" disabled>CET-6 (规划中，当前版本暂未开放)</option>
                     </select>
                     <ChevronDown className="h-4 w-4 absolute right-3.5 top-3.5 text-[#434652] pointer-events-none" />
                   </div>
@@ -307,10 +376,10 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                       onChange={(e) => setDailyTargetMinutes(parseInt(e.target.value))}
                       className="w-full text-xs font-bold rounded-xl border border-[#c3c6d4] px-4 py-3 bg-[#f8fafc] text-[#003178] appearance-none focus:outline-none focus:ring-1 focus:ring-[#003178] cursor-pointer"
                     >
-                      <option value="30">30 分钟 (高效摸鱼流)</option>
+                      <option value="30">30 分钟 (轻量保持)</option>
                       <option value="45">45 分钟 (主力冲刺流)</option>
-                      <option value="60">60 分钟 (学霸爆肝流)</option>
-                      <option value="90">90 分钟 (狂暴逆天改命流)</option>
+                      <option value="60">60 分钟 (稳定提升)</option>
+                      <option value="90">90 分钟 (高强度冲刺)</option>
                     </select>
                     <ChevronDown className="h-4 w-4 absolute right-3.5 top-3.5 text-[#434652] pointer-events-none" />
                   </div>
@@ -318,8 +387,8 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
 
                 <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
                   <div className="flex flex-col">
-                    <span className="text-xs font-bold text-[#003178]">口语降噪增强模式</span>
-                    <span className="text-[10px] text-gray-400 mt-0.5">自适应分析麦克风噪声，使影子口语发音评估准确度显著提升 15%</span>
+                    <span className="text-xs font-bold text-[#003178]">口语录音质量提醒</span>
+                    <span className="text-[10px] text-gray-400 mt-0.5">开启后会在口语训练中提示尽量使用安静环境和清晰麦克风。</span>
                   </div>
                   <button
                     onClick={() => setWhisperNoiseReduction(!whisperNoiseReduction)}
@@ -334,6 +403,37 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                     />
                   </button>
                 </div>
+              </div>
+            </div>
+
+            <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-6.5 shadow-sm space-y-4">
+              <h3 className="text-sm font-black text-[#003178] flex items-center gap-2">
+                <Database className="h-4 w-4 text-[#003178]" />
+                本地数据保险箱
+              </h3>
+              <p className="text-[11px] leading-5 text-[#434652] font-semibold">
+                学习记录默认仅保存在当前浏览器。导出备份可用于更换设备前留存进度；恢复备份会覆盖当前浏览器中的学习记录。
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={handleExportLearningData}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#cfe6f2] bg-[#f7fbff] px-4 py-3 text-xs font-black text-[#003178] transition hover:bg-[#eef7fc]"
+                >
+                  <Download className="h-4 w-4" />
+                  导出学习数据
+                </button>
+                <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#003178] px-4 py-3 text-xs font-black text-white transition hover:bg-[#07244f]">
+                  <Upload className="h-4 w-4" />
+                  恢复学习数据
+                  <input
+                    data-testid="restore-learning-data-input"
+                    type="file"
+                    accept="application/json,.json"
+                    className="hidden"
+                    onChange={handleRestoreLearningData}
+                  />
+                </label>
               </div>
             </div>
 
@@ -418,7 +518,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
 
                 <div className="flex items-center justify-center gap-1.5 text-[9.5px] text-[#434652] font-bold opacity-80">
                   <Lock className="h-3 w-3 text-[#003178]" />
-                  <span>AI 引擎正在计算</span>
+                  <span>根据本地目标和练习证据更新</span>
                 </div>
               </div>
 
@@ -438,7 +538,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
           <a href="#privacy" onClick={(e) => { 
             e.preventDefault(); 
             if (onTriggerModal) {
-              onTriggerModal("隐私保障协议", "备考训练舱极其看重您的数据隐私：\n\n1. 练习记录、错题复习队列、目标设置和能力画像默认保存在当前浏览器 IndexedDB 中；更换浏览器、清空浏览器数据或更换设备后可能无法自动恢复。\n\n2. 口语录音文件不上传；若您点击口语 AI 分析，页面会把口语文本发送到本服务端并转交已配置的 AI 供应商处理。请不要输入身份证号、手机号、学校账号密码等敏感信息。");
+              onTriggerModal("隐私保障协议", "英语训练舱重视您的数据隐私：\n\n1. 练习记录、错题复习队列、目标设置和能力画像默认保存在当前浏览器 IndexedDB 中；更换浏览器、清空浏览器数据或更换设备后可能无法自动恢复。\n\n2. 口语录音文件不上传；若您点击口语 AI 分析，页面会把口语文本发送到本服务端并转交已配置的 AI 供应商处理。请不要输入身份证号、手机号、学校账号密码等敏感信息。");
             } else {
               triggerToast("隐私协议：学习记录默认保存在当前浏览器，AI 分析会发送必要文本。");
             }
@@ -447,18 +547,18 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
           <a href="#terms" onClick={(e) => { 
             e.preventDefault(); 
             if (onTriggerModal) {
-              onTriggerModal("服务条款说明", "欢迎使用智能备考备考舱服务：\n\n1. 本训练舱旨在通过 AI 算力与自然语言能力优化，为广大学子提供高水准、自适应、定制化的四六级听说读写一栈式备考辅助。\n\n2. 用户在使用影子口语重说等模块时建议使用高质量麦克风以便获得最佳体验。");
+              onTriggerModal("服务条款说明", "欢迎使用英语训练舱：\n\n1. 本训练舱通过自适应计划、错因复习和 AI 反馈，辅助用户完成英语听说读写训练。\n\n2. 用户在使用影子跟读、口语重说等模块时，建议使用安静环境和清晰麦克风以获得更稳定的反馈。");
             } else {
-              triggerToast("服务条款：本系统由 AI 开发并为您的大学英语四六级考试提供自适应答疑服务。");
+              triggerToast("服务条款：本系统为大学英语训练提供自适应练习和反馈。");
             }
           }} className="hover:text-[#003178] transition-colors">服务条款</a>
           <span>•</span>
           <a href="#developer" onClick={(e) => { 
             e.preventDefault(); 
             if (onTriggerModal) {
-              onTriggerModal("开发者资源中心", "大学英语超级智能自适应备考训练舱由 AI 全栈式开发，结合了 React 超高密度单网页架构与 Antigravity 极致性能底色。我们的目标是运用 AI 自适应和记忆周期算法改变每一个学子的复习逻辑。祝您顺利斩获高分！");
+              onTriggerModal("开发者资源中心", "英语训练舱采用 React、TypeScript、Vite、Dexie 与 Express 构建，当前重点是验证本地优先学习闭环、错因复习、材料导入和 AI 反馈接口。后续可继续扩展账号、云同步、多考试配置和更完整的内容授权体系。");
             } else {
-              triggerToast("开发者中心：欢迎使用超级自适应 CET-4 备考舱。本产品基于 Antigravity 强劲架构。");
+              triggerToast("开发者中心：当前版本聚焦本地优先学习闭环与 AI 反馈接口。");
             }
           }} className="hover:text-[#003178] transition-colors">开发者中心</a>
         </div>

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 
 test('MVP critical reading flow persists local learning evidence', async ({ page }) => {
   await page.goto('/');
@@ -46,6 +47,20 @@ test('MVP critical reading flow persists local learning evidence', async ({ page
   expect(counts.attempts).toBe(5);
   expect(counts.reviewItems).toBeGreaterThan(0);
   expect(counts.skillProfiles).toBe(1);
+});
+
+test('application shell loads without browser console errors', async ({ page }) => {
+  const consoleErrors: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') {
+      consoleErrors.push(message.text());
+    }
+  });
+
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: '今日训练' })).toBeVisible();
+
+  expect(consoleErrors).toEqual([]);
 });
 
 test('API health, planning, and AI contracts are reachable from production build', async ({ request }) => {
@@ -119,7 +134,7 @@ test('all MVP sections render their primary controls', async ({ page }) => {
 
   await page.getByRole('button', { name: '复习队列' }).click();
   await expect(page.getByRole('heading', { name: '复习队列' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '开始复习' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /开始复习|体验示例复习/ })).toBeVisible();
 
   await page.getByRole('button', { name: '口语重说' }).click();
   await expect(page.getByRole('heading', { name: /口语重说/ })).toBeVisible();
@@ -136,4 +151,105 @@ test('all MVP sections render their primary controls', async ({ page }) => {
   await page.getByRole('button', { name: '设置' }).click();
   await expect(page.getByRole('heading', { name: '目标与计划设置' })).toBeVisible();
   await expect(page.getByRole('button', { name: '保存设置' })).toBeVisible();
+});
+
+test('local learning data can be exported and restored from settings', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => indexedDB.deleteDatabase('english-training-cabin'));
+  await page.reload();
+
+  await page.getByRole('button', { name: '设置' }).click();
+  await expect(page.getByRole('heading', { name: '本地数据保险箱' })).toBeVisible();
+
+  const download = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: '导出学习数据' }).click(),
+  ]).then(([downloadEvent]) => downloadEvent);
+  const downloadPath = await download.path();
+  expect(downloadPath).toBeTruthy();
+  const exported = JSON.parse(await readFile(downloadPath!, 'utf-8'));
+
+  expect(exported).toMatchObject({
+    app: 'english-training-cabin',
+    schemaVersion: 1,
+  });
+  expect(exported.data.studyGoals.length).toBeGreaterThan(0);
+
+  const backup = {
+    app: 'english-training-cabin',
+    schemaVersion: 1,
+    exportedAt: new Date().toISOString(),
+    data: {
+      studyGoals: [
+        {
+          id: 'goal-restored',
+          examId: 'cet4',
+          examDate: '2026-12-12',
+          targetScore: 605,
+          dailyMinutes: 45,
+          prioritySkills: ['reading', 'speaking'],
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ],
+      practiceSessions: [],
+      attempts: [],
+      reviewItems: [
+        {
+          id: 'review-restored',
+          title: '恢复测试错因',
+          category: '错题',
+          detail: '用于验证本地备份恢复链路。',
+          daysAgo: 0,
+          targetType: 'question',
+          targetId: 'q-restored',
+          examId: 'cet4',
+          moduleId: 'reading',
+          skillArea: 'reading',
+          masteryScore: 35,
+          priorityScore: 90,
+          reviewIntervalDays: 1,
+          nextReviewAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+        },
+      ],
+      skillProfiles: [],
+    },
+  };
+
+  await page.getByTestId('restore-learning-data-input').setInputFiles({
+    name: 'learning-backup.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(backup)),
+  });
+
+  await expect(page.getByRole('heading', { name: '学习数据恢复完成' })).toBeVisible();
+
+  const restored = await page.evaluate(async () => {
+    function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
+      return new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('english-training-cabin');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const tx = db.transaction(['studyGoals', 'reviewItems'], 'readonly');
+    const goal = await requestToPromise(tx.objectStore('studyGoals').get('goal-restored'));
+    const reviewCount = await requestToPromise(tx.objectStore('reviewItems').count());
+    db.close();
+    return { goal, reviewCount };
+  });
+
+  expect(restored.goal).toMatchObject({
+    id: 'goal-restored',
+    targetScore: 605,
+    dailyMinutes: 45,
+  });
+  expect(restored.reviewCount).toBe(1);
 });

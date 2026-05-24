@@ -201,4 +201,41 @@ describe('server API', () => {
     expect(policy).not.toContain("script-src 'self' 'unsafe-inline'");
     expect(policy).not.toContain('ws://127.0.0.1');
   });
+
+  it('accepts quoted AI environment values passed through Docker env files', async () => {
+    const previous = {
+      allowLive: process.env.ALLOW_LIVE_AI_IN_TESTS,
+      provider: process.env.AI_PROVIDER,
+      baseUrl: process.env.AI_BASE_URL,
+      apiKey: process.env.AI_API_KEY,
+      model: process.env.AI_MODEL,
+    };
+
+    process.env.ALLOW_LIVE_AI_IN_TESTS = 'true';
+    process.env.AI_PROVIDER = '"baseui"';
+    process.env.AI_BASE_URL = '"https://api.example.test/v1"';
+    process.env.AI_API_KEY = '"test-secret"';
+    process.env.AI_MODEL = '"gpt-test"';
+
+    try {
+      const response = await request(createApp()).get('/api/health').expect(200);
+      expect(response.body).toMatchObject({
+        aiConfigured: true,
+        aiProvider: 'baseui',
+        aiModel: 'gpt-test',
+      });
+    } finally {
+      Object.entries(previous).forEach(([key, value]) => {
+        const environmentKey = {
+          allowLive: 'ALLOW_LIVE_AI_IN_TESTS',
+          provider: 'AI_PROVIDER',
+          baseUrl: 'AI_BASE_URL',
+          apiKey: 'AI_API_KEY',
+          model: 'AI_MODEL',
+        }[key]!;
+        if (value === undefined) delete process.env[environmentKey];
+        else process.env[environmentKey] = value;
+      });
+    }
+  });
 });

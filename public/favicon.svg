@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="英语训练舱">
+  <rect width="64" height="64" rx="18" fill="#003178"/>
+  <path d="M18 18h28a4 4 0 0 1 4 4v25a2 2 0 0 1-2.9 1.8L42 46.3l-5.1 2.5a2 2 0 0 1-1.8 0L30 46.3l-5.1 2.5A2 2 0 0 1 22 47V26h-4a4 4 0 0 1 0-8Z" fill="#DBF1FE"/>
+  <path d="M26 24h18M26 31h14M26 38h10" stroke="#003178" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="18" cy="22" r="2" fill="#34D399"/>
+</svg>

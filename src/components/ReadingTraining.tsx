@@ -439,7 +439,7 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
                 <div className="bg-neutral-50 p-5 rounded-2xl border border-neutral-200/80">
                   <div className="flex justify-between items-start mb-3">
                     <span className="text-xs font-bold text-gray-500">
-                      真题考点击破与同义替换精析
+                  模拟题考点拆解与同义替换精析
                     </span>
                     {/* Voice Synth trigger */}
                     <button

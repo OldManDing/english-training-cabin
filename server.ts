@@ -15,9 +15,16 @@ if (process.env.NODE_ENV !== 'test') {
   dotenv.config({ path: '.env.test' });
 }
 
-const PORT = Number(process.env.PORT ?? 3000);
+function readEnvironmentValue(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  if (!value) return undefined;
+  const unquoted = value.replace(/^(['"])(.*)\1$/, '$2').trim();
+  return unquoted || undefined;
+}
+
+const PORT = Number(readEnvironmentValue('PORT') ?? 3000);
 const JSON_LIMIT = '64kb';
-const AI_TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS ?? 20_000);
+const AI_TIMEOUT_MS = Number(readEnvironmentValue('AI_TIMEOUT_MS') ?? 20_000);
 
 function isProductionServerRuntime() {
   return process.env.NODE_ENV === 'production' || path.basename(process.argv[1] ?? '') === 'server.cjs';
@@ -276,9 +283,9 @@ function getAiProviderConfig(): AiProviderConfig | null {
     return null;
   }
 
-  const explicitProvider = process.env.AI_PROVIDER?.trim().toLowerCase();
-  const openAiBaseUrl = process.env.AI_BASE_URL?.trim();
-  const openAiApiKey = process.env.AI_API_KEY?.trim();
+  const explicitProvider = readEnvironmentValue('AI_PROVIDER')?.toLowerCase();
+  const openAiBaseUrl = readEnvironmentValue('AI_BASE_URL');
+  const openAiApiKey = readEnvironmentValue('AI_API_KEY');
 
   if ((explicitProvider === 'openai-compatible' || explicitProvider === 'baseui' || !explicitProvider) && openAiBaseUrl && openAiApiKey) {
     return {
@@ -286,17 +293,17 @@ function getAiProviderConfig(): AiProviderConfig | null {
       providerName: explicitProvider === 'baseui' ? 'baseui' : 'openai-compatible',
       baseUrl: openAiBaseUrl.replace(/\/+$/, ''),
       apiKey: openAiApiKey,
-      model: process.env.AI_MODEL?.trim() || 'gpt-4o-mini',
+      model: readEnvironmentValue('AI_MODEL') || 'gpt-4o-mini',
     };
   }
 
-  const geminiApiKey = process.env.GEMINI_API_KEY?.trim();
+  const geminiApiKey = readEnvironmentValue('GEMINI_API_KEY');
   if ((explicitProvider === 'gemini' || !explicitProvider) && geminiApiKey) {
     return {
       type: 'gemini',
       providerName: 'gemini',
       apiKey: geminiApiKey,
-      model: process.env.GEMINI_MODEL?.trim() || 'gemini-3.5-flash',
+      model: readEnvironmentValue('GEMINI_MODEL') || 'gemini-3.5-flash',
     };
   }
 

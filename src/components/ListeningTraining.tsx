@@ -253,7 +253,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
               听力训练 - Section A
             </h1>
             <p className="text-[11px] text-gray-400">
-              科技发展对教育的影响 (2023年6月真题长对话)
+              科技发展对教育的影响 (原创模拟长对话)
             </p>
           </div>
         </div>
@@ -401,7 +401,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
 
                 {/* Simulated Volume */}
                 <div className="flex items-center space-x-1 text-xs font-semibold text-gray-400">
-                  <span>音效: Dolby 3D</span>
+                  <span>音频模拟</span>
                 </div>
               </div>
 
@@ -567,7 +567,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
                           : 'text-[#434652] hover:bg-white'
                       }`}
                     >
-                      {lvl === 'Low' ? 'Low' : lvl === 'Medium' ? 'Medium' : 'High'}
+                      {lvl === 'Low' ? '低' : lvl === 'Medium' ? '中' : '高'}
                     </button>
                   );
                 })}

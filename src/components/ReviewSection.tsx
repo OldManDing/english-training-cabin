@@ -20,13 +20,14 @@ interface ReviewSectionProps {
 }
 
 export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0, persistedReviewItems = [] }: ReviewSectionProps) {
+  const hasRealReviewItems = persistedReviewCount > 0 || persistedReviewItems.length > 0;
   // UI views: 'dashboard' is main view, 'quiz' is interactive simulator
   const [view, setView] = useState<'dashboard' | 'quiz'>('dashboard');
   
   // Interactive statistics state
-  const [pendingCount, setPendingCount] = useState<number>(persistedReviewCount > 0 ? persistedReviewCount : 12);
-  const [resolvedCount, setResolvedCount] = useState<number>(5);
-  const [averageMastery, setAverageMastery] = useState<number>(74);
+  const [pendingCount, setPendingCount] = useState<number>(persistedReviewCount);
+  const [resolvedCount, setResolvedCount] = useState<number>(0);
+  const [averageMastery, setAverageMastery] = useState<number>(0);
   const [highPriorityMastery, setHighPriorityMastery] = useState<number>(46);
   const [quizCompleted, setQuizCompleted] = useState<boolean>(false);
   
@@ -46,6 +47,8 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
   useEffect(() => {
     if (persistedReviewCount > 0) {
       setPendingCount(persistedReviewCount);
+    } else {
+      setPendingCount(0);
     }
   }, [persistedReviewCount]);
 
@@ -117,11 +120,13 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
           // Finished all questions!
           setView('dashboard');
           setQuizCompleted(true);
-          setPendingCount(11); // Decrements pending task
-          setResolvedCount(6); // Increments resolved task
-          setAverageMastery(75); // Updates predicted stats!
+          setPendingCount((count) => Math.max(0, count - 1));
+          setResolvedCount((count) => count + 1);
+          setAverageMastery(hasRealReviewItems ? 75 : 0);
           setHighPriorityMastery(92); // Upgraded mastery percent!
-          triggerToast("🎉 太棒了！您已成功攻克「同义替换未识别」高优先复习点，今日艾宾浩斯记忆熟练度+1！");
+          triggerToast(hasRealReviewItems
+            ? "已完成一个高优先级复习点，今日记忆熟练度已更新。"
+            : "已完成一次示例复习。完成真实训练后，系统会在这里生成你的错因复习队列。");
         }
       }, 1200);
     } else {
@@ -178,7 +183,7 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
             {/* Top right pill metrics & actions */}
             <div className="flex items-center gap-3">
               <div className="px-4 py-1.5 border border-[#dcfce7] bg-[#f0fdf4] text-[#1b6d24] rounded-full text-xs font-black flex items-center gap-1.5 shadow-2xs">
-                <span>距考试 42 天</span>
+                <span>复习证据 {pendingCount} 项</span>
               </div>
               
               {/* Notification icon & user avatar */}
@@ -254,7 +259,7 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
           <div className="space-y-4">
             <h3 className="text-sm font-black text-rose-600 flex items-center gap-1.5">
               <AlertTriangle className="h-4.5 w-4.5 text-rose-500 fill-rose-50/50" />
-              <span>高优先级复习</span>
+              <span>{hasRealReviewItems ? '高优先级复习' : '示例复习流程'}</span>
             </h3>
 
             {/* Split big highlighted main card container */}
@@ -266,7 +271,7 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
                 {/* Horizontal tags block */}
                 <div className="flex items-center gap-2.5">
                   <span className="text-[10px] font-black text-rose-600 bg-rose-50 border border-rose-100 px-2.5 py-1 rounded-md">
-                    ⚠ 核心薄弱项
+                    {hasRealReviewItems ? '⚠ 核心薄弱项' : '体验样例'}
                   </span>
                   <span className="text-[10px] font-black text-blue-800 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-md">
                     阅读与理解
@@ -276,7 +281,7 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
                 {/* Massive title text */}
                 <div>
                   <h4 className="text-2xl font-black text-slate-800 tracking-tight">
-                    {topPersistedReview?.title ?? '同义替换未识别'}
+                    {topPersistedReview?.title ?? '同义替换未识别（示例）'}
                   </h4>
                 </div>
 
@@ -284,14 +289,14 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
                 <div className="bg-[#f0f4f8] border border-slate-200/40 rounded-xl p-4 text-[11px] leading-relaxed select-none">
                   <p className="font-semibold text-slate-600 flex items-start gap-2">
                     <AlertCircle className="h-4.5 w-4.5 text-[#003178] shrink-0 mt-0.5" />
-                    <span>{topPersistedReview?.detail ?? '原因：AI 诊断显示你在最近的 3 篇阅读练习中，均在“考察近义词替换”的细节题中失分。'}</span>
+                    <span>{topPersistedReview?.detail ?? '完成阅读或听力训练后，这里会展示真实错因、优先级和下次复习时间。当前示例用于体验复习交互流程。'}</span>
                   </p>
                 </div>
 
                 {/* Current progress bar */}
                 <div className="space-y-1.5 pt-1.5">
                   <div className="flex justify-between items-baseline text-xs font-bold">
-                    <span className="text-slate-500">当前掌握度 {topPersistedReview?.masteryScore ?? highPriorityMastery}/100</span>
+                    <span className="text-slate-500">{hasRealReviewItems ? '当前掌握度' : '示例掌握度'} {topPersistedReview?.masteryScore ?? highPriorityMastery}/100</span>
                     <span className="text-rose-600 font-extrabold text-[11px] flex items-center gap-1">
                       ● 亟需强化 训练
                     </span>
@@ -325,7 +330,7 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
                     <RefreshCw className="h-4 w-4 text-[#0d47a1] shrink-0 mt-0.5" />
                     <div>
                       <span className="block text-[10px] font-bold text-gray-400">下次复习</span>
-                      <span className="block font-black text-slate-800 text-sm mt-0.5">{topPersistedReview?.nextReviewAt ? new Date(topPersistedReview.nextReviewAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '明天 09:00'}</span>
+                      <span className="block font-black text-slate-800 text-sm mt-0.5">{topPersistedReview?.nextReviewAt ? new Date(topPersistedReview.nextReviewAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '完成训练后生成'}</span>
                     </div>
                   </div>
                 </div>
@@ -336,7 +341,7 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
                     onClick={handleStartReview}
                     className="w-full px-5 py-3 bg-[#003178] hover:bg-[#0d47a1] text-white text-xs font-black rounded-xl flex items-center justify-center gap-1.5 transition-all hover:scale-[1.01] pointer-events-auto cursor-pointer shadow-xs"
                   >
-                    <span>开始复习</span>
+                    <span>{hasRealReviewItems ? '开始复习' : '体验示例复习'}</span>
                     <ArrowRight className="h-3.5 w-3.5" />
                   </button>
                 </div>
@@ -554,9 +559,9 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
           <a href="#terms" onClick={(e) => { 
             e.preventDefault(); 
             if (onTriggerModal) {
-              onTriggerModal("服务条款", "本智能备考舱为您的高效备考保驾护航。您可以使用 AI 自适应测评、精听录音重读与错题集诊断等全套功能。");
+              onTriggerModal("服务条款", "英语训练舱提供自适应测评、精听训练、口语重说与错因复习等能力训练功能。");
             } else {
-              triggerToast("服务条款：本系统由 AI 开发并为您的大学英语四六级考试提供自适应答疑服务。");
+              triggerToast("服务条款：本系统为大学英语训练提供自适应练习和反馈。");
             }
           }} className="hover:text-[#003178] transition-colors">服务条款</a>
           <span>•</span>

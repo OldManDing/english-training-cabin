@@ -167,7 +167,7 @@ export default function MaterialImporter({ onLoadCustomPassage }: MaterialImport
             材料导入与 AI 模拟卷生成
           </h2>
           <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
-            支持 AI 生成 CET-4 仿真阅读，也支持导入合法来源的 JSON 题材。所有导入内容都会先经过后端结构校验，再进入训练舱。
+            支持 AI 生成 CET-4 模拟阅读，也支持导入合法来源的 JSON 题材。所有导入内容都会先经过后端结构校验，再进入训练舱。
           </p>
         </div>
         <div className="rounded-2xl border border-[#cfe6f2] bg-white/80 px-4 py-3 text-xs font-bold text-[#003178] shadow-xs">
@@ -192,7 +192,7 @@ export default function MaterialImporter({ onLoadCustomPassage }: MaterialImport
         <section className="rounded-3xl border border-[#c3c6d4] bg-white p-6 shadow-xs">
           <div className="flex items-center gap-2 text-sm font-black text-[#071e27]">
             <Sparkles className="h-5 w-5 text-[#003178]" />
-            AI 仿真阅读生成
+            AI 模拟阅读生成
           </div>
           <p className="mt-3 text-xs font-semibold leading-6 text-slate-500">
             输入话题后，系统会调用 AI 生成原创模拟材料；没有 API Key 时会自动返回离线样例，保证演示和训练流程不断裂。

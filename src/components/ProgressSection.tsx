@@ -158,8 +158,8 @@ export default function ProgressSection({ scoreChange, persistedSkillProfiles = 
                 <span className="text-3xl font-black text-[#003178] mt-1 font-mono">540</span>
               </div>
               <div className="flex-1 bg-gradient-to-tr from-[#f3faff] to-[#dbf1fe]/50 p-4.5 rounded-2xl border flex flex-col justify-center">
-                <span className="text-[10px] text-gray-400 font-bold block">班级排名</span>
-                <span className="text-3xl font-black text-emerald-700 mt-1 font-mono">Top 15%</span>
+                <span className="text-[10px] text-gray-400 font-bold block">训练稳定度</span>
+                <span className="text-3xl font-black text-emerald-700 mt-1 font-mono">78%</span>
               </div>
             </div>
 
