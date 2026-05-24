@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
-import { createApp } from '../../server';
+import { buildContentSecurityPolicy, createApp } from '../../server';
 
 describe('server API', () => {
   const app = createApp();
@@ -191,5 +191,14 @@ describe('server API', () => {
       .expect(200);
 
     expect(response.body).toHaveProperty('improvedTextWithConnectors');
+  });
+
+  it('keeps strict CSP in test and production-like runtime', () => {
+    const policy = buildContentSecurityPolicy();
+
+    expect(policy).toContain("script-src 'self'");
+    expect(policy).toContain("connect-src 'self'");
+    expect(policy).not.toContain("script-src 'self' 'unsafe-inline'");
+    expect(policy).not.toContain('ws://127.0.0.1');
   });
 });

@@ -19,6 +19,29 @@ const PORT = Number(process.env.PORT ?? 3000);
 const JSON_LIMIT = '64kb';
 const AI_TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS ?? 20_000);
 
+function isProductionServerRuntime() {
+  return process.env.NODE_ENV === 'production' || path.basename(process.argv[1] ?? '') === 'server.cjs';
+}
+
+export function buildContentSecurityPolicy() {
+  const isDevRuntime = process.env.NODE_ENV !== 'test' && !isProductionServerRuntime();
+  return [
+    "default-src 'self'",
+    isDevRuntime ? "script-src 'self' 'unsafe-inline'" : "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data:",
+    "font-src 'self' data:",
+    isDevRuntime
+      ? "connect-src 'self' ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*"
+      : "connect-src 'self'",
+    "media-src 'self' blob:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join('; ');
+}
+
 type RateBucket = {
   count: number;
   resetAt: number;
@@ -464,22 +487,7 @@ export function createApp() {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'same-origin');
     res.setHeader('Permissions-Policy', 'microphone=(self)');
-    res.setHeader(
-      'Content-Security-Policy',
-      [
-        "default-src 'self'",
-        "script-src 'self'",
-        "style-src 'self' 'unsafe-inline'",
-        "img-src 'self' data:",
-        "font-src 'self' data:",
-        "connect-src 'self'",
-        "media-src 'self' blob:",
-        "object-src 'none'",
-        "base-uri 'self'",
-        "form-action 'self'",
-        "frame-ancestors 'none'",
-      ].join('; '),
-    );
+    res.setHeader('Content-Security-Policy', buildContentSecurityPolicy());
     if (req.secure || req.headers['x-forwarded-proto'] === 'https') {
       res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
     }
@@ -699,8 +707,7 @@ Return JSON only with this shape: {"originalTextWithMarkings":"...","improvedTex
 
 export async function startServer() {
   const app = createApp();
-  const isProductionRuntime =
-    process.env.NODE_ENV === 'production' || path.basename(process.argv[1] ?? '') === 'server.cjs';
+  const isProductionRuntime = isProductionServerRuntime();
 
   if (!isProductionRuntime) {
     const vite = await createViteServer({
