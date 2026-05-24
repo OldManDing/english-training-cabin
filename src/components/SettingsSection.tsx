@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Flag, LayoutGrid, Target, Calendar, Check, Lock, Sparkles, Sliders, ChevronDown, Save, Sparkle, RefreshCw, Database, Download, Upload } from 'lucide-react';
 import { exportLearningData, importLearningData } from '../lib/storage/db';
+import SaasAccountPanel from './SaasAccountPanel';
 
 interface SettingsSectionProps {
   onSave?: (settings: {
@@ -436,6 +437,11 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                 </label>
               </div>
             </div>
+
+            <SaasAccountPanel
+              onTriggerModal={onTriggerModal}
+              onDataRestored={onDataRestored}
+            />
 
           </div>
 

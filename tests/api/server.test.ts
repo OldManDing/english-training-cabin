@@ -1,6 +1,7 @@
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import { buildContentSecurityPolicy, createApp } from '../../server';
+import { createInMemorySaasStore } from '../../src/server/saas';
 
 describe('server API', () => {
   const app = createApp();
@@ -45,6 +46,148 @@ describe('server API', () => {
       .post('/api/telemetry/event')
       .send({ eventName: 'raw_prompt_dump' })
       .expect(400);
+  });
+
+  it('supports SaaS account registration, login, entitlements, and cloud learning snapshots', async () => {
+    const saasApp = createApp({
+      saasStore: createInMemorySaasStore(),
+      saasSessionSecret: 'test-saas-secret',
+    });
+    const email = `learner-${Date.now()}@example.com`;
+
+    await request(saasApp)
+      .get('/api/cloud/learning-data')
+      .expect(401);
+
+    const registerResponse = await request(saasApp)
+      .post('/api/auth/register')
+      .send({
+        email,
+        password: 'secure-password-1',
+        name: '商业化学习者',
+        organizationName: '英语训练商业化团队',
+      })
+      .expect(201);
+
+    expect(registerResponse.body.token).toEqual(expect.any(String));
+    expect(registerResponse.body.account).toMatchObject({
+      user: {
+        email,
+        role: 'owner',
+      },
+      organization: {
+        name: '英语训练商业化团队',
+      },
+      subscription: {
+        tier: 'pro',
+        status: 'trialing',
+      },
+      entitlements: {
+        cloudSync: true,
+      },
+    });
+
+    const token = registerResponse.body.token as string;
+    const meResponse = await request(saasApp)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(meResponse.body.account.user.email).toBe(email);
+
+    const loginResponse = await request(saasApp)
+      .post('/api/auth/login')
+      .send({ email, password: 'secure-password-1' })
+      .expect(200);
+
+    expect(loginResponse.body.account.entitlements.aiMonthlyCredits).toBeGreaterThan(0);
+
+    const backup = {
+      app: 'english-training-cabin',
+      schemaVersion: 1,
+      exportedAt: new Date().toISOString(),
+      data: {
+        studyGoals: [{ id: 'goal-cet4-primary', status: 'active' }],
+        practiceSessions: [{ id: 'session-1' }],
+        attempts: [{ id: 'attempt-1' }],
+        reviewItems: [{ id: 'review-1' }],
+        skillProfiles: [{ id: 'profile-1' }],
+      },
+    };
+
+    const syncResponse = await request(saasApp)
+      .put('/api/cloud/learning-data')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ backup })
+      .expect(200);
+
+    expect(syncResponse.body.snapshot.counts).toMatchObject({
+      studyGoals: 1,
+      practiceSessions: 1,
+      attempts: 1,
+      reviewItems: 1,
+      skillProfiles: 1,
+    });
+
+    const cloudResponse = await request(saasApp)
+      .get('/api/cloud/learning-data')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(cloudResponse.body.snapshot.backup.data.practiceSessions).toHaveLength(1);
+  });
+
+  it('isolates SaaS cloud snapshots by authenticated user and tenant', async () => {
+    const saasApp = createApp({
+      saasStore: createInMemorySaasStore(),
+      saasSessionSecret: 'tenant-isolation-secret',
+    });
+
+    const first = await request(saasApp)
+      .post('/api/auth/register')
+      .send({
+        email: 'first-tenant@example.com',
+        password: 'secure-password-1',
+        name: '第一位学习者',
+        organizationName: '第一租户',
+      })
+      .expect(201);
+
+    const second = await request(saasApp)
+      .post('/api/auth/register')
+      .send({
+        email: 'second-tenant@example.com',
+        password: 'secure-password-1',
+        name: '第二位学习者',
+        organizationName: '第二租户',
+      })
+      .expect(201);
+
+    await request(saasApp)
+      .put('/api/cloud/learning-data')
+      .set('Authorization', `Bearer ${first.body.token}`)
+      .send({
+        backup: {
+          app: 'english-training-cabin',
+          schemaVersion: 1,
+          exportedAt: new Date().toISOString(),
+          data: {
+            studyGoals: [{ id: 'first-goal' }],
+            practiceSessions: [],
+            attempts: [],
+            reviewItems: [],
+            skillProfiles: [],
+          },
+        },
+      })
+      .expect(200);
+
+    const secondCloud = await request(saasApp)
+      .get('/api/cloud/learning-data')
+      .set('Authorization', `Bearer ${second.body.token}`)
+      .expect(200);
+
+    expect(secondCloud.body.snapshot).toBeNull();
   });
 
   it('returns exam registry', async () => {

@@ -17,6 +17,23 @@ import {
   SubjectivePracticeAnalysis,
 } from './src/domain/practice/reports';
 import { MistakeReason, ReviewItem, SkillArea, SkillProfile, StudyGoal } from './src/types';
+import {
+  createFileSaasStore,
+  createInMemorySaasStore,
+  getDefaultSaasDataFile,
+  getSaasSessionSecret,
+  issueSessionToken,
+  loginSaasAccount,
+  registerSaasAccount,
+  SaasAccountRecord,
+  SaasApiError,
+  SaasSessionPayload,
+  SaasStore,
+  summarizeLearningSnapshot,
+  toPublicAccountContext,
+  validateLearningBackup,
+  verifySessionToken,
+} from './src/server/saas';
 
 if (process.env.NODE_ENV !== 'test') {
   dotenv.config({ path: ['.env.local', '.env'] });
@@ -32,7 +49,7 @@ function readEnvironmentValue(name: string): string | undefined {
 }
 
 const PORT = Number(readEnvironmentValue('PORT') ?? 3000);
-const JSON_LIMIT = '64kb';
+const JSON_LIMIT = readEnvironmentValue('JSON_LIMIT') ?? '2mb';
 const AI_TIMEOUT_MS = Number(readEnvironmentValue('AI_TIMEOUT_MS') ?? 20_000);
 
 function isProductionServerRuntime() {
@@ -636,9 +653,55 @@ function buildMockSubjectiveAnalysis(moduleId: 'writing' | 'translation', answer
   };
 }
 
-export function createApp() {
+export interface CreateAppOptions {
+  saasStore?: SaasStore;
+  saasSessionSecret?: string | null;
+}
+
+type AuthenticatedSaasContext = {
+  session: SaasSessionPayload;
+  account: SaasAccountRecord;
+};
+
+function createDefaultSaasStore(): SaasStore {
+  if (process.env.NODE_ENV === 'test') {
+    return createInMemorySaasStore();
+  }
+  return createFileSaasStore(getDefaultSaasDataFile());
+}
+
+function getBearerToken(req: Request): string {
+  const authorization = req.get('authorization') ?? '';
+  const [type, token] = authorization.split(/\s+/, 2);
+  if (type?.toLowerCase() !== 'bearer' || !token) {
+    throw new SaasApiError(401, 'missing_token', '请先登录账号。');
+  }
+  return token;
+}
+
+function requireSaasSessionSecret(secret: string | null): string {
+  if (!secret) {
+    throw new SaasApiError(503, 'auth_not_configured', '账号服务缺少会话密钥，暂时无法登录。');
+  }
+  return secret;
+}
+
+function getSaasContext(res: Response): AuthenticatedSaasContext {
+  return res.locals.saas as AuthenticatedSaasContext;
+}
+
+function asyncRoute(handler: (req: Request, res: Response, next: NextFunction) => Promise<void>) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    handler(req, res, next).catch(next);
+  };
+}
+
+export function createApp(options: CreateAppOptions = {}) {
   const app = express();
   const aiLimiter = createRateLimiter(20, 60_000);
+  const authLimiter = createRateLimiter(15, 60_000);
+  const saasStore = options.saasStore ?? createDefaultSaasStore();
+  const saasSessionSecret = options.saasSessionSecret ?? getSaasSessionSecret();
 
   app.disable('x-powered-by');
   app.use((req, res, next) => {
@@ -666,6 +729,19 @@ export function createApp() {
     next();
   });
 
+  const requireSaasAuth = asyncRoute(async (req, res, next) => {
+    const secret = requireSaasSessionSecret(saasSessionSecret);
+    const session = verifySessionToken(getBearerToken(req), secret);
+    const account = await saasStore.getAccountForUser(session.sub);
+
+    if (!account || account.organization.id !== session.org || account.user.role !== session.role) {
+      throw new SaasApiError(401, 'invalid_token', '登录状态无效，请重新登录。');
+    }
+
+    res.locals.saas = { session, account } satisfies AuthenticatedSaasContext;
+    next();
+  });
+
   app.get('/api/health', (_req, res) => {
     const ai = getAiProviderStatus();
     res.json({
@@ -674,6 +750,11 @@ export function createApp() {
       aiConfigured: ai.configured,
       aiProvider: ai.provider,
       aiModel: ai.model,
+      saas: {
+        enabled: true,
+        authConfigured: Boolean(saasSessionSecret),
+        store: saasStore.kind,
+      },
       timestamp: new Date().toISOString(),
     });
   });
@@ -696,6 +777,75 @@ export function createApp() {
     incrementCounter(observability.eventsByName, eventName);
     res.status(204).end();
   });
+
+  app.post('/api/auth/register', authLimiter, asyncRoute(async (req, res) => {
+    const secret = requireSaasSessionSecret(saasSessionSecret);
+    const account = await registerSaasAccount(saasStore, req.body);
+    const token = issueSessionToken(account, secret);
+
+    res.status(201).json({
+      token,
+      account: toPublicAccountContext(account),
+    });
+  }));
+
+  app.post('/api/auth/login', authLimiter, asyncRoute(async (req, res) => {
+    const secret = requireSaasSessionSecret(saasSessionSecret);
+    const account = await loginSaasAccount(saasStore, req.body);
+    const token = issueSessionToken(account, secret);
+
+    res.json({
+      token,
+      account: toPublicAccountContext(account),
+    });
+  }));
+
+  app.get('/api/auth/me', requireSaasAuth, asyncRoute(async (_req, res) => {
+    const { account } = getSaasContext(res);
+    res.json({ account: toPublicAccountContext(account) });
+  }));
+
+  app.post('/api/auth/logout', requireSaasAuth, asyncRoute(async (_req, res) => {
+    res.status(204).end();
+  }));
+
+  app.get('/api/billing/entitlements', requireSaasAuth, asyncRoute(async (_req, res) => {
+    const { account } = getSaasContext(res);
+    res.json({
+      account: toPublicAccountContext(account),
+    });
+  }));
+
+  app.get('/api/cloud/learning-data', requireSaasAuth, asyncRoute(async (_req, res) => {
+    const { account } = getSaasContext(res);
+    const snapshot = await saasStore.getLearningSnapshot(account.organization.id, account.user.id);
+
+    res.json({
+      snapshot: snapshot ? {
+        ...summarizeLearningSnapshot(snapshot),
+        backup: snapshot.backup,
+      } : null,
+    });
+  }));
+
+  app.put('/api/cloud/learning-data', requireSaasAuth, asyncRoute(async (req, res) => {
+    const { account } = getSaasContext(res);
+    const context = toPublicAccountContext(account);
+    if (!context.entitlements.cloudSync) {
+      throw new SaasApiError(403, 'cloud_sync_disabled', '当前订阅暂未开通云同步。');
+    }
+
+    const backup = validateLearningBackup(req.body?.backup ?? req.body);
+    const snapshot = await saasStore.saveLearningSnapshot({
+      organizationId: account.organization.id,
+      userId: account.user.id,
+      backup,
+    });
+
+    res.json({
+      snapshot: summarizeLearningSnapshot(snapshot),
+    });
+  }));
 
   app.post('/api/study/daily-plan', (req, res) => {
     const goal = validateGoal(req.body?.goal);
@@ -924,6 +1074,11 @@ Use Chinese for comments and nextActions.`;
   app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
     if ('type' in error && error.type === 'entity.parse.failed') {
       res.status(400).json({ error: 'invalid_json', message: 'Request body must be valid JSON.' });
+      return;
+    }
+
+    if (error instanceof SaasApiError) {
+      res.status(error.statusCode).json({ error: error.code, message: error.message });
       return;
     }
 
