@@ -154,6 +154,19 @@ export interface PracticeCompletionReport {
   skillProfiles: SkillProfile[];
 }
 
+export interface MemoryReviewTask {
+  version: 1;
+  sourceText: string;
+  recallPrompt: string;
+  recallAnswer: string;
+  clozePrompt: string;
+  clozeAnswer: string;
+  chunks: string[];
+  productionPrompt: string;
+  methodNotes: string[];
+  spacingPlanDays: number[];
+}
+
 export interface DailyPlan {
   id: string;
   date: string;
@@ -210,6 +223,9 @@ export interface ReviewItem {
   lastReviewedAt?: string;
   sourceAttemptId?: string;
   createdAt?: string;
+  memoryTask?: MemoryReviewTask;
+  learningMethod?: 'active-recall-cloze-production';
+  retrievalCount?: number;
 }
 
 export interface SkillProfile {

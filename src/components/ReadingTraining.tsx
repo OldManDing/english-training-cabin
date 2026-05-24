@@ -97,6 +97,8 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
           type: question.type,
           moduleId: question.moduleId,
           questionTypeId: question.questionTypeId,
+          correctSentence: question.correctSentence,
+          explanation: question.explanation,
         })),
         answers: userAnswers.map((answer) => ({
           selected: answer?.selected,

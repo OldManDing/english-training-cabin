@@ -16,6 +16,8 @@ describe('buildChoicePracticeReport', () => {
           id: 1,
           question: 'What is the main idea?',
           correctAnswer: 'B',
+          correctSentence: 'Natural environments may reduce stress and improve concentration.',
+          explanation: 'The correct option paraphrases reduce stress and improve concentration.',
           type: '同义替换',
         },
       ],
@@ -32,6 +34,13 @@ describe('buildChoicePracticeReport', () => {
     expect(report.attempts).toHaveLength(1);
     expect(report.attempts[0].mistakeReasons).toContain('同义替换未识别');
     expect(report.reviewItems).toHaveLength(1);
+    expect(report.reviewItems[0].learningMethod).toBe('active-recall-cloze-production');
+    expect(report.reviewItems[0].memoryTask).toMatchObject({
+      sourceText: 'Natural environments may reduce stress and improve concentration.',
+      spacingPlanDays: [1, 3, 7, 14, 30],
+    });
+    expect(report.reviewItems[0].memoryTask?.clozePrompt).toContain('____');
+    expect(report.reviewItems[0].memoryTask?.productionPrompt).toContain('用语块');
     expect(report.skillProfiles[0]).toMatchObject({
       skillArea: 'reading',
       subSkillId: 'careful-reading',
@@ -98,6 +107,8 @@ describe('buildChoicePracticeReport', () => {
       targetType: 'speaking-pattern',
       skillArea: 'speaking',
     });
+    expect(report.reviewItems[0].memoryTask?.sourceText).toContain('renewable energy');
+    expect(report.reviewItems[0].memoryTask?.productionPrompt).toContain('用语块');
     expect(report.skillProfiles[0]).toMatchObject({
       skillArea: 'speaking',
       score: 72,
@@ -134,6 +145,7 @@ describe('buildChoicePracticeReport', () => {
       targetType: 'expression',
       skillArea: 'translation',
     });
+    expect(report.reviewItems[0].memoryTask?.sourceText).toContain('increasingly important role');
     expect(report.skillProfiles[0]).toMatchObject({
       skillArea: 'translation',
       score: 68,

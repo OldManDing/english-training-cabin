@@ -258,6 +258,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
           question: question.question,
           correctAnswer: question.correctAnswer,
           trapType: question.trapType,
+          explanation: question.explanation,
         })),
         answers: questions.map((question) => ({
           selected: question.selectedAnswer,

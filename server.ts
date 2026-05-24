@@ -292,6 +292,8 @@ function validateChoicePracticePayload(value: unknown) {
       trapType: typeof item.trapType === 'string' ? item.trapType : undefined,
       moduleId: typeof item.moduleId === 'string' ? item.moduleId : undefined,
       questionTypeId: typeof item.questionTypeId === 'string' ? item.questionTypeId : undefined,
+      correctSentence: typeof item.correctSentence === 'string' ? sanitizeText(item.correctSentence, `questions[${index}].correctSentence`, 1200) : undefined,
+      explanation: typeof item.explanation === 'string' ? sanitizeText(item.explanation, `questions[${index}].explanation`, 2000) : undefined,
     } satisfies ChoicePracticeQuestion;
   });
 

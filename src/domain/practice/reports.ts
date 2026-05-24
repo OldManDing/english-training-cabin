@@ -1,5 +1,6 @@
 import {
   Attempt,
+  MemoryReviewTask,
   MistakeReason,
   PracticeCompletionReport,
   PracticeSession,
@@ -18,6 +19,8 @@ export interface ChoicePracticeQuestion {
   trapType?: string;
   moduleId?: string;
   questionTypeId?: string;
+  correctSentence?: string;
+  explanation?: string;
 }
 
 export interface ChoicePracticeAnswer {
@@ -91,6 +94,89 @@ function confidenceToScore(confidence: ChoicePracticeAnswer['confidence']): 1 | 
   return undefined;
 }
 
+function normalizeStudyText(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+function trimStudyText(value: string, maxLength = 320): string {
+  const normalized = normalizeStudyText(value);
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1)}…` : normalized;
+}
+
+function extractEnglishChunks(sourceText: string): string[] {
+  const source = normalizeStudyText(sourceText);
+  const chunks = new Set<string>();
+  const patterns = [
+    /\b(?:play|plays|played|playing)\s+an?\s+\w+\s+role\s+in\b[^,.]*/gi,
+    /\b(?:provide|provides|provided|support|supports|reduce|reduces|improve|improves|secure|secures|voice|voices|require|requires|enable|enables|foster|fosters|lead|leads)\b\s+[^,.]{8,90}/gi,
+    /\b(?:as a result|because of|due to|rather than|instead of|according to|in order to|be likely to|is likely to|are likely to)\b[^,.]*/gi,
+  ];
+
+  patterns.forEach((pattern) => {
+    source.match(pattern)?.forEach((match) => {
+      const chunk = trimStudyText(match, 96);
+      if (chunk.split(' ').length >= 3) chunks.add(chunk);
+    });
+  });
+
+  if (chunks.size === 0) {
+    source
+      .split(/[.;:!?]/)
+      .map((part) => trimStudyText(part, 96))
+      .filter((part) => part.split(' ').length >= 4)
+      .slice(0, 2)
+      .forEach((part) => chunks.add(part));
+  }
+
+  return Array.from(chunks).slice(0, 3);
+}
+
+function buildCloze(sourceText: string, chunks: string[]): { prompt: string; answer: string } {
+  const source = trimStudyText(sourceText, 360);
+  const target = chunks[0] ?? source.split(/\s+/).slice(0, 5).join(' ');
+  if (!target) {
+    return { prompt: source, answer: source };
+  }
+
+  return {
+    prompt: source.replace(target, '____'),
+    answer: target,
+  };
+}
+
+function buildMemoryReviewTask(params: {
+  sourceText: string;
+  contextLabel: string;
+  skillArea: SkillArea;
+  mistakeReasons: MistakeReason[];
+}): MemoryReviewTask {
+  const sourceText = trimStudyText(params.sourceText);
+  const chunks = extractEnglishChunks(sourceText);
+  const cloze = buildCloze(sourceText, chunks);
+  const targetChunk = chunks[0] ?? cloze.answer;
+  const reasonText = params.mistakeReasons.length > 0 ? params.mistakeReasons.join('、') : '低掌握度';
+
+  return {
+    version: 1,
+    sourceText,
+    recallPrompt: `先遮住答案，用中文说清楚这个${params.contextLabel}的意思、错因和适用场景。重点错因：${reasonText}。`,
+    recallAnswer: sourceText,
+    clozePrompt: cloze.prompt,
+    clozeAnswer: cloze.answer,
+    chunks,
+    productionPrompt: targetChunk
+      ? `用语块 “${targetChunk}” 自己造一个新句，或把它用于本题材料的复述/翻译中。`
+      : `用自己的话重新表达这个${params.contextLabel}，要求意思完整、句子自然。`,
+    methodNotes: [
+      '主动回忆：先答后看，避免只重读解析。',
+      '语块化：优先记可迁移的短语和句式，而不是孤立单词。',
+      '挖空补全：用缺口迫使大脑提取关键词。',
+      '语境化输出：最后必须造句、复述或翻译，确认能主动使用。',
+    ],
+    spacingPlanDays: [1, 3, 7, 14, 30],
+  };
+}
+
 function deriveMistakeReasons(params: {
   answer: ChoicePracticeAnswer;
   skillArea: SkillArea;
@@ -129,6 +215,13 @@ function buildReviewItem(params: {
   const isIncorrect = params.attempt.isCorrect === false;
   const nextReviewAt = new Date();
   nextReviewAt.setDate(nextReviewAt.getDate() + (isIncorrect ? 1 : 2));
+  const sourceText = params.question.correctSentence || params.question.explanation || params.question.question;
+  const memoryTask = buildMemoryReviewTask({
+    sourceText,
+    contextLabel: params.skillArea === 'listening' ? '听力原句' : '阅读定位句',
+    skillArea: params.skillArea,
+    mistakeReasons: params.reasons,
+  });
 
   return {
     id: makeId('review'),
@@ -147,6 +240,9 @@ function buildReviewItem(params: {
     nextReviewAt: nextReviewAt.toISOString(),
     sourceAttemptId: params.attempt.id,
     createdAt: params.attempt.createdAt,
+    memoryTask,
+    learningMethod: 'active-recall-cloze-production',
+    retrievalCount: 0,
   };
 }
 
@@ -294,6 +390,14 @@ export function buildSpeakingPracticeReport(input: BuildSpeakingPracticeReportIn
           nextReviewAt: nextReviewAt.toISOString(),
           sourceAttemptId: attempt.id,
           createdAt: now,
+          memoryTask: buildMemoryReviewTask({
+            sourceText: input.analysis.improvedTextWithConnectors,
+            contextLabel: '口语升级句',
+            skillArea: 'speaking',
+            mistakeReasons,
+          }),
+          learningMethod: 'active-recall-cloze-production',
+          retrievalCount: 0,
         },
       ]
     : [];
@@ -381,6 +485,14 @@ export function buildSubjectivePracticeReport(input: BuildSubjectivePracticeRepo
         nextReviewAt: nextReviewAt.toISOString(),
         sourceAttemptId: attempt.id,
         createdAt: now,
+        memoryTask: buildMemoryReviewTask({
+          sourceText: input.analysis.sampleAnswer || input.answer,
+          contextLabel: input.moduleId === 'writing' ? '写作表达' : '翻译表达',
+          skillArea: input.moduleId,
+          mistakeReasons,
+        }),
+        learningMethod: 'active-recall-cloze-production',
+        retrievalCount: 0,
       }]
     : [];
 

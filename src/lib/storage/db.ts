@@ -135,7 +135,8 @@ export async function completeReviewItem(itemId: string): Promise<ReviewItem | u
     const now = new Date();
     const currentMastery = current.masteryScore ?? 35;
     const masteryScore = Math.min(100, currentMastery + (currentMastery < 60 ? 25 : 15));
-    const reviewIntervalDays = masteryScore >= 85 ? 7 : masteryScore >= 65 ? 3 : 1;
+    const reviewIntervalDays =
+      masteryScore >= 95 ? 30 : masteryScore >= 85 ? 14 : masteryScore >= 70 ? 7 : masteryScore >= 55 ? 3 : 1;
     const nextReview = new Date(now);
     nextReview.setDate(nextReview.getDate() + reviewIntervalDays);
 
@@ -147,6 +148,7 @@ export async function completeReviewItem(itemId: string): Promise<ReviewItem | u
       lastReviewedAt: now.toISOString(),
       nextReviewAt: nextReview.toISOString(),
       daysAgo: 0,
+      retrievalCount: (current.retrievalCount ?? 0) + 1,
     };
     await db.reviewItems.put(updatedItem);
 

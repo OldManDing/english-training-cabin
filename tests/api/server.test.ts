@@ -613,6 +613,8 @@ describe('server API', () => {
             question: 'What is the main idea?',
             correctAnswer: 'B',
             type: 'synonym',
+            correctSentence: 'Researchers found that active recall improves long-term learning.',
+            explanation: 'The answer paraphrases active recall improves long-term learning.',
           },
         ],
         answers: [
@@ -627,6 +629,11 @@ describe('server API', () => {
 
     expect(response.body.report.attempts).toHaveLength(1);
     expect(response.body.report.reviewItems).toHaveLength(1);
+    expect(response.body.report.reviewItems[0].memoryTask).toMatchObject({
+      sourceText: 'Researchers found that active recall improves long-term learning.',
+      spacingPlanDays: [1, 3, 7, 14, 30],
+    });
+    expect(response.body.report.reviewItems[0].memoryTask.clozePrompt).toContain('____');
     expect(response.body.report.skillProfiles[0]).toMatchObject({
       skillArea: 'reading',
       score: 0,

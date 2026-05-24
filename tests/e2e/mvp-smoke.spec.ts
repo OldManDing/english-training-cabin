@@ -51,11 +51,15 @@ test('MVP critical reading flow persists local learning evidence', async ({ page
 
   await page.getByRole('button', { name: '复习队列' }).click();
   await page.getByRole('button', { name: '开始复习' }).click();
-  await page.getByRole('button', { name: /说清楚本题错因/ }).click();
-  await expect(page.getByText('第 2 步：主动回忆')).toBeVisible();
-  await page.getByRole('button', { name: /先遮住解析/ }).click();
-  await expect(page.getByText('第 3 步：安排下次复习')).toBeVisible();
-  await page.getByRole('button', { name: /更新掌握度和下次复习时间/ }).click();
+  await expect(page.getByRole('heading', { name: '第 1 步：主动回忆' })).toBeVisible();
+  await page.getByTestId('review-recall-answer').fill('I remember the key sentence and the mistake reason.');
+  await page.getByRole('button', { name: /完成主动回忆，进入挖空/ }).click();
+  await expect(page.getByRole('heading', { name: '第 2 步：挖空补全' })).toBeVisible();
+  await page.getByTestId('review-cloze-answer').fill('key phrase');
+  await page.getByRole('button', { name: /完成挖空，进入输出/ }).click();
+  await expect(page.getByRole('heading', { name: '第 3 步：语境化输出' })).toBeVisible();
+  await page.getByTestId('review-production-answer').fill('Active recall improves long-term learning when students use it in context.');
+  await page.getByRole('button', { name: /完成复习并安排下次间隔/ }).click();
   await expect(page.getByRole('heading', { name: '复习队列' })).toBeVisible();
 
   const reviewedEvidence = await page.evaluate(async () => {
