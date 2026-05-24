@@ -454,7 +454,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
               <div className="bg-white/80 border border-[#cbecfe] rounded-2xl p-4.5 text-xs text-[#003178]">
                 <div className="flex items-center gap-1.5 font-bold text-xs mb-1.5">
                   <Sparkles className="h-4 w-4 text-[#003178]" />
-                  <span>AI 生成逻辑</span>
+                  <span>计划生成逻辑</span>
                 </div>
                 <p className="text-[10.5px] leading-relaxed text-[#434652] font-medium">
                   系统根据考试倒计时 <span className="font-bold text-[#003178]">({daysRemaining}天)</span>、目标分数 <span className="font-bold text-[#003178]">({targetScore}+)</span> 及每日投入 <span className="font-bold text-[#003178]">({dailyTargetMinutes}分钟)</span> 动态计算训练节奏。

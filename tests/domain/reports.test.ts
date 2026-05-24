@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildChoicePracticeReport } from '../../src/domain/practice/reports';
+import { buildChoicePracticeReport, buildSpeakingPracticeReport, buildSubjectivePracticeReport } from '../../src/domain/practice/reports';
 
 describe('buildChoicePracticeReport', () => {
   it('creates attempts, review items, and skill evidence from wrong answers', () => {
@@ -67,5 +67,76 @@ describe('buildChoicePracticeReport', () => {
     expect(report.attempts[0].mistakeReasons).toEqual([]);
     expect(report.reviewItems).toEqual([]);
     expect(report.skillProfiles[0].score).toBe(100);
+  });
+
+  it('creates speaking attempts, review work, and skill evidence from a retell round', () => {
+    const report = buildSpeakingPracticeReport({
+      examId: 'cet4',
+      modeId: 'cet-set4-retell',
+      startedAt: new Date(Date.now() - 45_000).toISOString(),
+      originalSpeech: 'um I can see wind power and it is good for environment',
+      analysisMode: 'live',
+      analysis: {
+        originalTextWithMarkings: '[filler um] I can see wind power and it is good for environment',
+        improvedTextWithConnectors: 'The picture shows renewable energy facilities, which can reduce pollution and support sustainable development.',
+        fillerCount: 1,
+        fluencyAnalysis: '减少填充词，先完整输出主题句。',
+        logicAnalysis: '补充观点、原因和限制。',
+        vocabularyAnalysis: '用 renewable energy 替换 good energy。',
+        scoreImprovementFrom: 58,
+        scoreImprovementTo: 72,
+      },
+    });
+
+    expect(report.session).toMatchObject({
+      moduleId: 'speaking',
+      modeId: 'cet-set4-retell',
+      status: 'completed',
+    });
+    expect(report.attempts[0].aiFeedback?.nextActions[0]).toContain('renewable energy');
+    expect(report.reviewItems[0]).toMatchObject({
+      targetType: 'speaking-pattern',
+      skillArea: 'speaking',
+    });
+    expect(report.skillProfiles[0]).toMatchObject({
+      skillArea: 'speaking',
+      score: 72,
+    });
+  });
+
+  it('creates subjective writing or translation evidence from AI feedback', () => {
+    const report = buildSubjectivePracticeReport({
+      examId: 'cet4',
+      moduleId: 'translation',
+      questionTypeId: 'paragraph-translation',
+      modeId: 'translation-practice',
+      plannedMinutes: 30,
+      startedAt: new Date(Date.now() - 90_000).toISOString(),
+      prompt: 'Translate a paragraph about renewable energy.',
+      answer: 'Renewable energy plays more important role in city development.',
+      analysis: {
+        score: 68,
+        mistakeReasons: ['中文干扰', '搭配错误'],
+        comments: ['句序受中文影响。'],
+        nextActions: ['先确定主干，再处理修饰。'],
+        sampleAnswer: 'Renewable energy is playing an increasingly important role in urban development.',
+        confidence: 'medium',
+      },
+    });
+
+    expect(report.session).toMatchObject({
+      moduleId: 'translation',
+      modeId: 'translation-practice',
+      status: 'completed',
+    });
+    expect(report.attempts[0].mistakeReasons).toContain('中文干扰');
+    expect(report.reviewItems[0]).toMatchObject({
+      targetType: 'expression',
+      skillArea: 'translation',
+    });
+    expect(report.skillProfiles[0]).toMatchObject({
+      skillArea: 'translation',
+      score: 68,
+    });
   });
 });

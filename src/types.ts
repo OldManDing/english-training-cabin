@@ -15,7 +15,11 @@ export type MistakeReason =
   | '低信心'
   | '盲猜'
   | '表达不自然'
-  | '语法错误';
+  | '语法错误'
+  | '论证结构松散'
+  | '搭配错误'
+  | '时态语态错误'
+  | '中文干扰';
 
 export interface ExamProfile {
   id: string;

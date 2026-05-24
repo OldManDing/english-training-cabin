@@ -1,20 +1,113 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, Calendar, HelpCircle, GraduationCap, CheckCircle, ChevronRight, Settings, Target, AlertTriangle, Play, Sparkles, Clock, RefreshCw } from 'lucide-react';
+import { SkillProfile, StudyGoal } from '../types';
 
 interface OnboardingDiagnosticProps {
   onDismiss: () => void;
   onSetScoreLimit?: (score: number) => void;
+  onCompleteDiagnostic?: (result: {
+    targetScore: number;
+    examDate: string;
+    dailyMinutes: number;
+    prioritySkills: StudyGoal['prioritySkills'];
+    skillProfiles: SkillProfile[];
+  }) => Promise<void> | void;
 }
 
-export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit }: OnboardingDiagnosticProps) {
+function levelToScore(level: 'A' | 'B' | 'C'): number {
+  if (level === 'A') return 55;
+  if (level === 'B') return 72;
+  return 86;
+}
+
+function getDaysRemaining(date: string): number {
+  const target = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(target.getTime())) return 0;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.max(0, Math.ceil((target.getTime() - today.getTime()) / 86400000));
+}
+
+export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit, onCompleteDiagnostic }: OnboardingDiagnosticProps) {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [targetScore, setTargetScore] = useState<number>(550);
   const [countdownDate, setCountdownDate] = useState<string>("2026-06-15");
+  const [dailyMinutes, setDailyMinutes] = useState<number>(45);
   const [testReading, setTestReading] = useState<'A' | 'B' | 'C'>('B'); // B = 中级
   const [testListening, setTestListening] = useState<'A' | 'B' | 'C'>('B');
   const [testTranslation, setTestTranslation] = useState<'A' | 'B' | 'C'>('A'); // A = 入门
   const [testWriting, setTestWriting] = useState<'A' | 'B' | 'C'>('B');
   const [testOral, setTestOral] = useState<'A' | 'B' | 'C'>('A');
+  const readingScore = levelToScore(testReading);
+  const listeningScore = levelToScore(testListening);
+  const translationScore = levelToScore(testTranslation);
+  const writingScore = levelToScore(testWriting);
+  const speakingScore = levelToScore(testOral);
+  const daysRemaining = getDaysRemaining(countdownDate);
+  const skillLabelMap: Record<SkillProfile['skillArea'], string> = {
+    reading: '阅读',
+    listening: '听力',
+    translation: '翻译',
+    writing: '写作',
+    speaking: '口语',
+    vocabulary: '词汇',
+    grammar: '语法',
+  };
+  const prioritizedSkillEntries = [
+    { skillArea: 'reading' as const, score: readingScore },
+    { skillArea: 'listening' as const, score: listeningScore },
+    { skillArea: 'translation' as const, score: translationScore },
+    { skillArea: 'writing' as const, score: writingScore },
+    { skillArea: 'speaking' as const, score: speakingScore },
+  ].sort((left, right) => left.score - right.score);
+  const prioritySkills = prioritizedSkillEntries.map((item) => item.skillArea);
+  const topPriorityText = prioritizedSkillEntries
+    .slice(0, 2)
+    .map((item) => skillLabelMap[item.skillArea])
+    .join(' & ');
+  const skillCopy: Record<SkillProfile['skillArea'], { focus: string; strong: string; weak: string }> = {
+    reading: {
+      focus: '阅读定位与同义替换',
+      strong: '自评阅读基线较高，可先用限时仔细阅读巩固定位速度。',
+      weak: '阅读基线偏低，今日任务会优先安排题干定位和选项排除训练。',
+    },
+    listening: {
+      focus: '听力长对话与转折信息',
+      strong: '自评听力基线较高，可加入精听和影子跟读保持辨音稳定度。',
+      weak: '听力基线偏低，建议从长对话关键词、数字时间和转折信号开始。',
+    },
+    translation: {
+      focus: '翻译句法转换',
+      strong: '翻译基线较高，可继续积累搭配和复杂句表达。',
+      weak: '翻译基线偏低，系统会优先安排中文干扰、搭配和时态语态修正。',
+    },
+    writing: {
+      focus: '写作结构与论证',
+      strong: '写作基线较高，可用 AI 评阅继续打磨结构和表达多样性。',
+      weak: '写作基线偏低，先练主题句、例证展开和结尾收束。',
+    },
+    speaking: {
+      focus: '口语连贯与自然表达',
+      strong: '口语基线较高，适合每天用短回合保持输出和重说节奏。',
+      weak: '口语基线偏低，建议从图片描述、连接词和二次重说开始。',
+    },
+    vocabulary: {
+      focus: '词汇识别',
+      strong: '词汇基础较稳定。',
+      weak: '词汇证据不足，需要在阅读和听力中继续积累。',
+    },
+    grammar: {
+      focus: '语法结构',
+      strong: '语法基础较稳定。',
+      weak: '语法证据不足，需要在写作和翻译中继续积累。',
+    },
+  };
+  const strongestSkillEntries = [...prioritizedSkillEntries].sort((left, right) => right.score - left.score).slice(0, 2);
+  const weakestSkillEntries = prioritizedSkillEntries.slice(0, 2);
+  const ringOffset = 263.8 - Math.min(1, dailyMinutes / 90) * 263.8;
+  const diagnosticMinutes = Math.max(8, Math.round(dailyMinutes * 0.25));
+  const practiceMinutes = Math.max(12, Math.round(dailyMinutes * 0.45));
+  const reviewMinutes = Math.max(6, dailyMinutes - diagnosticMinutes - practiceMinutes);
 
   // Loading animation simulation for Step 3
   const [simulatedLoadMsg, setSimulatedLoadMsg] = useState("正在抓取词汇储备模型...");
@@ -38,7 +131,66 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit }: Onb
 
   const handleConfirmPlan = () => {
     setStep(3);
-    if (onSetScoreLimit) {
+    const now = new Date().toISOString();
+    const skillProfiles: SkillProfile[] = [
+      {
+        id: 'cet4-reading-diagnostic',
+        skillArea: 'reading',
+        subSkillId: 'diagnostic-reading',
+        score: levelToScore(testReading),
+        confidence: 3,
+        evidenceCount: 1,
+        lastUpdatedAt: now,
+      },
+      {
+        id: 'cet4-listening-diagnostic',
+        skillArea: 'listening',
+        subSkillId: 'diagnostic-listening',
+        score: levelToScore(testListening),
+        confidence: 3,
+        evidenceCount: 1,
+        lastUpdatedAt: now,
+      },
+      {
+        id: 'cet4-translation-diagnostic',
+        skillArea: 'translation',
+        subSkillId: 'diagnostic-translation',
+        score: levelToScore(testTranslation),
+        confidence: 3,
+        evidenceCount: 1,
+        lastUpdatedAt: now,
+      },
+      {
+        id: 'cet4-writing-diagnostic',
+        skillArea: 'writing',
+        subSkillId: 'diagnostic-writing',
+        score: levelToScore(testWriting),
+        confidence: 3,
+        evidenceCount: 1,
+        lastUpdatedAt: now,
+      },
+      {
+        id: 'cet4-speaking-diagnostic',
+        skillArea: 'speaking',
+        subSkillId: 'diagnostic-speaking',
+        score: levelToScore(testOral),
+        confidence: 3,
+        evidenceCount: 1,
+        lastUpdatedAt: now,
+      },
+    ];
+
+    if (onCompleteDiagnostic) {
+      Promise.resolve(onCompleteDiagnostic({
+        targetScore,
+        examDate: countdownDate,
+        dailyMinutes,
+        prioritySkills,
+        skillProfiles,
+      })).catch((error) => {
+        console.error('Failed to save diagnostic result:', error);
+      });
+    } else if (onSetScoreLimit) {
       onSetScoreLimit(targetScore);
     }
   };
@@ -186,9 +338,32 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit }: Onb
                   <label className="text-xs font-bold text-[#071e27] block">倒计时</label>
                   <div className="bg-[#dbf1fe] text-[#003178] border border-[#cfe6f2] px-4 py-2.5 rounded-xl font-black text-sm flex items-center justify-between">
                     <span className="text-xs font-semibold">剩余</span>
-                    <span className="text-lg">42 <span className="text-xs font-bold">天</span></span>
+                    <span className="text-lg">{daysRemaining} <span className="text-xs font-bold">天</span></span>
                   </div>
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-[#071e27] block">⏱ 每日可投入时间</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[30, 45, 60, 90].map((minutes) => (
+                    <button
+                      key={minutes}
+                      type="button"
+                      onClick={() => setDailyMinutes(minutes)}
+                      className={`rounded-xl border px-3 py-2 text-xs font-black transition-all ${
+                        dailyMinutes === minutes
+                          ? 'border-[#003178] bg-[#003178] text-white shadow-2xs'
+                          : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-[#003178] hover:text-[#003178]'
+                      }`}
+                    >
+                      {minutes}m
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] font-semibold text-slate-400">
+                  诊断会把此时间写入学习目标，今日任务会按该预算自动切分诊断、练习、复习和口语。
+                </p>
               </div>
 
               {/* Baseline capabilities select toggles */}
@@ -300,7 +475,7 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit }: Onb
                 <h3 className="text-sm font-black text-[#071e27] pb-2 border-b border-gray-100 flex items-center gap-1">
                   📈 每日训练负荷
                 </h3>
-                <p className="text-[11px] text-gray-500">基于目标与剩余时间的 AI 评估算法</p>
+                <p className="text-[11px] text-gray-500">基于目标、剩余时间与自评基线的本地调度算法</p>
 
                 {/* Circular ring chart */}
                 <div className="flex flex-col items-center justify-center py-6">
@@ -323,14 +498,14 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit }: Onb
                         strokeWidth="8"
                         fill="transparent"
                         strokeDasharray="263.8"
-                        strokeDashoffset="65" /* representing 45 mins load out of some baseline */
+                        strokeDashoffset={ringOffset}
                         strokeLinecap="round"
                       />
                     </svg>
                     
                     {/* Ring Inner Text label */}
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                      <span className="text-4xl font-extrabold text-[#003178] tracking-tight">45</span>
+                      <span className="text-4xl font-extrabold text-[#003178] tracking-tight">{dailyMinutes}</span>
                       <span className="text-[10px] text-gray-400 font-bold">分钟/天</span>
                     </div>
                   </div>
@@ -339,19 +514,19 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit }: Onb
                 {/* Subtask breakdowns inside schedule container */}
                 <div className="space-y-3.5 pt-4">
                   <div className="flex items-center justify-between text-xs font-semibold">
-                    <span className="flex items-center gap-2 text-slate-600">
-                      <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
-                      新词习得
+                      <span className="flex items-center gap-2 text-slate-600">
+                        <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+                      入门诊断
                     </span>
-                    <span className="text-[#003178] font-mono">15 分钟</span>
+                    <span className="text-[#003178] font-mono">{diagnosticMinutes} 分钟</span>
                   </div>
 
                   <div className="flex items-center justify-between text-xs font-semibold">
                     <span className="flex items-center gap-2 text-slate-600">
                       <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
-                      听力精读
+                      弱项专项
                     </span>
-                    <span className="text-[#003178] font-mono">20 分钟</span>
+                    <span className="text-[#003178] font-mono">{practiceMinutes} 分钟</span>
                   </div>
 
                   <div className="flex items-center justify-between text-xs font-semibold">
@@ -359,7 +534,7 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit }: Onb
                       <span className="w-2.5 h-2.5 rounded-full bg-amber-600" />
                       错题复习
                     </span>
-                    <span className="text-[#003178] font-mono">10 分钟</span>
+                    <span className="text-[#003178] font-mono">{reviewMinutes} 分钟</span>
                   </div>
                 </div>
 
@@ -413,8 +588,8 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit }: Onb
           {/* Grid Layout of results panel */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
             
-            {/* SVG RADAR CHART (Exactly matching Listening 68, Reading 82, Speaking 55, Writing 70 layout) */}
-            <div className="bg-[#f8fafc] rounded-2xl border p-6 flex flex-col items-center justify-center relative shadow-2xs">
+              {/* SVG RADAR CHART based on selected self-diagnostic levels */}
+              <div className="bg-[#f8fafc] rounded-2xl border p-6 flex flex-col items-center justify-center relative shadow-2xs">
               <span className="text-[10px] font-bold text-[#003178] bg-white border px-2 py-0.5 rounded-full mb-4">
                 综合能力雷达图
               </span>
@@ -430,31 +605,28 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit }: Onb
                 <line x1="100" y1="20" x2="100" y2="180" stroke="#cbd5e1" strokeWidth="1" />
                 <line x1="20" y1="100" x2="180" y2="100" stroke="#cbd5e1" strokeWidth="1" />
 
-                {/* Score polygon points calculations based on center = (100, 100)
-                    1. 听力 Listening (Up axis, score = 68% -> r = 68*0.8 = 54.4 -> (100, 100 - 54.4) = (100, 45.6)
-                    2. 阅读 Reading (Right axis, score = 82% -> r = 82*0.8 = 65.6 -> (100 + 65.6, 100) = (165.6, 100)
-                    3. 写作 Writing (Down axis, score = 70% -> r = 70*0.8 = 56 -> (100, 100 + 56) = (100, 156)
-                    4. 口语 Speaking (Left axis, score = 55% -> r = 55*0.8 = 44 -> (100 - 44, 100) = (56, 100)
-                */}
                 <polygon
-                  points="100,45.6 165.6,100 100,156 56,100"
+                  points={`100,${100 - listeningScore * 0.8} ${100 + readingScore * 0.8},100 100,${100 + writingScore * 0.8} ${100 - speakingScore * 0.8},100`}
                   fill="rgba(13, 71, 161, 0.15)"
                   stroke="#003178"
                   strokeWidth="2.5"
                 />
 
                 {/* Points highlights */}
-                <circle cx="100" cy="45.6" r="4" fill="#003178" />
-                <circle cx="165.6" cy="100" r="4" fill="#003178" />
-                <circle cx="100" cy="156" r="4" fill="#003178" />
-                <circle cx="56" cy="100" r="4" fill="#003178" />
+                <circle cx="100" cy={100 - listeningScore * 0.8} r="4" fill="#003178" />
+                <circle cx={100 + readingScore * 0.8} cy="100" r="4" fill="#003178" />
+                <circle cx="100" cy={100 + writingScore * 0.8} r="4" fill="#003178" />
+                <circle cx={100 - speakingScore * 0.8} cy="100" r="4" fill="#003178" />
 
                 {/* Text labels exactly as diagram */}
-                <text x="100" y="15" textAnchor="middle" fontSize="9" fontWeight="bold" fill="#475569">听力 (68/100)</text>
-                <text x="184" y="103" textAnchor="start" fontSize="9" fontWeight="bold" fill="#475569">阅读 (82)</text>
-                <text x="100" y="193" textAnchor="middle" fontSize="9" fontWeight="bold" fill="#475569">写作 (70)</text>
-                <text x="14" y="103" textAnchor="end" fontSize="9" fontWeight="bold" fill="#475569">口语 (55)</text>
+                <text x="100" y="15" textAnchor="middle" fontSize="9" fontWeight="bold" fill="#475569">听力 ({listeningScore}/100)</text>
+                <text x="184" y="103" textAnchor="start" fontSize="9" fontWeight="bold" fill="#475569">阅读 ({readingScore})</text>
+                <text x="100" y="193" textAnchor="middle" fontSize="9" fontWeight="bold" fill="#475569">写作 ({writingScore})</text>
+                <text x="14" y="103" textAnchor="end" fontSize="9" fontWeight="bold" fill="#475569">口语 ({speakingScore})</text>
               </svg>
+              <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-[10px] font-bold text-amber-800">
+                翻译基线：{translationScore}/100，会进入能力画像并影响今日任务调度。
+              </div>
             </div>
 
             {/* Strengths & Weaknesses column */}
@@ -466,23 +638,16 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit }: Onb
                 </span>
 
                 <div className="space-y-3">
-                  <div className="p-3 bg-[#e8f5e9]/50 border-l-4 border-emerald-500 rounded-r-xl">
-                    <h4 className="text-xs font-bold text-[#071e27] flex items-center gap-1.5">
-                      <span className="text-emerald-600">✓</span> 阅读主旨识别
-                    </h4>
-                    <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                      能快速抓取段落核心思想，时限消耗优于 75% 平台真实考生。
-                    </p>
-                  </div>
-
-                  <div className="p-3 bg-[#e8f5e9]/50 border-l-4 border-emerald-500 rounded-r-xl">
-                    <h4 className="text-xs font-bold text-[#071e27] flex items-center gap-1.5">
-                      <span className="text-emerald-600">✓</span> 基础词汇量
-                    </h4>
-                    <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                      初步评测掌握约 3500 核心CET-4词汇，名词和主干句意识别极其稳固。
-                    </p>
-                  </div>
+                  {strongestSkillEntries.map((item) => (
+                    <div key={item.skillArea} className="p-3 bg-[#e8f5e9]/50 border-l-4 border-emerald-500 rounded-r-xl">
+                      <h4 className="text-xs font-bold text-[#071e27] flex items-center gap-1.5">
+                        <span className="text-emerald-600">✓</span> {skillCopy[item.skillArea].focus} · {item.score}/100
+                      </h4>
+                      <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                        {skillCopy[item.skillArea].strong}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -493,25 +658,17 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit }: Onb
                 </span>
 
                 <div className="space-y-3">
-                  <div className="p-3 bg-[#ffebee]/50 border-l-4 border-rose-400 rounded-r-xl">
-                    <h4 className="text-xs font-bold text-[#071e27] flex items-center gap-1.5">
-                      <AlertTriangle className="h-3.5 w-3.5 text-rose-500 shrink-0" />
-                      听力细节捕捉
-                    </h4>
-                    <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                      长对话中容易遗漏关键数字、主客对应与时间，注意克服转折陷阱。
-                    </p>
-                  </div>
-
-                  <div className="p-3 bg-[#ffebee]/50 border-l-4 border-rose-400 rounded-r-xl">
-                    <h4 className="text-xs font-bold text-[#071e27] flex items-center gap-1.5">
-                      <AlertTriangle className="h-3.5 w-3.5 text-rose-500 shrink-0" />
-                      长难句拆解
-                    </h4>
-                    <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                      面对多重从句与复杂定状嵌套结构时，综合抓取主谓宾的速度显著下降。
-                    </p>
-                  </div>
+                  {weakestSkillEntries.map((item) => (
+                    <div key={item.skillArea} className="p-3 bg-[#ffebee]/50 border-l-4 border-rose-400 rounded-r-xl">
+                      <h4 className="text-xs font-bold text-[#071e27] flex items-center gap-1.5">
+                        <AlertTriangle className="h-3.5 w-3.5 text-rose-500 shrink-0" />
+                        {skillCopy[item.skillArea].focus} · {item.score}/100
+                      </h4>
+                      <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                        {skillCopy[item.skillArea].weak}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -525,11 +682,11 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit }: Onb
               <Sparkles className="h-5 w-5 animate-spin-slow shrink-0" />
               <div>
                 <span className="font-semibold block text-[#0284c7] text-[10px] uppercase">系统推荐策略</span>
-                <p className="font-extrabold text-[#0369a1] text-xs">建议优先训练模块: 仔细阅读 & 听力长对话</p>
+                <p className="font-extrabold text-[#0369a1] text-xs">建议优先训练模块: {topPriorityText}</p>
               </div>
             </div>
             <span className="text-[10px] font-bold text-[#0369a1] bg-[#e0f2fe] border border-[#bae6fd] px-2 py-1 rounded-full shrink-0">
-              定制权重: 60%
+              依据：目标分数 · 每日 {dailyMinutes} 分钟 · 自评基线
             </span>
           </div>
 

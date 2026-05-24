@@ -388,7 +388,7 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
               <div className="p-4 bg-neutral-50 border border-neutral-200 rounded-2xl">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-[#434652] mb-3">
                   <HelpCircle className="h-4 w-4 text-[#003178]" />
-                  <span>答题把握度诊断 (影响 AI 行为学分析结果)：</span>
+                  <span>答题把握度诊断 (影响错因分析和复习优先级)：</span>
                 </div>
                 <div className="flex gap-2">
                   {[
@@ -423,7 +423,7 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
                   <div className="flex justify-between items-center mb-2">
                     <div className="text-xs font-bold text-[#003178] flex items-center gap-1">
                       <Sparkles className="h-3.5 w-3.5 animate-bounce" />
-                      <span>AI 行为诊断反馈</span>
+                      <span>错因行为诊断反馈</span>
                     </div>
                     <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${currentFeedback.badgeColor}`}>
                       {currentFeedback.badge}

@@ -21,6 +21,11 @@
 - 产品精修：复习队列空状态不再展示虚假待复习数量，改为明确提示“完成训练后生成真实错因”。
 - 产品精修：对外名称统一为“英语训练舱 / AI 英语能力训练系统”，减少单一 CET-4 AI 教练表述。
 - 产品精修：清理用户界面中不适合上线的口语化、不可证或过强营销文案。
+- 产品精修：今日页能力弱项只显示真实 `SkillProfile` 分数，未诊断模块显示“待诊断”。
+- 产品精修：复习页无真实错因时不再提供示例复习流程，改为生产空状态。
+- 产品精修：口语重说新增第二次重说转写确认，完成后才生成对比报告并写入能力证据。
+- 产品精修：入门诊断结果页改为基于用户自评动态生成强项、弱项和推荐依据，去除平台排名、固定词汇量、固定权重等未验证表述。
+- 数据精修：练习完成写入能力画像时按证据数合并同一能力点，避免重复训练覆盖历史证据。
 - 本机环境：已安装 Playwright Chromium，E2E 可在当前机器直接运行。
 - 供应商验证：BaseUI `/models` 可访问，本机 `.env.local` 使用 `gpt-5.4-mini`。
 - 供应商验证：生产包在 `PORT=3200` 下调用 `/api/ai/analyze-speech` 与 `/api/ai/generate-passage` 成功，2 次 AI 请求、0 次兜底，平均耗时约 7.2 秒。
@@ -32,9 +37,9 @@
 | 门禁 | 命令 | 结果 |
 | --- | --- | --- |
 | TypeScript 类型检查 | `npm run lint` | 通过 |
-| 单元/API 测试 | `npm run test` | 4 个测试文件，21 个用例通过 |
+| 单元/API 测试 | `npm run test` | 4 个测试文件，29 个用例通过 |
 | 生产构建 | `npm run build` | 通过，无 chunk 体积告警 |
-| 浏览器 E2E | `playwright test` | 6 个桌面 Chromium 用例 + 1 个移动 Chromium 用例通过 |
+| 浏览器 E2E | `playwright test` | 9 个桌面 Chromium 用例 + 1 个移动 Chromium 用例通过 |
 | 串行总验证 | `npm run verify` | 通过 |
 | 依赖安全审计 | `npm audit --audit-level=moderate` | 0 个已知漏洞 |
 | 本地开发运行 | `PORT=3300 npm run dev` + 浏览器控制台 | Vite websocket 正常连接，0 个 console error |
@@ -44,6 +49,10 @@
 | 功能路径 | 覆盖方式 | 证据 |
 | --- | --- | --- |
 | 阅读训练闭环 | E2E | 完成 5 题阅读训练，IndexedDB 写入 session、attempt、reviewItem、skillProfile |
+| 主动复习闭环 | E2E | 真实错因按三步复盘，完成后更新 mastery、nextReviewAt 和 review skillProfile |
+| 入门诊断闭环 | E2E | 诊断写入目标分、每日时间、五项能力画像，再回到今日训练 |
+| 口语重说闭环 | E2E | 首次转写、AI/模拟反馈、第二次重说转写确认、报告持久化 |
+| 翻译训练闭环 | E2E | AI 评阅后生成 attempt、reviewItem 和 translation skillProfile |
 | API 健康与今日计划 | E2E + API 测试 | `/api/health`、`/api/study/daily-plan` 返回成功，健康检查返回 AI provider/model 状态但不泄露 key |
 | AI 阅读生成兜底 | API 测试 | 无 API Key 时返回离线模拟材料 |
 | 口语分析兜底 | API 测试 | 无 API Key 时返回结构化模拟反馈 |
@@ -61,7 +70,7 @@
 - 通过：类型检查、领域/API 测试、生产构建、桌面与移动端 E2E、生产构建控制台错误断言、本地开发地址手工浏览器验证。
 - 通过：健康检查、今日计划、材料校验、练习报告、AI 阅读生成、AI 口语分析、观测汇总均可访问。
 - 通过：AI 供应商 BaseUI 已按 OpenAI-compatible `/v1/chat/completions` 调用成功；供应商异常时仍有离线兜底。
-- 通过：前端关键闭环覆盖到阅读训练写入 IndexedDB、复习项生成、能力画像更新、材料导入、数据导出与恢复。
+- 通过：前端关键闭环覆盖到阅读训练写入 IndexedDB、复习项生成、主动复习、入门诊断持久化、口语二次重说、翻译评阅、能力画像更新、材料导入、数据导出与恢复。
 
 ## 产品验收结论
 

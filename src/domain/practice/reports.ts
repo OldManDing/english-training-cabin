@@ -38,6 +38,48 @@ interface BuildChoicePracticeReportInput {
   answers: ChoicePracticeAnswer[];
 }
 
+export interface SpeakingPracticeAnalysis {
+  originalTextWithMarkings: string;
+  improvedTextWithConnectors: string;
+  fillerCount: number;
+  fluencyAnalysis: string;
+  logicAnalysis: string;
+  vocabularyAnalysis: string;
+  scoreImprovementFrom: number;
+  scoreImprovementTo: number;
+}
+
+export interface BuildSpeakingPracticeReportInput {
+  examId?: string;
+  modeId: string;
+  startedAt: string;
+  originalSpeech: string;
+  secondSpeech?: string;
+  analysis: SpeakingPracticeAnalysis;
+  analysisMode: 'live' | 'fallback' | 'unknown';
+}
+
+export interface SubjectivePracticeAnalysis {
+  score: number;
+  mistakeReasons: MistakeReason[];
+  comments: string[];
+  nextActions: string[];
+  sampleAnswer: string;
+  confidence: 'low' | 'medium' | 'high';
+}
+
+export interface BuildSubjectivePracticeReportInput {
+  examId?: string;
+  moduleId: 'writing' | 'translation';
+  questionTypeId: string;
+  modeId: string;
+  plannedMinutes: number;
+  startedAt: string;
+  prompt: string;
+  answer: string;
+  analysis: SubjectivePracticeAnalysis;
+}
+
 function makeId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -184,5 +226,186 @@ export function buildChoicePracticeReport(input: BuildChoicePracticeReportInput)
     attempts,
     reviewItems,
     skillProfiles,
+  };
+}
+
+export function buildSpeakingPracticeReport(input: BuildSpeakingPracticeReportInput): PracticeCompletionReport {
+  const examId = input.examId ?? 'cet4';
+  const sessionId = makeId('session-speaking');
+  const now = new Date().toISOString();
+  const targetScore = Math.max(0, Math.min(100, input.analysis.scoreImprovementTo));
+  const mistakeReasons: MistakeReason[] = [];
+
+  if (input.analysis.fillerCount > 0) mistakeReasons.push('表达不自然');
+  if (targetScore < 70) mistakeReasons.push('语法错误');
+  if (input.analysisMode === 'fallback') mistakeReasons.push('低信心');
+  if (mistakeReasons.length === 0 && targetScore < 85) mistakeReasons.push('表达不自然');
+
+  const attempt: Attempt = {
+    id: makeId('attempt-speaking'),
+    sessionId,
+    questionId: 'cet-set4-retell',
+    examId,
+    moduleId: 'speaking',
+    questionTypeId: 'cet-set4-retell',
+    answer: {
+      firstAttempt: input.originalSpeech,
+      secondAttempt: input.secondSpeech ?? input.analysis.improvedTextWithConnectors,
+    },
+    isCorrect: targetScore >= 70,
+    elapsedSeconds: Math.max(1, Math.round((Date.now() - new Date(input.startedAt).getTime()) / 1000)),
+    confidence: targetScore >= 80 ? 4 : 3,
+    mistakeReasons,
+    aiFeedback: {
+      score: targetScore,
+      mistakeReasons,
+      comments: [
+        input.analysis.fluencyAnalysis,
+        input.analysis.logicAnalysis,
+        input.analysis.vocabularyAnalysis,
+      ],
+      nextActions: [
+        input.analysis.improvedTextWithConnectors,
+      ],
+      confidence: input.analysisMode === 'fallback' ? 'low' : 'medium',
+    },
+    createdAt: now,
+  };
+
+  const nextReviewAt = new Date();
+  nextReviewAt.setDate(nextReviewAt.getDate() + 1);
+
+  const reviewItems: ReviewItem[] = mistakeReasons.length > 0
+    ? [
+        {
+          id: makeId('review-speaking'),
+          title: `口语错因：${mistakeReasons[0]}`,
+          category: '句式',
+          detail: `原表达：${input.originalSpeech}\n建议表达：${input.analysis.improvedTextWithConnectors}\n复习重点：${mistakeReasons.join('、')}。`,
+          daysAgo: 0,
+          targetType: 'speaking-pattern',
+          targetId: 'cet-set4-retell',
+          examId,
+          moduleId: 'speaking',
+          skillArea: 'speaking',
+          masteryScore: Math.max(30, Math.min(75, targetScore)),
+          priorityScore: 75 + mistakeReasons.length * 5,
+          reviewIntervalDays: 1,
+          nextReviewAt: nextReviewAt.toISOString(),
+          sourceAttemptId: attempt.id,
+          createdAt: now,
+        },
+      ]
+    : [];
+
+  return {
+    session: {
+      id: sessionId,
+      examId,
+      moduleId: 'speaking',
+      modeId: input.modeId,
+      startedAt: input.startedAt,
+      finishedAt: now,
+      plannedMinutes: 15,
+      questionIds: ['cet-set4-retell'],
+      status: 'completed',
+    },
+    attempts: [attempt],
+    reviewItems,
+    skillProfiles: [
+      {
+        id: `${examId}-speaking-cet-set4-retell`,
+        skillArea: 'speaking',
+        subSkillId: 'cet-set4-retell',
+        score: targetScore,
+        confidence: targetScore >= 80 ? 4 : 3,
+        evidenceCount: 1,
+        lastUpdatedAt: now,
+      },
+    ],
+  };
+}
+
+export function buildSubjectivePracticeReport(input: BuildSubjectivePracticeReportInput): PracticeCompletionReport {
+  const examId = input.examId ?? 'cet4';
+  const now = new Date().toISOString();
+  const sessionId = makeId(`session-${input.moduleId}`);
+  const score = Math.max(0, Math.min(100, Math.round(input.analysis.score)));
+  const mistakeReasons = input.analysis.mistakeReasons.length > 0
+    ? input.analysis.mistakeReasons
+    : score < 85
+    ? ['表达不自然' as MistakeReason]
+    : [];
+  const questionId = `${input.moduleId}-${input.questionTypeId}`;
+
+  const attempt: Attempt = {
+    id: makeId(`attempt-${input.moduleId}`),
+    sessionId,
+    questionId,
+    examId,
+    moduleId: input.moduleId,
+    questionTypeId: input.questionTypeId,
+    answer: input.answer,
+    isCorrect: score >= 70,
+    elapsedSeconds: Math.max(1, Math.round((Date.now() - new Date(input.startedAt).getTime()) / 1000)),
+    confidence: input.analysis.confidence === 'high' ? 5 : input.analysis.confidence === 'low' ? 2 : 3,
+    mistakeReasons,
+    aiFeedback: {
+      score,
+      mistakeReasons,
+      comments: input.analysis.comments,
+      nextActions: input.analysis.nextActions,
+      confidence: input.analysis.confidence,
+    },
+    createdAt: now,
+  };
+
+  const nextReviewAt = new Date();
+  nextReviewAt.setDate(nextReviewAt.getDate() + (score < 70 ? 1 : 2));
+  const moduleName = input.moduleId === 'writing' ? '写作' : '翻译';
+  const reviewItems: ReviewItem[] = mistakeReasons.length > 0
+    ? [{
+        id: makeId(`review-${input.moduleId}`),
+        title: `${moduleName}错因：${mistakeReasons[0]}`,
+        category: '句式',
+        detail: `任务：${input.prompt}\n你的作答：${input.answer}\n改进示例：${input.analysis.sampleAnswer}\n下一步：${input.analysis.nextActions.join('；')}。`,
+        daysAgo: 0,
+        targetType: 'expression',
+        targetId: questionId,
+        examId,
+        moduleId: input.moduleId,
+        skillArea: input.moduleId,
+        masteryScore: Math.max(30, Math.min(80, score)),
+        priorityScore: (score < 70 ? 85 : 60) + mistakeReasons.length * 5,
+        reviewIntervalDays: score < 70 ? 1 : 2,
+        nextReviewAt: nextReviewAt.toISOString(),
+        sourceAttemptId: attempt.id,
+        createdAt: now,
+      }]
+    : [];
+
+  return {
+    session: {
+      id: sessionId,
+      examId,
+      moduleId: input.moduleId,
+      modeId: input.modeId,
+      startedAt: input.startedAt,
+      finishedAt: now,
+      plannedMinutes: input.plannedMinutes,
+      questionIds: [questionId],
+      status: 'completed',
+    },
+    attempts: [attempt],
+    reviewItems,
+    skillProfiles: [{
+      id: `${examId}-${input.moduleId}-${input.questionTypeId}`,
+      skillArea: input.moduleId,
+      subSkillId: input.questionTypeId,
+      score,
+      confidence: attempt.confidence ?? 3,
+      evidenceCount: 1,
+      lastUpdatedAt: now,
+    }],
   };
 }

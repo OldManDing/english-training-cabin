@@ -7,7 +7,8 @@ test('MVP critical reading flow persists local learning evidence', async ({ page
   await page.reload();
 
   await expect(page.getByRole('heading', { name: '今日训练' })).toBeVisible();
-  await page.getByRole('button', { name: /开始训练/ }).click();
+  await page.getByRole('button', { name: '专项练习' }).click();
+  await page.getByRole('button', { name: /开始仔细阅读训练/ }).first().click();
 
   for (let index = 0; index < 5; index += 1) {
     await page.getByRole('button', { name: /^A / }).click();
@@ -47,6 +48,214 @@ test('MVP critical reading flow persists local learning evidence', async ({ page
   expect(counts.attempts).toBe(5);
   expect(counts.reviewItems).toBeGreaterThan(0);
   expect(counts.skillProfiles).toBe(1);
+
+  await page.getByRole('button', { name: '复习队列' }).click();
+  await page.getByRole('button', { name: '开始复习' }).click();
+  await page.getByRole('button', { name: /说清楚本题错因/ }).click();
+  await expect(page.getByText('第 2 步：主动回忆')).toBeVisible();
+  await page.getByRole('button', { name: /先遮住解析/ }).click();
+  await expect(page.getByText('第 3 步：安排下次复习')).toBeVisible();
+  await page.getByRole('button', { name: /更新掌握度和下次复习时间/ }).click();
+  await expect(page.getByRole('heading', { name: '复习队列' })).toBeVisible();
+
+  const reviewedEvidence = await page.evaluate(async () => {
+    function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
+      return new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('english-training-cabin');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const tx = db.transaction(['reviewItems', 'skillProfiles'], 'readonly');
+    const items = await requestToPromise(tx.objectStore('reviewItems').getAll());
+    const reviewProfile = await requestToPromise(tx.objectStore('skillProfiles').get('cet4-reading-review'));
+    db.close();
+    return {
+      reviewed: items.some((item) => Boolean(item.lastReviewedAt) && item.masteryScore > 35),
+      reviewProfile,
+    };
+  });
+
+  expect(reviewedEvidence.reviewed).toBeTruthy();
+  expect(reviewedEvidence.reviewProfile).toMatchObject({
+    skillArea: 'reading',
+  });
+});
+
+test('MVP critical speaking retell flow persists review and ability evidence', async ({ page }) => {
+  await page.route('**/api/ai/analyze-speech', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        originalTextWithMarkings: '[filler um] In the picture, I can see wind turbines and solar panels.',
+        improvedTextWithConnectors:
+          'The picture shows renewable energy facilities, which can reduce pollution and support sustainable development. However, cost and local conditions should also be considered.',
+        fillerCount: 1,
+        fluencyAnalysis: '减少填充词，先完整输出主题句。',
+        logicAnalysis: '补充画面描述、观点、原因和限制。',
+        vocabularyAnalysis: '用 renewable energy、sustainable development 替换 good for environment。',
+        scoreImprovementFrom: 58,
+        scoreImprovementTo: 74,
+      }),
+    });
+  });
+
+  await page.goto('/');
+  await page.evaluate(() => indexedDB.deleteDatabase('english-training-cabin'));
+  await page.reload();
+
+  await page.getByRole('button', { name: '口语重说' }).click();
+  await page.getByRole('button', { name: '开始录音' }).click();
+  await expect(page.locator('textarea')).toBeVisible({ timeout: 7_000 });
+  await page.locator('textarea').fill('um In the picture, I can see wind turbines and solar panels. They are good for environment.');
+  await page.getByRole('button', { name: '完成录音' }).click();
+
+  await expect(page.getByRole('heading', { name: /口语重说 - AI 反馈与改写/ })).toBeVisible();
+  await expect(page.getByText('renewable energy facilities')).toBeVisible();
+  await page.getByRole('button', { name: '开始第二次重说' }).click();
+  await expect(page.getByText('第二次重说转写')).toBeVisible();
+  await page.locator('textarea').fill('The picture shows renewable energy facilities, which can reduce pollution and support sustainable development.');
+  await page.getByRole('button', { name: '完成第二次重说并生成对比报告' }).click();
+
+  await expect(page.getByRole('heading', { name: /口语重说 - 训练对比报告/ })).toBeVisible();
+  await expect(page.getByText('本轮口语证据已写入本地能力画像')).toBeVisible();
+
+  const counts = await page.evaluate(async () => {
+    function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
+      return new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('english-training-cabin');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+
+    const tx = db.transaction(['practiceSessions', 'attempts', 'reviewItems', 'skillProfiles'], 'readonly');
+    const result = {
+      sessions: await requestToPromise(tx.objectStore('practiceSessions').count()),
+      attempts: await requestToPromise(tx.objectStore('attempts').count()),
+      reviewItems: await requestToPromise(tx.objectStore('reviewItems').count()),
+      skillProfiles: await requestToPromise(tx.objectStore('skillProfiles').count()),
+    };
+    db.close();
+    return result;
+  });
+
+  expect(counts.sessions).toBe(1);
+  expect(counts.attempts).toBe(1);
+  expect(counts.reviewItems).toBe(1);
+  expect(counts.skillProfiles).toBe(1);
+});
+
+test('onboarding diagnostic persists the initial ability portrait before entering daily training', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => indexedDB.deleteDatabase('english-training-cabin'));
+  await page.reload();
+
+  await page.getByRole('button', { name: '入门能力诊断' }).click();
+  await page.getByRole('button', { name: '开始诊断' }).click();
+  await page.getByRole('button', { name: '确认并生成计划' }).click();
+
+  await expect(page.getByRole('heading', { name: '诊断完成！您的能力画像已生成' })).toBeVisible({ timeout: 7_000 });
+  await page.getByRole('button', { name: /开启今日训练/ }).click();
+  await expect(page.getByRole('heading', { name: '今日训练' })).toBeVisible();
+
+  const result = await page.evaluate(async () => {
+    function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
+      return new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('english-training-cabin');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const tx = db.transaction(['studyGoals', 'skillProfiles'], 'readonly');
+    const goal = await requestToPromise(tx.objectStore('studyGoals').get('goal-cet4-primary'));
+    const skillProfiles = await requestToPromise(tx.objectStore('skillProfiles').count());
+    db.close();
+    return { goal, skillProfiles };
+  });
+
+  expect(result.goal).toMatchObject({
+    targetScore: 550,
+    dailyMinutes: 45,
+  });
+  expect(result.skillProfiles).toBe(5);
+});
+
+test('MVP critical translation flow evaluates feedback and persists learning evidence', async ({ page }) => {
+  await page.route('**/api/ai/evaluate-subjective', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        score: 69,
+        mistakeReasons: ['中文干扰', '搭配错误'],
+        comments: ['译文基本完整，但句序受中文影响。'],
+        nextActions: ['先确定英文主干，再补充修饰成分。'],
+        sampleAnswer:
+          'In recent years, renewable energy has played an increasingly important role in urban development.',
+        confidence: 'medium',
+      }),
+    });
+  });
+
+  await page.goto('/');
+  await page.evaluate(() => indexedDB.deleteDatabase('english-training-cabin'));
+  await page.reload();
+
+  await page.getByRole('button', { name: '专项练习' }).click();
+  await page.getByRole('button', { name: '开始翻译训练' }).click();
+  await page.locator('textarea').fill('In recent years, renewable energy plays more and more important role in city development.');
+  await page.getByRole('button', { name: '提交并获取 AI 反馈' }).click();
+
+  await expect(page.getByText('译文基本完整，但句序受中文影响。')).toBeVisible();
+  await page.getByRole('button', { name: '完成训练并写入能力画像' }).click();
+  await expect(page.getByRole('heading', { name: '能力地图' })).toBeVisible();
+
+  const counts = await page.evaluate(async () => {
+    function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
+      return new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('english-training-cabin');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const tx = db.transaction(['practiceSessions', 'attempts', 'reviewItems', 'skillProfiles'], 'readonly');
+    const result = {
+      sessions: await requestToPromise(tx.objectStore('practiceSessions').count()),
+      attempts: await requestToPromise(tx.objectStore('attempts').count()),
+      reviewItems: await requestToPromise(tx.objectStore('reviewItems').count()),
+      translationProfile: await requestToPromise(tx.objectStore('skillProfiles').get('cet4-translation-paragraph-translation')),
+    };
+    db.close();
+    return result;
+  });
+
+  expect(counts.sessions).toBe(1);
+  expect(counts.attempts).toBe(1);
+  expect(counts.reviewItems).toBe(1);
+  expect(counts.translationProfile).toMatchObject({
+    skillArea: 'translation',
+    score: 69,
+  });
 });
 
 test('application shell loads without browser console errors', async ({ page }) => {
@@ -134,7 +343,7 @@ test('all MVP sections render their primary controls', async ({ page }) => {
 
   await page.getByRole('button', { name: '复习队列' }).click();
   await expect(page.getByRole('heading', { name: '复习队列' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /开始复习|体验示例复习/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /开始复习|先完成训练生成错因/ })).toBeVisible();
 
   await page.getByRole('button', { name: '口语重说' }).click();
   await expect(page.getByRole('heading', { name: /口语重说/ })).toBeVisible();

@@ -150,6 +150,100 @@ describe('server API', () => {
     });
   });
 
+  it('builds a speaking completion report through API', async () => {
+    const response = await request(app)
+      .post('/api/practice/speaking-report')
+      .send({
+        examId: 'cet4',
+        modeId: 'cet-set4-retell',
+        startedAt: new Date(Date.now() - 45_000).toISOString(),
+        originalSpeech: 'um I can see wind turbines and solar panels',
+        analysisMode: 'live',
+        analysis: {
+          originalTextWithMarkings: '[filler um] I can see wind turbines and solar panels',
+          improvedTextWithConnectors: 'The picture shows renewable energy facilities, which can reduce pollution and support sustainable development.',
+          fillerCount: 1,
+          fluencyAnalysis: '减少填充词，先完整输出主题句。',
+          logicAnalysis: '补充观点、原因和限制。',
+          vocabularyAnalysis: '用 renewable energy 替换 good energy。',
+          scoreImprovementFrom: 58,
+          scoreImprovementTo: 72,
+        },
+      })
+      .expect(200);
+
+    expect(response.body.report.session.moduleId).toBe('speaking');
+    expect(response.body.report.reviewItems[0]).toMatchObject({
+      targetType: 'speaking-pattern',
+      skillArea: 'speaking',
+    });
+    expect(response.body.report.skillProfiles[0]).toMatchObject({
+      skillArea: 'speaking',
+      score: 72,
+    });
+  });
+
+  it('rejects malformed speaking completion report payloads', async () => {
+    const response = await request(app)
+      .post('/api/practice/speaking-report')
+      .send({
+        originalSpeech: '',
+        analysis: {},
+      })
+      .expect(400);
+
+    expect(response.body.error).toBe('invalid_speaking_report');
+  });
+
+  it('falls back to structured subjective writing and translation evaluation without API key', async () => {
+    const response = await request(app)
+      .post('/api/ai/evaluate-subjective')
+      .send({
+        moduleId: 'translation',
+        prompt: 'Translate a paragraph about renewable energy.',
+        answer: 'Renewable energy plays more important role in city development.',
+      })
+      .expect(200);
+
+    expect(response.body.score).toBeGreaterThan(0);
+    expect(response.body.mistakeReasons).toContain('中文干扰');
+    expect(response.body).toHaveProperty('sampleAnswer');
+  });
+
+  it('builds a subjective completion report through API', async () => {
+    const response = await request(app)
+      .post('/api/practice/subjective-report')
+      .send({
+        examId: 'cet4',
+        moduleId: 'writing',
+        questionTypeId: 'short-essay',
+        modeId: 'writing-practice',
+        plannedMinutes: 30,
+        startedAt: new Date(Date.now() - 90_000).toISOString(),
+        prompt: 'Write about active practice.',
+        answer: 'Active practice is important because students can find mistakes.',
+        analysis: {
+          score: 70,
+          mistakeReasons: ['论证结构松散', '语法错误'],
+          comments: ['结构需要更清楚。'],
+          nextActions: ['增加主题句和例子。'],
+          sampleAnswer: 'Active practice helps learners discover mistakes and review weak points.',
+          confidence: 'medium',
+        },
+      })
+      .expect(200);
+
+    expect(response.body.report.session.moduleId).toBe('writing');
+    expect(response.body.report.reviewItems[0]).toMatchObject({
+      targetType: 'expression',
+      skillArea: 'writing',
+    });
+    expect(response.body.report.skillProfiles[0]).toMatchObject({
+      skillArea: 'writing',
+      score: 70,
+    });
+  });
+
   it('validates passage generation input', async () => {
     await request(app)
       .post('/api/ai/generate-passage')

@@ -17,9 +17,15 @@ interface ReviewSectionProps {
   onTriggerModal?: (title: string, body: string) => void;
   persistedReviewCount?: number;
   persistedReviewItems?: ReviewItem[];
+  onCompleteReviewItem?: (reviewItemId: string) => Promise<void> | void;
 }
 
-export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0, persistedReviewItems = [] }: ReviewSectionProps) {
+export default function ReviewSection({
+  onTriggerModal,
+  persistedReviewCount = 0,
+  persistedReviewItems = [],
+  onCompleteReviewItem,
+}: ReviewSectionProps) {
   const hasRealReviewItems = persistedReviewCount > 0 || persistedReviewItems.length > 0;
   // UI views: 'dashboard' is main view, 'quiz' is interactive simulator
   const [view, setView] = useState<'dashboard' | 'quiz'>('dashboard');
@@ -27,7 +33,6 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
   // Interactive statistics state
   const [pendingCount, setPendingCount] = useState<number>(persistedReviewCount);
   const [resolvedCount, setResolvedCount] = useState<number>(0);
-  const [averageMastery, setAverageMastery] = useState<number>(0);
   const [highPriorityMastery, setHighPriorityMastery] = useState<number>(46);
   const [quizCompleted, setQuizCompleted] = useState<boolean>(false);
   
@@ -36,13 +41,21 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
   
   // Selection or detail modals
   const [activeDetailItem, setActiveDetailItem] = useState<string | null>(null);
+  const [selectedReviewItemId, setSelectedReviewItemId] = useState<string | null>(null);
 
   // States for interactive mini-quiz Synonym Challenge
   const [quizStep, setQuizStep] = useState<number>(0);
   const [selectedMatch, setSelectedMatch] = useState<string | null>(null);
   const [wrongAnswerIndex, setWrongAnswerIndex] = useState<number | null>(null);
   const [correctAnswerIndex, setCorrectAnswerIndex] = useState<number | null>(null);
-  const topPersistedReview = persistedReviewItems[0];
+  const dueReviewItems = persistedReviewItems.filter((item) => !item.nextReviewAt || item.nextReviewAt <= new Date().toISOString());
+  const selectedPersistedReview = selectedReviewItemId
+    ? persistedReviewItems.find((item) => item.id === selectedReviewItemId)
+    : undefined;
+  const topPersistedReview = selectedPersistedReview ?? dueReviewItems[0] ?? persistedReviewItems[0];
+  const averageMastery = hasRealReviewItems
+    ? Math.round(persistedReviewItems.reduce((sum, item) => sum + (item.masteryScore ?? 35), 0) / Math.max(1, persistedReviewItems.length))
+    : 0;
 
   useEffect(() => {
     if (persistedReviewCount > 0) {
@@ -59,60 +72,71 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
     }, 4500);
   };
 
-  // Middle-priority cards state
-  const [midPriorityItems, setMidPriorityItems] = useState([
-    { id: 'mid-1', title: '听力长对话推断题', mastery: 68 },
-    { id: 'mid-2', title: '阅读细节定位速度', mastery: 72 },
-  ]);
-
-  // Low frequency errors list matching screenshot
-  const [lowFreqErrors, setLowFreqErrors] = useState<LowFreqErrorItem[]>([
-    { id: 'low-1', topic: '虚拟语气倒装结构', daysAgoText: '3天前曾出错', mastery: 85 },
-    { id: 'low-2', topic: '特定介词搭配', daysAgoText: '5天前曾出错', mastery: 88 },
-    { id: 'low-3', topic: '翻译专有名词拼写', daysAgoText: '1周前曾出错', mastery: 92 },
-  ]);
+  const displayMidPriorityItems = hasRealReviewItems
+    ? persistedReviewItems
+        .filter((item) => item.id !== topPersistedReview?.id)
+        .slice(0, 3)
+        .map((item) => ({
+          id: item.id,
+          title: item.title,
+          mastery: item.masteryScore ?? 35,
+        }))
+    : [];
+  const displayLowFreqErrors = hasRealReviewItems
+    ? (persistedReviewItems.some((item) => (item.priorityScore ?? 0) < 70)
+        ? persistedReviewItems.filter((item) => (item.priorityScore ?? 0) < 70)
+        : persistedReviewItems)
+        .slice(0, 3)
+        .map((item) => ({
+          id: item.id,
+          topic: item.title,
+          daysAgoText: item.lastReviewedAt ? '已复习过' : `${item.daysAgo ?? 0}天前进入队列`,
+          mastery: item.masteryScore ?? 35,
+        }))
+    : [];
 
   // Interactive Mini Quiz: Synonym matching exercises
-  const synonymQuestions = [
+  const reviewQuestions = hasRealReviewItems && topPersistedReview ? [
     {
-      word: "nevertheless",
+      word: '第 1 步：复盘错因',
       options: [
-        { text: "因此 / 从而", correct: false },
-        { text: "然而 / 尽管如此", correct: true },
-        { text: "不仅...而且", correct: false },
-        { text: "由于 / 鉴于", correct: false }
+        { text: '只看一眼标题，直接标记完成', correct: false },
+        { text: '说清楚本题错因、原题线索和正确策略', correct: true },
+        { text: '把错题永久删除，避免再看到', correct: false },
+        { text: '只记住正确答案字母', correct: false },
       ],
-      tip: "CET-4高频转折同义词，常与 however, nonetheless 发生同义替换。"
+      tip: topPersistedReview.detail,
     },
     {
-      word: "advocate",
+      word: '第 2 步：主动回忆',
       options: [
-        { text: "压制 / 强迫", correct: false },
-        { text: "提倡 / 倡导者", correct: true },
-        { text: "忽略 / 视而不见", correct: false },
-        { text: "怀疑 / 拒绝", correct: false }
+        { text: '先遮住解析，用自己的话复述为什么错', correct: true },
+        { text: '先复制解析，再进入下一题', correct: false },
+        { text: '只检查拼写，不管逻辑', correct: false },
+        { text: '跳过低信心原因', correct: false },
       ],
-      tip: "仔细阅读常考词汇，常与 recommend, support 进行同义替换。"
+      tip: '复习不是重新阅读解析，而是主动回忆错因和可迁移策略。',
     },
     {
-      word: "transform",
+      word: '第 3 步：安排下次复习',
       options: [
-        { text: "保持 / 延续", correct: false },
-        { text: "加强 / 扩大", correct: false },
-        { text: "改变 / 转变", correct: true },
-        { text: "阻碍 / 延迟", correct: false }
+        { text: '完成后让系统更新掌握度和下次复习时间', correct: true },
+        { text: '每天固定重复同一题，不看掌握度', correct: false },
+        { text: '只要今天做对就永不复习', correct: false },
+        { text: '把复习项转成普通收藏', correct: false },
       ],
-      tip: "核心考点动词，常与 change, alter 发生文意转化替换。"
-    }
-  ];
+      tip: '系统会按掌握度调整间隔：薄弱项更快回访，稳定项延后复习。',
+    },
+  ] : [];
 
   const handleSelectOption = (index: number, isCorrect: boolean) => {
+    if (reviewQuestions.length === 0) return;
     if (correctAnswerIndex !== null) return; // Prevent double clicking
     
     if (isCorrect) {
       setCorrectAnswerIndex(index);
       setTimeout(() => {
-        if (quizStep < synonymQuestions.length - 1) {
+        if (quizStep < reviewQuestions.length - 1) {
           setQuizStep(prev => prev + 1);
           setCorrectAnswerIndex(null);
           setWrongAnswerIndex(null);
@@ -122,11 +146,14 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
           setQuizCompleted(true);
           setPendingCount((count) => Math.max(0, count - 1));
           setResolvedCount((count) => count + 1);
-          setAverageMastery(hasRealReviewItems ? 75 : 0);
           setHighPriorityMastery(92); // Upgraded mastery percent!
-          triggerToast(hasRealReviewItems
-            ? "已完成一个高优先级复习点，今日记忆熟练度已更新。"
-            : "已完成一次示例复习。完成真实训练后，系统会在这里生成你的错因复习队列。");
+          if (topPersistedReview && onCompleteReviewItem) {
+            Promise.resolve(onCompleteReviewItem(topPersistedReview.id)).catch((error) => {
+              console.error('Failed to save review completion:', error);
+              triggerToast('复习已完成，但本地复习计划更新失败，请稍后重试。');
+            });
+          }
+          triggerToast("已完成一个高优先级复习点，掌握度与下次复习时间已更新。");
         }
       }, 1200);
     } else {
@@ -135,7 +162,12 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
     }
   };
 
-  const handleStartReview = () => {
+  const handleStartReview = (reviewItemId?: string) => {
+    if (!hasRealReviewItems || reviewQuestions.length === 0) {
+      triggerToast('当前还没有真实错因。请先完成阅读、听力、写作、翻译或口语训练。');
+      return;
+    }
+    if (reviewItemId) setSelectedReviewItemId(reviewItemId);
     setView('quiz');
     setQuizStep(0);
     setCorrectAnswerIndex(null);
@@ -146,7 +178,7 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
     if (onTriggerModal) {
       onTriggerModal(
         `知识点诊断 - ${item.topic}`,
-        `📌 弱点名称: ${item.topic}\n📈 当前艾宾浩斯熟练度: ${item.mastery}%\n🕒 错误记录: ${item.daysAgoText}\n\n💡 备考建议:\n该复习项掌握度正稳步提升。建议在今日口语纠错重说或仔细阅读中，刻意加强对该模块或句法特征的连贯运用。AI 智慧教练已自动根据记忆机制为您平滑递减当前训练频度。`
+        `📌 弱点名称: ${item.topic}\n📈 当前间隔复习掌握度: ${item.mastery}%\n🕒 错误记录: ${item.daysAgoText}\n\n💡 备考建议:\n该复习项掌握度正稳步提升。建议在今日口语纠错重说或仔细阅读中，刻意加强对该模块或句法特征的连贯运用。系统会根据掌握度调整后续复习频度。`
       );
     } else {
       triggerToast(`📌 ${item.topic}: 当前掌握度 ${item.mastery}%`);
@@ -154,6 +186,12 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
   };
 
   const handleExecuteMidPriority = (id: string, title: string) => {
+    if (hasRealReviewItems && persistedReviewItems.some((item) => item.id === id)) {
+      triggerToast(`正在进入「${title}」的主动复盘流程。`);
+      handleStartReview(id);
+      return;
+    }
+
     triggerToast(`🔄 正在提取「${title}」相关自适应特训题目，即将为您开启巩固训练...`);
   };
 
@@ -169,7 +207,7 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
       )}
 
       {/* DASHBOARD COGNITIVE CANVAS VIEW */}
-      {view === 'dashboard' ? (
+      {view === 'dashboard' || reviewQuestions.length === 0 ? (
         <div className="space-y-6 flex-1 overflow-y-auto pr-1 pb-8">
           
           {/* Header element mirroring the exact layout requested */}
@@ -259,7 +297,7 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
           <div className="space-y-4">
             <h3 className="text-sm font-black text-rose-600 flex items-center gap-1.5">
               <AlertTriangle className="h-4.5 w-4.5 text-rose-500 fill-rose-50/50" />
-              <span>{hasRealReviewItems ? '高优先级复习' : '示例复习流程'}</span>
+              <span>{hasRealReviewItems ? '高优先级复习' : '等待生成真实错因'}</span>
             </h3>
 
             {/* Split big highlighted main card container */}
@@ -271,17 +309,17 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
                 {/* Horizontal tags block */}
                 <div className="flex items-center gap-2.5">
                   <span className="text-[10px] font-black text-rose-600 bg-rose-50 border border-rose-100 px-2.5 py-1 rounded-md">
-                    {hasRealReviewItems ? '⚠ 核心薄弱项' : '体验样例'}
+                    {hasRealReviewItems ? '⚠ 核心薄弱项' : '暂无错因'}
                   </span>
                   <span className="text-[10px] font-black text-blue-800 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-md">
-                    阅读与理解
+                    {hasRealReviewItems ? '阅读与理解' : '完成训练后自动入队'}
                   </span>
                 </div>
 
                 {/* Massive title text */}
                 <div>
                   <h4 className="text-2xl font-black text-slate-800 tracking-tight">
-                    {topPersistedReview?.title ?? '同义替换未识别（示例）'}
+                    {topPersistedReview?.title ?? '还没有可复习的真实错因'}
                   </h4>
                 </div>
 
@@ -289,23 +327,23 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
                 <div className="bg-[#f0f4f8] border border-slate-200/40 rounded-xl p-4 text-[11px] leading-relaxed select-none">
                   <p className="font-semibold text-slate-600 flex items-start gap-2">
                     <AlertCircle className="h-4.5 w-4.5 text-[#003178] shrink-0 mt-0.5" />
-                    <span>{topPersistedReview?.detail ?? '完成阅读或听力训练后，这里会展示真实错因、优先级和下次复习时间。当前示例用于体验复习交互流程。'}</span>
+                    <span>{topPersistedReview?.detail ?? '完成阅读、听力、写作、翻译或口语训练后，系统会根据错误、低信心和 AI 反馈生成复习项，并安排下次复习时间。'}</span>
                   </p>
                 </div>
 
                 {/* Current progress bar */}
                 <div className="space-y-1.5 pt-1.5">
                   <div className="flex justify-between items-baseline text-xs font-bold">
-                    <span className="text-slate-500">{hasRealReviewItems ? '当前掌握度' : '示例掌握度'} {topPersistedReview?.masteryScore ?? highPriorityMastery}/100</span>
+                    <span className="text-slate-500">{hasRealReviewItems ? `当前掌握度 ${topPersistedReview?.masteryScore ?? highPriorityMastery}/100` : '等待第一条复习证据'}</span>
                     <span className="text-rose-600 font-extrabold text-[11px] flex items-center gap-1">
-                      ● 亟需强化 训练
+                      {hasRealReviewItems ? '● 亟需强化训练' : '● 先完成训练'}
                     </span>
                   </div>
                   {/* Slider or progress track bar */}
                   <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden flex">
-                    <div 
-                      className={`h-full ${quizCompleted ? 'bg-emerald-600' : 'bg-rose-600'} transition-all duration-500`} 
-                      style={{ width: `${topPersistedReview?.masteryScore ?? highPriorityMastery}%` }} 
+                    <div
+                      className={`h-full ${quizCompleted ? 'bg-emerald-600' : 'bg-rose-600'} transition-all duration-500`}
+                      style={{ width: `${hasRealReviewItems ? topPersistedReview?.masteryScore ?? highPriorityMastery : 0}%` }}
                     />
                   </div>
                 </div>
@@ -338,10 +376,10 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
                 {/* Massive Blue launch button */}
                 <div>
                   <button
-                    onClick={handleStartReview}
+                    onClick={() => handleStartReview(topPersistedReview?.id)}
                     className="w-full px-5 py-3 bg-[#003178] hover:bg-[#0d47a1] text-white text-xs font-black rounded-xl flex items-center justify-center gap-1.5 transition-all hover:scale-[1.01] pointer-events-auto cursor-pointer shadow-xs"
                   >
-                    <span>{hasRealReviewItems ? '开始复习' : '体验示例复习'}</span>
+                    <span>{hasRealReviewItems ? '开始复习' : '先完成训练生成错因'}</span>
                     <ArrowRight className="h-3.5 w-3.5" />
                   </button>
                 </div>
@@ -363,7 +401,12 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
 
               {/* Items column */}
               <div className="space-y-4">
-                {midPriorityItems.map((item) => (
+                {displayMidPriorityItems.length === 0 && (
+                  <div className="bg-white border border-dashed border-[#c3c6d4]/70 rounded-2.5xl p-5 text-xs font-bold leading-6 text-slate-500">
+                    暂无中优先级复习项。完成训练后，系统会把低信心或轻微错误的题目放到这里。
+                  </div>
+                )}
+                {displayMidPriorityItems.map((item) => (
                   <div 
                     key={item.id}
                     className="bg-white border border-[#c3c6d4]/60 rounded-2.5xl p-5 flex items-center justify-between hover:shadow-2xs transition-shadow group"
@@ -414,7 +457,12 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
 
                 {/* Table row list */}
                 <div className="divide-y divide-gray-100">
-                  {lowFreqErrors.map((item) => (
+                  {displayLowFreqErrors.length === 0 && (
+                    <div className="px-4 py-6 text-xs font-bold leading-6 text-slate-500">
+                      暂无低频错误。系统只会在出现真实复习记录后展示这里的数据。
+                    </div>
+                  )}
+                  {displayLowFreqErrors.map((item) => (
                     <div 
                       key={item.id} 
                       className="px-4 py-3.5 flex items-center justify-between text-xs group hover:bg-slate-50/50 transition-colors"
@@ -467,7 +515,7 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
             {/* Top Close icon */}
             <div className="flex justify-between items-center">
               <span className="text-[10px] font-black text-[#003178] tracking-widest bg-[#dbf1fe]/55 px-3 py-1 rounded-full uppercase">
-                同义替换自适应极速背记
+                真实错因复习确认
               </span>
               <button 
                 onClick={() => setView('dashboard')} 
@@ -479,7 +527,7 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
 
             {/* Stage tracking */}
             <div className="flex items-center gap-1.5">
-              {synonymQuestions.map((_, idx) => (
+              {reviewQuestions.map((_, idx) => (
                 <div 
                   key={idx} 
                   className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
@@ -492,16 +540,16 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
             {/* Central Word prompt */}
             <div className="text-center py-6">
               <span className="text-[11px] font-bold text-slate-400 block tracking-widest uppercase">
-                请选出最贴切的同义替换义项
+                按步骤完成主动复盘
               </span>
               <h3 className="text-4xl font-black text-[#003178] tracking-tight mt-1.5 font-mono">
-                {synonymQuestions[quizStep].word}
+                {reviewQuestions[quizStep].word}
               </h3>
             </div>
 
             {/* Answer options selection list */}
             <div className="space-y-3">
-              {synonymQuestions[quizStep].options.map((opt, oIdx) => {
+              {reviewQuestions[quizStep].options.map((opt, oIdx) => {
                 const isSelected = correctAnswerIndex === oIdx;
                 const isWrong = wrongAnswerIndex === oIdx;
 
@@ -533,7 +581,7 @@ export default function ReviewSection({ onTriggerModal, persistedReviewCount = 0
             {/* Footer tips prompt layout */}
             <div className="bg-[#f0f9ff] border border-[#dbf1fe]/50 rounded-xl p-3 text-[10px] leading-relaxed text-slate-500 font-semibold flex items-start gap-1.5">
               <AlertCircle className="h-3.5 w-3.5 text-[#003178] mt-0.5 shrink-0" />
-              <span>{synonymQuestions[quizStep].tip}</span>
+              <span>{reviewQuestions[quizStep].tip}</span>
             </div>
 
           </div>

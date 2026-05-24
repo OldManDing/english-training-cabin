@@ -28,8 +28,13 @@ interface QuestionItem {
   transcriptionPoint: string; // e.g., '01:22 处原句'
 }
 
+const LISTENING_TRANSCRIPT_TEXT = `Now, you've been working on this research project looking at how digital technology is used in primary schools. Can you tell us a bit about what you found?
+
+Yes, certainly. We looked at a number of different aspects. We observed lessons and interviewed teachers and pupils. One of the main things we noticed was that there was a huge variation in how teachers applied standard software from class to class. Some used smart tablets to enable individual speed runs, while others worried it was disruptive to focused student attention. A significant percentage of teachers voiced extreme concerns about student attention span and constant notifications from tablet screens.`;
+
 export default function ListeningTraining({ onBack, onComplete, onAddToReview }: ListeningTrainingProps) {
   const [startedAt] = useState(() => new Date().toISOString());
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   // Playback States
   const [isPlaying, setIsPlaying] = useState(false);
@@ -51,17 +56,17 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
   const [questions, setQuestions] = useState<QuestionItem[]>([
     {
       id: 1,
-      question: "What is the woman's main reason for visiting Japan?",
+      question: "How did the woman's research team collect information for the project?",
       options: {
-        A: "To attend a business conference.",
-        B: "To practice the language she has been studying.",
-        C: "To visit family members living there.",
-        D: "To explore historical tourist sites."
+        A: "They only analyzed national exam scores.",
+        B: "They observed lessons and interviewed teachers and pupils.",
+        C: "They asked technology companies for sales data.",
+        D: "They invited students to complete online games."
       },
       correctAnswer: 'B',
-      explanation: "录音开头女士提到：'The primary goal of my trip to Tokyo next month is actually to practice conversational Japanese, which I've been learning for three years.' 对应选项 B 处表示。选项 A 和 C 虽被提起但非主要目的。",
+      explanation: "录音开头女士明确说：'We observed lessons and we interviewed teachers and pupils.' 对应选项 B。其他选项均没有在原文中出现。",
       trapType: "关键词漏听",
-      transcriptionPoint: "00:45 处原句"
+      transcriptionPoint: "00:32 处原句"
     },
     {
       id: 2,
@@ -87,7 +92,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
         D: "Reduced student focus and electronic distractions."
       },
       correctAnswer: 'D',
-      explanation: "女士指出：'A significant percentage of teachers voiced extreme concerns about student attention spam and constant notifications from tablet screens.' 对应选项 D 核心意思。",
+      explanation: "女士指出：'A significant percentage of teachers voiced extreme concerns about student attention span and constant notifications from tablet screens.' 对应选项 D 核心意思。",
       trapType: "选项判断失误",
       transcriptionPoint: "01:54 处原句"
     }
@@ -117,6 +122,14 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
     return () => clearInterval(interval);
   }, [isPlaying]);
 
+  useEffect(() => {
+    return () => {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
   const formatTime = (secs: number) => {
     const mins = Math.floor(secs / 60);
     const remSecs = secs % 60;
@@ -130,6 +143,36 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
       if (target >= totalDuration) return totalDuration;
       return target;
     });
+  };
+
+  const toggleAudioPlayback = () => {
+    if (!('speechSynthesis' in window)) {
+      triggerToast('当前浏览器不支持语音播放，请直接阅读听力原文完成训练。');
+      return;
+    }
+
+    if (isPlaying) {
+      window.speechSynthesis.cancel();
+      setIsPlaying(false);
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(LISTENING_TRANSCRIPT_TEXT);
+    utterance.lang = 'en-US';
+    utterance.rate = audioSpeed;
+    utterance.onend = () => {
+      setIsPlaying(false);
+      utteranceRef.current = null;
+    };
+    utterance.onerror = () => {
+      setIsPlaying(false);
+      utteranceRef.current = null;
+      triggerToast('浏览器语音播放失败，请改用听力原文训练。');
+    };
+    utteranceRef.current = utterance;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+    setIsPlaying(true);
   };
 
   const handleSelectOption = (opt: 'A' | 'B' | 'C' | 'D') => {
@@ -163,6 +206,10 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
       triggerToast("请先选择一个选项作为答案！");
       return;
     }
+    if (!activeQ.confidence) {
+      triggerToast("请先选择把握度，系统需要它判断低信心题是否进入复习队列。");
+      return;
+    }
 
     setQuestions((prev) => {
       const copy = [...prev];
@@ -187,7 +234,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
       });
       triggerToast("已成功为您拉入「复习队列」，后续将根据艾宾浩斯记忆原理循环推送！");
     } else {
-      triggerToast("该听力干扰项已被成功添加至后台复习卡片中！");
+      triggerToast("本题错因已标记；完成本轮听力后会自动写入本地复习队列。");
     }
   };
 
@@ -383,7 +430,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
 
                   {/* Play Main Circle Toggle */}
                   <button
-                    onClick={() => setIsPlaying(!isPlaying)}
+                    onClick={toggleAudioPlayback}
                     className="p-4 bg-[#003178] hover:bg-[#003178]/90 text-white rounded-full shadow-md flex items-center justify-center hover:scale-105 transition-all cursor-pointer"
                   >
                     {isPlaying ? <Pause className="h-5 w-5 fill-white" /> : <Play className="h-5 w-5 fill-white translate-x-0.5" />}
@@ -401,7 +448,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
 
                 {/* Simulated Volume */}
                 <div className="flex items-center space-x-1 text-xs font-semibold text-gray-400">
-                  <span>音频模拟</span>
+                  <span>浏览器语音播放</span>
                 </div>
               </div>
 
@@ -444,6 +491,10 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
                     </p>
                     <p className="opacity-75">
                       Some used smart tablets to enable individual speed runs, while others worried it was purely disruptive to focused student attention.
+                    </p>
+                    <p className="bg-rose-50/70 border-l-2 border-rose-400 pl-2 py-1 font-semibold text-[#071e27]">
+                      <span className="text-[10px] text-rose-600 font-mono mr-1.5">[01:54]</span>
+                      A significant percentage of teachers voiced extreme concerns about student attention span and constant notifications from tablet screens.
                     </p>
                   </div>
                 </div>
@@ -579,7 +630,12 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
               <div className="mt-6 flex justify-end">
                 <button
                   onClick={handleSubmitAnswer}
-                  className="px-6 py-2.5 bg-[#1b6d24] hover:bg-emerald-700 hover:shadow text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
+                  disabled={!activeQ.selectedAnswer || !activeQ.confidence}
+                  className={`px-6 py-2.5 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all ${
+                    activeQ.selectedAnswer && activeQ.confidence
+                      ? 'bg-[#1b6d24] hover:bg-emerald-700 hover:shadow cursor-pointer'
+                      : 'bg-slate-300 cursor-not-allowed'
+                  }`}
                 >
                   <span>提交答案</span>
                   <ArrowRight className="h-3.5 w-3.5" />
@@ -596,7 +652,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
                   <Sparkles className="h-4 w-4" />
                 </div>
                 <h4 className="text-xs font-extrabold text-[#0369a1] uppercase tracking-wider">
-                  AI 听力分析与解题建议
+                  听力错因分析与解题建议
                 </h4>
               </div>
 

@@ -8,21 +8,23 @@ import Sidebar from './components/Sidebar';
 import TodayDashboard from './components/TodayDashboard';
 import ReadingTraining from './components/ReadingTraining';
 import SpeakingTraining from './components/SpeakingTraining';
+import SubjectiveTraining from './components/SubjectiveTraining';
 import ReviewSection from './components/ReviewSection';
 import ProgressSection from './components/ProgressSection';
 import MaterialImporter from './components/MaterialImporter';
 import OnboardingDiagnostic from './components/OnboardingDiagnostic';
 import ListeningTraining from './components/ListeningTraining';
 import SettingsSection from './components/SettingsSection';
-import LaunchReadinessNotice from './components/LaunchReadinessNotice';
 import { ActiveTab, DailyPlan, Passage, PracticeCompletionReport, ReviewItem, SkillProfile, StudyGoal } from './types';
 import { INITIAL_PASSAGE } from './data';
 import { Sparkles, BookOpen, Clock, ChevronRight, GraduationCap, X } from 'lucide-react';
 import {
+  completeReviewItem,
   getOrCreateActiveGoal,
   loadReviewItems,
   loadSkillProfiles,
   persistPracticeCompletion,
+  persistSkillProfiles,
   upsertActiveGoal,
 } from './lib/storage/db';
 import { buildDailyPlan } from './domain/planner/dailyPlan';
@@ -37,6 +39,69 @@ function getDaysRemaining(examDate?: string): number {
   return Math.max(0, Math.ceil((target.getTime() - todayStart.getTime()) / 86400000));
 }
 
+function countDueReviews(reviewItems: ReviewItem[]): number {
+  const now = new Date().toISOString();
+  return reviewItems.filter((item) => !item.nextReviewAt || item.nextReviewAt <= now).length;
+}
+
+function levelToProfileScore(level: number): number {
+  if (level <= 0) return 55;
+  if (level >= 2) return 86;
+  return 72;
+}
+
+function estimateCetScore(skillProfiles: SkillProfile[]): number | undefined {
+  if (skillProfiles.length === 0) return undefined;
+  const latestBySkill = new Map<SkillProfile['skillArea'], SkillProfile>();
+  skillProfiles.forEach((profile) => {
+    const current = latestBySkill.get(profile.skillArea);
+    if (!current || profile.lastUpdatedAt > current.lastUpdatedAt) {
+      latestBySkill.set(profile.skillArea, profile);
+    }
+  });
+
+  const weightedProfiles = [
+    { skill: 'writing' as const, weight: 0.15 },
+    { skill: 'listening' as const, weight: 0.35 },
+    { skill: 'reading' as const, weight: 0.35 },
+    { skill: 'translation' as const, weight: 0.15 },
+  ];
+  const available = weightedProfiles.filter((item) => latestBySkill.has(item.skill));
+  if (available.length === 0) return undefined;
+
+  const normalizedWeight = available.reduce((sum, item) => sum + item.weight, 0);
+  const abilityScore = available.reduce((sum, item) => {
+    return sum + (latestBySkill.get(item.skill)?.score ?? 0) * item.weight;
+  }, 0) / normalizedWeight;
+
+  return Math.round(Math.max(300, Math.min(710, 300 + abilityScore * 4.1)));
+}
+
+function buildSettingsSkillProfiles(settings: {
+  readingLevel: number;
+  listeningLevel: number;
+  translationLevel: number;
+  writingLevel: number;
+  speakingLevel: number;
+}): SkillProfile[] {
+  const now = new Date().toISOString();
+  return [
+    ['reading', 'settings-reading', settings.readingLevel],
+    ['listening', 'settings-listening', settings.listeningLevel],
+    ['translation', 'settings-translation', settings.translationLevel],
+    ['writing', 'settings-writing', settings.writingLevel],
+    ['speaking', 'settings-speaking', settings.speakingLevel],
+  ].map(([skillArea, subSkillId, level]) => ({
+    id: `cet4-${skillArea}-${subSkillId}`,
+    skillArea: skillArea as SkillProfile['skillArea'],
+    subSkillId: subSkillId as string,
+    score: levelToProfileScore(level as number),
+    confidence: 3,
+    evidenceCount: 1,
+    lastUpdatedAt: now,
+  }));
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('today');
   const [activeGoal, setActiveGoal] = useState<StudyGoal | null>(null);
@@ -47,7 +112,9 @@ export default function App() {
   const [customPassage, setCustomPassage] = useState<Passage>(INITIAL_PASSAGE);
   const [isPracticing, setIsPracticing] = useState(false);
   const [isListeningPracticing, setIsListeningPracticing] = useState(false);
+  const [subjectivePracticeMode, setSubjectivePracticeMode] = useState<'writing' | 'translation' | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [dailyStrategy, setDailyStrategy] = useState<'efficient' | 'review'>('efficient');
   const [targetScoreLimit, setTargetScoreLimit] = useState<number | undefined>(undefined);
   const [modalContent, setModalContent] = useState<{ title: string; body: string } | null>(null);
 
@@ -60,6 +127,8 @@ export default function App() {
   });
   const [speakingScoreChange, setSpeakingScoreChange] = useState<{ from: number; to: number } | undefined>(undefined);
   const examCountdown = getDaysRemaining(activeGoal?.examDate);
+  const estimatedScore = estimateCetScore(persistedSkillProfiles);
+  const abilityEvidenceCount = persistedSkillProfiles.reduce((sum, profile) => sum + profile.evidenceCount, 0);
 
   const refreshStudyState = async () => {
     const [goal, reviewItems, skillProfiles] = await Promise.all([
@@ -69,7 +138,7 @@ export default function App() {
     ]);
     setActiveGoal(goal);
     setTargetScoreLimit(goal.targetScore);
-    setReviewItemCount(reviewItems.length);
+    setReviewItemCount(countDueReviews(reviewItems));
     setPersistedReviewItems(reviewItems);
     setPersistedSkillProfiles(skillProfiles);
   };
@@ -81,8 +150,9 @@ export default function App() {
       goal: activeGoal,
       reviewItems: persistedReviewItems,
       skillProfiles: persistedSkillProfiles,
+      strategy: dailyStrategy,
     }));
-  }, [activeGoal, persistedReviewItems, persistedSkillProfiles]);
+  }, [activeGoal, persistedReviewItems, persistedSkillProfiles, dailyStrategy]);
 
   useEffect(() => {
     trackTelemetry('section_viewed', { section: activeTab });
@@ -100,7 +170,7 @@ export default function App() {
       if (!mounted) return;
       setActiveGoal(goal);
       setTargetScoreLimit(goal.targetScore);
-      setReviewItemCount(reviewItems.length);
+      setReviewItemCount(countDueReviews(reviewItems));
       setPersistedReviewItems(reviewItems);
       setPersistedSkillProfiles(skillProfiles);
     }
@@ -122,9 +192,19 @@ export default function App() {
       loadReviewItems(),
       loadSkillProfiles(),
     ]);
-    setReviewItemCount(reviewItems.length);
+    setReviewItemCount(countDueReviews(reviewItems));
     setPersistedReviewItems(reviewItems);
     setPersistedSkillProfiles(skillProfiles);
+  };
+
+  const handleCompleteReviewItem = async (reviewItemId: string) => {
+    await completeReviewItem(reviewItemId);
+    await refreshStudyState();
+    trackTelemetry('practice_completed', {
+      mode: 'scheduled-review',
+      moduleId: 'review',
+      reviewItems: 1,
+    });
   };
 
   const handleSetGoalTarget = (score: number) => {
@@ -142,27 +222,69 @@ export default function App() {
     examType: string;
     examDate: string;
     prepareSpeaking: boolean;
+    readingLevel: number;
+    listeningLevel: number;
+    translationLevel: number;
+    writingLevel: number;
+    speakingLevel: number;
     targetScore: number;
     dailyTargetMinutes: number;
   }) => {
     const prioritySkills: StudyGoal['prioritySkills'] = settings.prepareSpeaking
-      ? ['reading', 'listening', 'speaking']
-      : ['reading', 'listening'];
+      ? ['reading', 'listening', 'writing', 'translation', 'speaking']
+      : ['reading', 'listening', 'writing', 'translation'];
 
     try {
       const goal = await upsertActiveGoal({
-      examId: settings.examType === 'CET-4' ? 'cet4' : settings.examType.toLowerCase(),
-      examDate: settings.examDate,
-      targetScore: settings.targetScore,
-      dailyMinutes: settings.dailyTargetMinutes,
-      prioritySkills,
+        examId: settings.examType === 'CET-4' ? 'cet4' : settings.examType.toLowerCase(),
+        examDate: settings.examDate,
+        targetScore: settings.targetScore,
+        dailyMinutes: settings.dailyTargetMinutes,
+        prioritySkills,
       });
+      const settingsProfiles = buildSettingsSkillProfiles(settings);
+      await persistSkillProfiles(settingsProfiles);
       setActiveGoal(goal);
       setTargetScoreLimit(goal.targetScore);
+      setPersistedSkillProfiles(settingsProfiles);
+      await refreshStudyState();
     } catch (error) {
       console.error('Failed to save study settings:', error);
       trackTelemetry('client_error', { area: 'study_settings_save' });
       handleTriggerModal('学习计划保存失败', '设置已在当前页面生效，但没有成功写入本地数据库。');
+      throw error;
+    }
+  };
+
+  const handleCompleteDiagnostic = async (result: {
+    targetScore: number;
+    examDate: string;
+    dailyMinutes: number;
+    prioritySkills: StudyGoal['prioritySkills'];
+    skillProfiles: SkillProfile[];
+  }) => {
+    try {
+      const goal = await upsertActiveGoal({
+        targetScore: result.targetScore,
+        examDate: result.examDate,
+        dailyMinutes: result.dailyMinutes,
+        prioritySkills: result.prioritySkills,
+      });
+      await persistSkillProfiles(result.skillProfiles);
+      setActiveGoal(goal);
+      setTargetScoreLimit(goal.targetScore);
+      await refreshStudyState();
+      trackTelemetry('practice_completed', {
+        mode: 'diagnostic',
+        moduleId: 'onboarding',
+        score: Math.round(result.skillProfiles.reduce((sum, item) => sum + item.score, 0) / Math.max(1, result.skillProfiles.length)),
+        attempts: result.skillProfiles.length,
+        reviewItems: 0,
+      });
+    } catch (error) {
+      console.error('Failed to save onboarding diagnostic:', error);
+      trackTelemetry('client_error', { area: 'onboarding_diagnostic_save' });
+      handleTriggerModal('入门诊断保存失败', '诊断结果已在当前页面生成，但没有成功写入本地能力画像。');
       throw error;
     }
   };
@@ -264,6 +386,34 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
     });
   };
 
+  const handleCompleteSubjectivePractice = (score: number, report: PracticeCompletionReport) => {
+    setSubjectivePracticeMode(null);
+    setActiveTab('progress');
+    trackTelemetry('practice_completed', {
+      mode: report.session.modeId,
+      moduleId: report.session.moduleId,
+      score,
+      attempts: report.attempts.length,
+      reviewItems: report.reviewItems.length,
+    });
+    persistCompletionReport(report).catch((error) => {
+      console.error('Failed to persist subjective practice:', error);
+      trackTelemetry('client_error', { area: `${report.session.moduleId}_practice_persist` });
+      handleTriggerModal('主观题记录保存失败', '本次反馈已生成，但错因和能力画像没有成功写入本地数据库。');
+    });
+  };
+
+  const handleCompleteSpeakingPractice = async (report: PracticeCompletionReport) => {
+    trackTelemetry('practice_completed', {
+      mode: report.session.modeId,
+      moduleId: report.session.moduleId,
+      score: report.skillProfiles[0]?.score,
+      attempts: report.attempts.length,
+      reviewItems: report.reviewItems.length,
+    });
+    await persistCompletionReport(report);
+  };
+
   // Render proper subviews
   const renderTabContent = () => {
     switch (activeTab) {
@@ -272,6 +422,8 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
           <TodayDashboard
             onStartReading={() => setIsPracticing(true)}
             onStartListening={() => setIsListeningPracticing(true)}
+            onStartWriting={() => setSubjectivePracticeMode('writing')}
+            onStartTranslation={() => setSubjectivePracticeMode('translation')}
             onStartOnboarding={() => setShowOnboarding(true)}
             onViewReview={() => setActiveTab('review')}
             onStartSpeaking={() => setActiveTab('speaking')}
@@ -279,8 +431,13 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
             readingProgress={readingProgress}
             examCountdown={examCountdown}
             targetScore={activeGoal?.targetScore ?? targetScoreLimit ?? 550}
+            estimatedScore={estimatedScore}
+            abilityEvidenceCount={abilityEvidenceCount}
             dailyPlan={dailyPlan}
             reviewItemCount={reviewItemCount}
+            skillProfiles={persistedSkillProfiles}
+            strategy={dailyStrategy}
+            onStrategyChange={setDailyStrategy}
           />
         );
       case 'practice':
@@ -331,6 +488,47 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
                   </div>
                 ))}
               </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-white border hover:border-[#003178] rounded-2.5xl p-6 transition-all duration-200 shadow-xs flex flex-col justify-between group min-h-40">
+                  <div>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">
+                      写作 · AI 结构化反馈
+                    </span>
+                    <h3 className="font-extrabold text-[#071e27] text-base group-hover:text-[#003178] transition-colors mt-3">
+                      短文写作：主动练习的重要性
+                    </h3>
+                    <p className="text-xs text-gray-400 font-semibold mt-1.5">
+                      30 分钟 · 论点结构、语法、词汇升级
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setSubjectivePracticeMode('writing')}
+                    className="mt-4 px-5 py-2 bg-[#003178] hover:bg-[#0d47a1] text-white font-bold text-xs rounded-xl self-end cursor-pointer"
+                  >
+                    开始写作训练
+                  </button>
+                </div>
+
+                <div className="bg-white border hover:border-[#003178] rounded-2.5xl p-6 transition-all duration-200 shadow-xs flex flex-col justify-between group min-h-40">
+                  <div>
+                    <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-100">
+                      翻译 · 中译英段落
+                    </span>
+                    <h3 className="font-extrabold text-[#071e27] text-base group-hover:text-[#003178] transition-colors mt-3">
+                      段落翻译：可再生能源与城市发展
+                    </h3>
+                    <p className="text-xs text-gray-400 font-semibold mt-1.5">
+                      30 分钟 · 中文干扰、搭配、时态语态
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setSubjectivePracticeMode('translation')}
+                    className="mt-4 px-5 py-2 bg-[#003178] hover:bg-[#0d47a1] text-white font-bold text-xs rounded-xl self-end cursor-pointer"
+                  >
+                    开始翻译训练
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         );
@@ -340,12 +538,14 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
             onTriggerModal={handleTriggerModal}
             persistedReviewCount={reviewItemCount}
             persistedReviewItems={persistedReviewItems}
+            onCompleteReviewItem={handleCompleteReviewItem}
           />
         );
       case 'speaking':
         return (
           <SpeakingTraining
             onUpdateProgress={(scoreChange) => setSpeakingScoreChange(scoreChange)}
+            onCompletePractice={handleCompleteSpeakingPractice}
           />
         );
       case 'progress':
@@ -376,6 +576,8 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
           <TodayDashboard
             onStartReading={() => setIsPracticing(true)}
             onStartListening={() => setIsListeningPracticing(true)}
+            onStartWriting={() => setSubjectivePracticeMode('writing')}
+            onStartTranslation={() => setSubjectivePracticeMode('translation')}
             onStartOnboarding={() => setShowOnboarding(true)}
             onViewReview={() => setActiveTab('review')}
             onStartSpeaking={() => setActiveTab('speaking')}
@@ -383,22 +585,27 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
             readingProgress={readingProgress}
             examCountdown={examCountdown}
             targetScore={activeGoal?.targetScore ?? targetScoreLimit ?? 550}
+            estimatedScore={estimatedScore}
+            abilityEvidenceCount={abilityEvidenceCount}
             dailyPlan={dailyPlan}
             reviewItemCount={reviewItemCount}
+            skillProfiles={persistedSkillProfiles}
+            strategy={dailyStrategy}
+            onStrategyChange={setDailyStrategy}
           />
         );
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex font-sans antialiased text-[#1e333c]">
+    <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row font-sans antialiased text-[#1e333c]">
       {showOnboarding ? (
         <OnboardingDiagnostic
           onDismiss={() => setShowOnboarding(false)}
           onSetScoreLimit={(score) => {
             handleSetGoalTarget(score);
-            setShowOnboarding(false);
           }}
+          onCompleteDiagnostic={handleCompleteDiagnostic}
         />
       ) : isListeningPracticing ? (
         <ListeningTraining
@@ -427,6 +634,12 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
           onBack={() => setIsPracticing(false)}
           onComplete={handleCompletePractice}
         />
+      ) : subjectivePracticeMode ? (
+        <SubjectiveTraining
+          mode={subjectivePracticeMode}
+          onBack={() => setSubjectivePracticeMode(null)}
+          onComplete={handleCompleteSubjectivePractice}
+        />
       ) : (
         <>
           <Sidebar
@@ -435,12 +648,7 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
             examCountdown={examCountdown}
             onTriggerModal={handleTriggerModal}
           />
-          <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-            {activeTab === 'today' && (
-              <div className="pointer-events-auto absolute bottom-4 left-4 right-4 z-40 sm:left-6 sm:right-6 lg:left-8 lg:right-8">
-                <LaunchReadinessNotice onOpen={handleTriggerModal} />
-              </div>
-            )}
+          <main className="flex-1 min-w-0 flex flex-col h-screen overflow-hidden relative">
             {/* Top Right Floating Coach Button exactly as screens - Hide on today page to avoid overlapping */}
             {activeTab !== 'today' && (
               <div className="absolute top-6 right-8 z-30 pointer-events-auto flex items-center gap-4">

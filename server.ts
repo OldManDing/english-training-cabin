@@ -6,8 +6,17 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { CET4_EXAM_PROFILE } from './src/exams/cet4';
 import { buildDailyPlan } from './src/domain/planner/dailyPlan';
 import { normalizePassage } from './src/domain/materials/passage';
-import { buildChoicePracticeReport, ChoicePracticeAnswer, ChoicePracticeQuestion } from './src/domain/practice/reports';
-import { ReviewItem, SkillArea, SkillProfile, StudyGoal } from './src/types';
+import {
+  buildChoicePracticeReport,
+  buildSpeakingPracticeReport,
+  buildSubjectivePracticeReport,
+  BuildSubjectivePracticeReportInput,
+  ChoicePracticeAnswer,
+  ChoicePracticeQuestion,
+  SpeakingPracticeAnalysis,
+  SubjectivePracticeAnalysis,
+} from './src/domain/practice/reports';
+import { MistakeReason, ReviewItem, SkillArea, SkillProfile, StudyGoal } from './src/types';
 
 if (process.env.NODE_ENV !== 'test') {
   dotenv.config({ path: ['.env.local', '.env'] });
@@ -88,12 +97,31 @@ const ALLOWED_TELEMETRY_EVENTS = new Set([
   'practice_completed',
   'speaking_analyzed',
   'speaking_completed',
+  'subjective_evaluated',
   'material_generated',
   'material_generation_failed',
   'material_imported',
   'material_import_failed',
   'client_error',
 ]);
+
+const VALID_MISTAKE_REASONS: MistakeReason[] = [
+  '定位失准',
+  '同义替换未识别',
+  '细节偷换',
+  '关键词漏听',
+  '转折信息漏听',
+  '数字时间混淆',
+  '选项判断失误',
+  '低信心',
+  '盲猜',
+  '表达不自然',
+  '语法错误',
+  '论证结构松散',
+  '搭配错误',
+  '时态语态错误',
+  '中文干扰',
+];
 
 function incrementCounter(counter: Map<string, number>, key: string) {
   counter.set(key, (counter.get(key) ?? 0) + 1);
@@ -183,16 +211,17 @@ function sanitizeText(value: unknown, field: string, maxLength: number): string 
 function validateGoal(value: unknown): Pick<StudyGoal, 'id' | 'examId' | 'examDate' | 'dailyMinutes' | 'prioritySkills'> {
   const input = typeof value === 'object' && value ? value as Partial<StudyGoal> : {};
   const dailyMinutes = Number(input.dailyMinutes ?? 60);
-  const prioritySkills = Array.isArray(input.prioritySkills) && input.prioritySkills.length > 0
-    ? input.prioritySkills
-    : ['reading', 'listening', 'speaking'];
+  const validSkills: SkillArea[] = ['reading', 'listening', 'writing', 'translation', 'speaking', 'vocabulary', 'grammar'];
+  const prioritySkills = Array.isArray(input.prioritySkills)
+    ? input.prioritySkills.filter((skill): skill is SkillArea => typeof skill === 'string' && validSkills.includes(skill as SkillArea))
+    : [];
 
   return {
     id: typeof input.id === 'string' ? input.id : 'goal-cet4-primary',
     examId: typeof input.examId === 'string' ? input.examId : 'cet4',
     examDate: typeof input.examDate === 'string' ? input.examDate : '2026-06-15',
     dailyMinutes: Number.isFinite(dailyMinutes) ? Math.min(180, Math.max(20, dailyMinutes)) : 60,
-    prioritySkills: prioritySkills as StudyGoal['prioritySkills'],
+    prioritySkills: prioritySkills.length > 0 ? prioritySkills : ['reading', 'listening', 'speaking'],
   };
 }
 
@@ -262,6 +291,92 @@ function validateChoicePracticePayload(value: unknown) {
     startedAt: typeof input.startedAt === 'string' ? input.startedAt : new Date().toISOString(),
     questions: normalizedQuestions,
     answers: normalizedAnswers,
+  };
+}
+
+function numberInRange(value: unknown, fallback: number, min = 0, max = 100): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(min, Math.min(max, numeric));
+}
+
+function validateSpeakingAnalysis(value: unknown): SpeakingPracticeAnalysis {
+  const input = typeof value === 'object' && value ? value as Record<string, unknown> : {};
+
+  return {
+    originalTextWithMarkings: sanitizeText(input.originalTextWithMarkings, 'analysis.originalTextWithMarkings', 4000),
+    improvedTextWithConnectors: sanitizeText(input.improvedTextWithConnectors, 'analysis.improvedTextWithConnectors', 4000),
+    fillerCount: Math.round(numberInRange(input.fillerCount, 0, 0, 200)),
+    fluencyAnalysis: sanitizeText(input.fluencyAnalysis, 'analysis.fluencyAnalysis', 1000),
+    logicAnalysis: sanitizeText(input.logicAnalysis, 'analysis.logicAnalysis', 1000),
+    vocabularyAnalysis: sanitizeText(input.vocabularyAnalysis, 'analysis.vocabularyAnalysis', 1000),
+    scoreImprovementFrom: Math.round(numberInRange(input.scoreImprovementFrom, 58)),
+    scoreImprovementTo: Math.round(numberInRange(input.scoreImprovementTo, 66)),
+  };
+}
+
+function validateSpeakingPracticePayload(value: unknown) {
+  const input = typeof value === 'object' && value ? value as Record<string, unknown> : {};
+  const analysisMode = ['live', 'fallback', 'unknown'].includes(String(input.analysisMode))
+    ? input.analysisMode as 'live' | 'fallback' | 'unknown'
+    : 'unknown';
+
+  return {
+    examId: typeof input.examId === 'string' ? input.examId : 'cet4',
+    modeId: typeof input.modeId === 'string' ? input.modeId : 'cet-set4-retell',
+    startedAt: typeof input.startedAt === 'string' ? input.startedAt : new Date().toISOString(),
+    originalSpeech: sanitizeText(input.originalSpeech, 'originalSpeech', 3000),
+    analysis: validateSpeakingAnalysis(input.analysis),
+    analysisMode,
+  };
+}
+
+function normalizeMistakeReasons(value: unknown, fallback: MistakeReason[]): MistakeReason[] {
+  const raw = Array.isArray(value) ? value : fallback;
+  const reasons = raw.filter((item): item is MistakeReason =>
+    typeof item === 'string' && VALID_MISTAKE_REASONS.includes(item as MistakeReason),
+  );
+  return Array.from(new Set(reasons.length > 0 ? reasons : fallback));
+}
+
+function normalizeStringArray(value: unknown, fallback: string[], label: string): string[] {
+  const raw = Array.isArray(value) ? value : fallback;
+  const items = raw
+    .map((item, index) => sanitizeText(item, `${label}[${index}]`, 1000))
+    .filter(Boolean);
+  return items.length > 0 ? items : fallback;
+}
+
+function normalizeSubjectiveAnalysis(value: unknown, moduleId: 'writing' | 'translation'): SubjectivePracticeAnalysis {
+  const input = typeof value === 'object' && value ? value as Record<string, unknown> : {};
+  const fallbackReason: MistakeReason = moduleId === 'translation' ? '中文干扰' : '论证结构松散';
+
+  return {
+    score: Math.round(numberInRange(input.score, 66)),
+    mistakeReasons: normalizeMistakeReasons(input.mistakeReasons, [fallbackReason]),
+    comments: normalizeStringArray(input.comments, ['反馈暂时不可用，请先检查结构、语法和表达是否完整。'], 'comments'),
+    nextActions: normalizeStringArray(input.nextActions, ['重写一版，明确主题句并修正高频表达错误。'], 'nextActions'),
+    sampleAnswer: sanitizeText(input.sampleAnswer, 'sampleAnswer', 4000),
+    confidence: ['low', 'medium', 'high'].includes(String(input.confidence))
+      ? input.confidence as 'low' | 'medium' | 'high'
+      : 'medium',
+  };
+}
+
+function validateSubjectivePracticePayload(value: unknown): BuildSubjectivePracticeReportInput {
+  const input = typeof value === 'object' && value ? value as Record<string, unknown> : {};
+  const moduleId = input.moduleId === 'translation' ? 'translation' : 'writing';
+
+  return {
+    examId: typeof input.examId === 'string' ? input.examId : 'cet4',
+    moduleId,
+    questionTypeId: typeof input.questionTypeId === 'string' ? input.questionTypeId : `${moduleId}-prompt`,
+    modeId: typeof input.modeId === 'string' ? input.modeId : `${moduleId}-practice`,
+    plannedMinutes: Number.isFinite(Number(input.plannedMinutes)) ? Math.max(1, Math.min(240, Number(input.plannedMinutes))) : moduleId === 'translation' ? 30 : 30,
+    startedAt: typeof input.startedAt === 'string' ? input.startedAt : new Date().toISOString(),
+    prompt: sanitizeText(input.prompt, 'prompt', 2000),
+    answer: sanitizeText(input.answer, 'answer', 5000),
+    analysis: normalizeSubjectiveAnalysis(input.analysis, moduleId),
   };
 }
 
@@ -485,6 +600,42 @@ function buildMockSpeechAnalysis(originalSpeech: string) {
   };
 }
 
+function buildMockSubjectiveAnalysis(moduleId: 'writing' | 'translation', answer: string): SubjectivePracticeAnalysis {
+  if (moduleId === 'translation') {
+    return {
+      score: 68,
+      mistakeReasons: ['中文干扰', '搭配错误'],
+      comments: [
+        '译文基本传达了原意，但句序仍受中文影响较明显。',
+        '部分动词搭配和抽象名词表达不够自然。',
+      ],
+      nextActions: [
+        '先确定英文主干，再处理修饰成分。',
+        '把“促进发展”优先改为 promote development 或 support growth。',
+      ],
+      sampleAnswer:
+        'In recent years, renewable energy has played an increasingly important role in urban development, helping cities reduce pollution and build a more sustainable future.',
+      confidence: answer.length > 120 ? 'medium' : 'low',
+    };
+  }
+
+  return {
+    score: 70,
+    mistakeReasons: ['论证结构松散', '语法错误'],
+    comments: [
+      '观点能够成立，但段落结构需要更清楚地区分论点和原因。',
+      '建议减少重复基础词，补充具体例子支撑主题句。',
+    ],
+    nextActions: [
+      '按 topic sentence、reason、example、conclusion 重写一段。',
+      '至少加入一个连接词，如 however、therefore 或 in addition。',
+    ],
+    sampleAnswer:
+      'Digital learning tools can improve study efficiency when they are used with clear goals. For example, students can review mistakes immediately and return to weak points through spaced practice. Therefore, technology should serve as a training assistant rather than a shortcut.',
+    confidence: answer.length > 140 ? 'medium' : 'low',
+  };
+}
+
 export function createApp() {
   const app = express();
   const aiLimiter = createRateLimiter(20, 60_000);
@@ -580,6 +731,24 @@ export function createApp() {
       res.json({ report: buildChoicePracticeReport(payload) });
     } catch (error) {
       res.status(400).json({ error: 'invalid_practice_report', message: (error as Error).message });
+    }
+  });
+
+  app.post('/api/practice/speaking-report', (req, res) => {
+    try {
+      const payload = validateSpeakingPracticePayload(req.body);
+      res.json({ report: buildSpeakingPracticeReport(payload) });
+    } catch (error) {
+      res.status(400).json({ error: 'invalid_speaking_report', message: (error as Error).message });
+    }
+  });
+
+  app.post('/api/practice/subjective-report', (req, res) => {
+    try {
+      const payload = validateSubjectivePracticePayload(req.body);
+      res.json({ report: buildSubjectivePracticeReport(payload) });
+    } catch (error) {
+      res.status(400).json({ error: 'invalid_subjective_report', message: (error as Error).message });
     }
   });
 
@@ -693,8 +862,61 @@ Return JSON only with this shape: {"originalTextWithMarkings":"...","improvedTex
     }
   };
 
+  const handleEvaluateSubjective = async (req: Request, res: Response) => {
+    const moduleId = req.body?.moduleId === 'translation' ? 'translation' : 'writing';
+    let promptText: string;
+    let answerText: string;
+    try {
+      promptText = sanitizeText(req.body?.prompt, 'prompt', 2000);
+      answerText = sanitizeText(req.body?.answer, 'answer', 5000);
+    } catch (error) {
+      res.status(400).json({ error: 'invalid_request', message: (error as Error).message });
+      return;
+    }
+
+    const aiStartedAt = Date.now();
+    try {
+      const taskName = moduleId === 'translation' ? 'CET-4 Chinese-to-English translation' : 'CET-4 short essay writing';
+      const prompt = `Evaluate this ${taskName} answer.
+Task prompt:
+${promptText}
+
+Student answer:
+${answerText}
+
+Return JSON only with this shape: {"score":70,"mistakeReasons":["语法错误"],"comments":["..."],"nextActions":["..."],"sampleAnswer":"...","confidence":"medium"}.
+Allowed mistakeReasons: ${VALID_MISTAKE_REASONS.join(', ')}.
+Use Chinese for comments and nextActions.`;
+
+      const data = await generateStructuredJson({
+        prompt,
+        systemInstruction: 'You are a CET-4 writing and translation coach. Return structured, concrete, task-level feedback only.',
+        geminiSchema: {
+          type: Type.OBJECT,
+          properties: {
+            score: { type: Type.INTEGER },
+            mistakeReasons: { type: Type.ARRAY, items: { type: Type.STRING } },
+            comments: { type: Type.ARRAY, items: { type: Type.STRING } },
+            nextActions: { type: Type.ARRAY, items: { type: Type.STRING } },
+            sampleAnswer: { type: Type.STRING },
+            confidence: { type: Type.STRING },
+          },
+          required: ['score', 'mistakeReasons', 'comments', 'nextActions', 'sampleAnswer', 'confidence'],
+        },
+      });
+
+      observeAiResult(aiStartedAt, false);
+      res.json(normalizeSubjectiveAnalysis(data, moduleId));
+    } catch (error) {
+      console.error('Subjective evaluation failed, using mock fallback:', error);
+      observeAiResult(aiStartedAt, true);
+      res.status(200).json(buildMockSubjectiveAnalysis(moduleId, answerText));
+    }
+  };
+
   app.post('/api/ai/generate-passage', aiLimiter, handleGeneratePassage);
   app.post('/api/ai/analyze-speech', aiLimiter, handleAnalyzeSpeech);
+  app.post('/api/ai/evaluate-subjective', aiLimiter, handleEvaluateSubjective);
   // Backward-compatible aliases for older builds and saved clients.
   app.post('/api/gemini/generate-passage', aiLimiter, handleGeneratePassage);
   app.post('/api/gemini/analyze-speech', aiLimiter, handleAnalyzeSpeech);

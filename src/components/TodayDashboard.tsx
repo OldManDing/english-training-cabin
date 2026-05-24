@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import { 
   Flag, Clock, Play, BookOpen, Sparkles, ChevronRight, 
-  MoreHorizontal, Headphones, Mic, BarChart2, TrendingDown,
-  BookMarked, HelpCircle, Edit2, CheckCircle2, Sliders, RefreshCw
+  Headphones, Mic, BarChart2, TrendingDown,
+  BookMarked, Edit2, Sliders
 } from 'lucide-react';
-import { DailyPlan } from '../types';
+import { DailyPlan, SkillProfile } from '../types';
+import LaunchReadinessNotice from './LaunchReadinessNotice';
 
 interface TodayDashboardProps {
   onStartReading: () => void;
   onStartListening: () => void;
+  onStartWriting: () => void;
+  onStartTranslation: () => void;
   onStartOnboarding: () => void;
   onViewReview: () => void;
   onStartSpeaking: () => void;
@@ -16,13 +19,20 @@ interface TodayDashboardProps {
   readingProgress: { completed: boolean; score?: number };
   examCountdown?: number;
   targetScore?: number;
+  estimatedScore?: number;
+  abilityEvidenceCount?: number;
   dailyPlan?: DailyPlan | null;
   reviewItemCount?: number;
+  skillProfiles?: SkillProfile[];
+  strategy: 'efficient' | 'review';
+  onStrategyChange: (strategy: 'efficient' | 'review') => void;
 }
 
 export default function TodayDashboard({ 
   onStartReading, 
   onStartListening, 
+  onStartWriting,
+  onStartTranslation,
   onStartOnboarding, 
   onViewReview, 
   onStartSpeaking,
@@ -30,17 +40,127 @@ export default function TodayDashboard({
   readingProgress,
   examCountdown = 0,
   targetScore = 550,
+  estimatedScore,
+  abilityEvidenceCount = 0,
   dailyPlan,
   reviewItemCount = 0,
+  skillProfiles = [],
+  strategy,
+  onStrategyChange,
 }: TodayDashboardProps) {
   
-  // Selected configuration strategy toggles
-  const [strategy, setStrategy] = useState<'efficient' | 'review'>('efficient');
   const [showTimeEditToast, setShowTimeEditToast] = useState(false);
+  const topTask = dailyPlan?.tasks[0];
   const primaryPracticeTask = dailyPlan?.tasks.find((task) => task.type === 'practice');
-  const reviewTask = dailyPlan?.tasks.find((task) => task.type === 'review');
-  const speakingTask = dailyPlan?.tasks.find((task) => task.type === 'speaking');
   const plannedMinutes = dailyPlan?.plannedMinutes ?? 45;
+  const displayedTask = topTask ?? primaryPracticeTask;
+  const primarySkillLabel = displayedTask?.type === 'diagnostic'
+    ? '入门诊断'
+    : displayedTask?.type === 'review'
+    ? '错因复习'
+    : displayedTask?.skillArea === 'listening'
+    ? '听力理解'
+    : displayedTask?.skillArea === 'writing'
+    ? '写作输出'
+    : displayedTask?.skillArea === 'translation'
+    ? '段落翻译'
+    : displayedTask?.skillArea === 'speaking'
+    ? '口语表达'
+    : '阅读理解';
+  const primaryTaskSummary = displayedTask?.type === 'diagnostic'
+    ? '先建立能力画像，再进入个性化练习'
+    : displayedTask?.type === 'review'
+    ? '先消化到期错因，再进入新题训练'
+    : displayedTask?.skillArea === 'listening'
+    ? '包含 3 道长对话精听题'
+    : displayedTask?.skillArea === 'writing'
+    ? '包含 1 篇短文写作评阅'
+    : displayedTask?.skillArea === 'translation'
+    ? '包含 1 段中译英评阅'
+    : displayedTask?.skillArea === 'speaking'
+    ? '包含 1 轮重说和反馈对比'
+    : '包含原创仔细阅读题组';
+  const primaryActionLabel = displayedTask?.type === 'diagnostic'
+    ? '开始诊断'
+    : displayedTask?.type === 'review'
+    ? '开始复习'
+    : '开始训练';
+  const scoreProgress = estimatedScore
+    ? Math.max(8, Math.min(100, Math.round((estimatedScore / Math.max(425, targetScore)) * 100)))
+    : 8;
+  const hasAbilityEvidence = skillProfiles.length > 0 || abilityEvidenceCount > 0;
+  const latestSkillScore = (skillArea: SkillProfile['skillArea']) => {
+    const profile = skillProfiles
+      .filter((item) => item.skillArea === skillArea)
+      .sort((left, right) => right.lastUpdatedAt.localeCompare(left.lastUpdatedAt))[0];
+    return profile?.score;
+  };
+  const describeScore = (score: number) => {
+    if (score < 60) return { label: '需关注', className: 'text-red-600', bar: 'bg-rose-600' };
+    if (score < 75) return { label: '薄弱', className: 'text-rose-500', bar: 'bg-orange-500' };
+    if (score < 88) return { label: '稳定', className: 'text-[#1b6d24]', bar: 'bg-slate-600' };
+    return { label: '优势', className: 'text-emerald-700', bar: 'bg-emerald-600' };
+  };
+  const skillDiagnosticRows = [
+    { label: '阅读: 细节定位', score: latestSkillScore('reading') },
+    { label: '听力: 长对话推断', score: latestSkillScore('listening') },
+    { label: '翻译: 复杂句型结构', score: latestSkillScore('translation') },
+  ].map((item) => ({
+    ...item,
+    visual: typeof item.score === 'number' ? describeScore(item.score) : null,
+  }));
+
+  const startTask = (task = displayedTask) => {
+    if (!task || task.type === 'diagnostic') {
+      onStartOnboarding();
+      return;
+    }
+    if (task.type === 'review') {
+      onViewReview();
+      return;
+    }
+    if (task.type === 'speaking' || task.skillArea === 'speaking') {
+      onStartSpeaking();
+      return;
+    }
+    if (task.skillArea === 'listening') {
+      onStartListening();
+      return;
+    }
+    if (task.skillArea === 'writing') {
+      onStartWriting();
+      return;
+    }
+    if (task.skillArea === 'translation') {
+      onStartTranslation();
+      return;
+    }
+    onStartReading();
+  };
+
+  const startPrimaryTask = () => startTask(displayedTask);
+
+  const taskRows = dailyPlan?.tasks.length ? dailyPlan.tasks : [
+    {
+      id: 'fallback-diagnostic',
+      type: 'diagnostic' as const,
+      title: '入门诊断：建立初始能力画像',
+      skillArea: 'reading' as const,
+      estimatedMinutes: 12,
+      priority: 'high' as const,
+      reason: '完成诊断后，系统会基于真实弱项安排训练。',
+      payload: {},
+    },
+  ];
+
+  const getTaskVisual = (task: DailyPlan['tasks'][number]) => {
+    if (task.type === 'diagnostic') return { Icon: Sparkles, border: 'border-l-[#003178]', bg: 'bg-[#eef7fc]', icon: 'text-[#003178]' };
+    if (task.type === 'review') return { Icon: BookMarked, border: 'border-l-rose-500', bg: 'bg-rose-50', icon: 'text-rose-600' };
+    if (task.skillArea === 'listening') return { Icon: Headphones, border: 'border-l-emerald-500', bg: 'bg-emerald-50', icon: 'text-emerald-600' };
+    if (task.skillArea === 'speaking') return { Icon: Mic, border: 'border-l-[#003178]', bg: 'bg-[#eef7fc]', icon: 'text-[#003178]' };
+    if (task.skillArea === 'writing' || task.skillArea === 'translation') return { Icon: Edit2, border: 'border-l-amber-500', bg: 'bg-amber-50', icon: 'text-amber-700' };
+    return { Icon: BookOpen, border: 'border-l-[#003178]', bg: 'bg-[#eef7fc]', icon: 'text-[#003178]' };
+  };
 
   const triggerTimeEdit = () => {
     setShowTimeEditToast(true);
@@ -77,7 +197,7 @@ export default function TodayDashboard({
               className="px-4 py-2 bg-gradient-to-r from-[#003178] to-[#0284c7] text-white hover:from-[#0d47a1] hover:to-[#0284c7] rounded-full text-xs font-black flex items-center gap-1.5 shadow-md hover:scale-[1.03] active:scale-[0.97] transition-all cursor-pointer pointer-events-auto border border-[#cfe6f2]"
             >
               <Sparkles className="h-4 w-4 text-emerald-300 fill-emerald-300 animate-pulse" />
-              <span>AI 自适应能力诊断</span>
+              <span>入门能力诊断</span>
             </button>
             {/* Countdown Red Pill element */}
             <div className="px-4 py-2 bg-[#fff1f2] border border-[#ffe4e6] text-[#e11d48] rounded-full text-xs font-black flex items-center gap-1.5 shadow-2xs">
@@ -107,16 +227,17 @@ export default function TodayDashboard({
             </div>
             <div className="pt-4 flex items-baseline gap-1">
               <span className="text-4xl font-extrabold text-[#003178]">
-                {readingProgress.completed ? Math.max(targetScore, 555) : targetScore}
+                {targetScore}
               </span>
               <span className="text-sm font-bold text-[#434652]">分</span>
             </div>
             {/* Single thin visual progress ruler bar */}
             <div className="mt-3.5 h-1 bg-slate-100 rounded-full overflow-hidden">
-              <div className="w-[68%] h-full bg-[#003178]" />
+              <div className="h-full bg-[#003178]" style={{ width: `${scoreProgress}%` }} />
             </div>
             <div className="mt-2.5 flex justify-between items-center text-[10px] text-gray-400 font-bold">
-              <span>当前预测：{readingProgress.score ? 485 + Math.round(readingProgress.score / 10) : 485}分</span>
+              <span>{estimatedScore ? `当前预测：${estimatedScore}分` : '当前预测：等待诊断或练习证据'}</span>
+              <span>{readingProgress.completed ? `最近阅读 ${readingProgress.score ?? 0}%` : `证据 ${abilityEvidenceCount} 条`}</span>
             </div>
           </div>
 
@@ -140,8 +261,12 @@ export default function TodayDashboard({
               <span className="text-xs font-bold text-[#434652]/70 ml-1">/ 建议 60m</span>
             </div>
             <div className="mt-3 pt-2.5 border-t border-gray-100/70">
-              <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-1 rounded-lg font-bold">
-                高效模式
+              <span className={`text-[10px] border px-2 py-1 rounded-lg font-bold ${
+                strategy === 'efficient'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-amber-50 text-amber-700 border-amber-200'
+              }`}>
+                {strategy === 'efficient' ? '高效模式' : '巩固模式'}
               </span>
             </div>
           </div>
@@ -156,15 +281,15 @@ export default function TodayDashboard({
             </div>
             <div className="pt-3">
               <h4 className="font-extrabold text-sm text-[#003178] truncate">
-                长篇阅读精读 (2/3)
+                {displayedTask?.title ?? '入门诊断'}
               </h4>
              <p className="text-[10.5px] text-gray-400 font-semibold mt-0.5">
-               剩余约 12 分钟
+               预计约 {displayedTask?.estimatedMinutes ?? 12} 分钟
              </p>
             </div>
             <div className="mt-2 text-right">
               <button 
-                onClick={onStartReading}
+                onClick={startPrimaryTask}
                 className="px-4 py-1.5 bg-[#003178] hover:bg-[#0d47a1] text-white text-[10.5px] font-bold rounded-xl inline-flex items-center gap-1 hover:scale-[1.02] transition-transform pointer-events-auto cursor-pointer shadow-xs"
               >
                 <span>进入</span>
@@ -193,12 +318,12 @@ export default function TodayDashboard({
                   </span>
                   <span className="text-xs font-bold text-[#003178] flex items-center gap-1">
                     <BookOpen className="h-3.5 w-3.5 text-[#003178]" />
-                    阅读理解
+                    {primarySkillLabel}
                   </span>
                 </div>
                 {/* Duration layout badge */}
                 <div className="text-right">
-                  <span className="block text-lg font-black text-[#003178]">{primaryPracticeTask?.estimatedMinutes ?? 18}<span className="text-xs font-bold text-[#434652] ml-0.5">m</span></span>
+                  <span className="block text-lg font-black text-[#003178]">{displayedTask?.estimatedMinutes ?? 12}<span className="text-xs font-bold text-[#434652] ml-0.5">m</span></span>
                   <span className="text-[9.5px] text-gray-400 font-bold block -mt-1">预计耗时</span>
                 </div>
               </div>
@@ -206,7 +331,7 @@ export default function TodayDashboard({
               {/* Title of the prioritized task */}
               <div className="mt-3.5 relative z-10">
                 <h3 className="text-2xl font-black text-[#0d47a1] tracking-tight">
-                  {primaryPracticeTask?.title ?? '信息匹配专项突破'}
+                  {displayedTask?.title ?? '入门诊断：建立初始能力画像'}
                 </h3>
               </div>
 
@@ -214,24 +339,24 @@ export default function TodayDashboard({
               <div className="bg-[#e3f2fd]/85 border border-[#c7e3fc]/80 rounded-2xl p-4.5 mt-5 text-[11px] leading-relaxed select-none relative z-10">
                 <div className="flex items-center gap-1.5 font-bold text-[#003178] mb-1.5">
                   <Sparkles className="h-4 w-4 text-[#003178] fill-[#003178]/10" />
-                  <span>AI 智能调度</span>
+                  <span>智能任务调度</span>
                 </div>
                 <p className="text-[#434652] font-semibold">
-                  {primaryPracticeTask?.reason ?? '系统正在基于本地练习记录和复习队列，为您生成今日最高收益训练。'} 距考试仅剩 <span className="text-[#003178] font-black">{examCountdown}</span> 天。
+                  {displayedTask?.reason ?? '系统正在基于本地练习记录和复习队列，为您生成今日最高收益训练。'} 距考试仅剩 <span className="text-[#003178] font-black">{examCountdown}</span> 天。
                 </p>
               </div>
 
               {/* Bottom footer button bar */}
               <div className="mt-5.5 pt-4.5 border-t border-gray-100 flex items-center justify-between relative z-10">
                 <span className="text-xs font-bold text-gray-400">
-                  包含 5 篇短文匹配
+                  {primaryTaskSummary}
                 </span>
                 <button
-                  onClick={onStartReading}
+                  onClick={startPrimaryTask}
                   className="px-6 py-3 bg-[#1b6d24] hover:bg-emerald-700 text-white text-xs font-black rounded-2xl flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all pointer-events-auto cursor-pointer shadow-xs"
                 >
                   <Sparkles className="h-4 w-4 text-emerald-300 animate-pulse" />
-                  <span>开始训练</span>
+                  <span>{primaryActionLabel}</span>
                 </button>
               </div>
             </div>
@@ -245,84 +370,41 @@ export default function TodayDashboard({
 
               {/* Training checklists list */}
               <div className="space-y-4">
-                
-                {/* 1. 待复习: 词汇与错题巩固 */}
-                <div className="bg-white border border-[#c3c6d4]/60 border-l-[4px] border-l-rose-500 rounded-2xl p-4.5 flex items-center justify-between group hover:shadow-2xs transition-shadow">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center shrink-0">
-                      <BookMarked className="h-5 w-5 text-rose-600" />
-                    </div>
-                    <div>
-                      <h4 className="font-extrabold text-[#003178] text-sm">
-                        词汇与错题巩固
-                      </h4>
-                      <p className="text-xs text-gray-400 font-bold mt-0.5">
-                        {reviewItemCount > 0 ? `${reviewItemCount} 个待处理项目` : '完成训练后自动生成复习项'}
-                      </p>
-                    </div>
-                  </div>
-                  <div>
-                    <button
-                      onClick={onViewReview}
-                      className="px-4 py-2 font-black text-[#1a73e8] hover:text-[#0d47a1] hover:bg-[#e8f0fe] rounded-xl text-xs transition-colors pointer-events-auto cursor-pointer"
+                {taskRows.map((task, index) => {
+                  const visual = getTaskVisual(task);
+                  const Icon = visual.Icon;
+                  return (
+                    <div
+                      key={task.id}
+                      onClick={() => startTask(task)}
+                      className={`bg-white border border-[#c3c6d4]/60 border-l-[4px] ${visual.border} rounded-2xl p-4.5 flex items-center justify-between group hover:shadow-2xs hover:border-[#003178]/50 transition-all cursor-pointer pointer-events-auto`}
                     >
-                      立即处理
-                    </button>
-                  </div>
-                </div>
-
-                {/* 2. 听力练习: 长对话听力练习 */}
-                <div className="bg-white border border-[#c3c6d4]/60 border-l-[4px] border-l-emerald-500 rounded-2xl p-4.5 flex items-center justify-between group hover:shadow-2xs transition-shadow">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0">
-                      <Headphones className="h-5 w-5 text-emerald-600 animate-bounce" />
+                      <div className="flex items-center gap-4 min-w-0">
+                        <div className={`w-10 h-10 rounded-xl ${visual.bg} border border-slate-100 flex items-center justify-center shrink-0`}>
+                          <Icon className={`h-5 w-5 ${visual.icon}`} />
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-extrabold text-[#003178] text-sm truncate">
+                            {task.title}
+                          </h4>
+                          <p className="text-xs text-gray-400 font-bold mt-0.5 line-clamp-1">
+                            {task.reason} · {task.estimatedMinutes}m
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          startTask(task);
+                        }}
+                        className="p-2 text-gray-400 hover:text-[#003178] rounded-lg hover:bg-slate-50 transition-colors pointer-events-auto cursor-pointer"
+                        aria-label={`执行今日第 ${index + 1} 个任务`}
+                      >
+                        <ChevronRight className="h-5 w-5" />
+                      </button>
                     </div>
-                    <div>
-                      <h4 className="font-extrabold text-[#003178] text-sm">
-                        长对话听力练习
-                      </h4>
-                      <p className="text-xs text-gray-400 font-bold mt-0.5">
-                        专注力训练 · {dailyPlan?.tasks.find((task) => task.skillArea === 'listening')?.estimatedMinutes ?? 10}m
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button 
-                      onClick={onStartListening}
-                      className="p-2 text-gray-300 hover:text-[#003178] rounded-lg hover:bg-slate-50 transition-colors pointer-events-auto cursor-pointer"
-                    >
-                      <MoreHorizontal className="h-5 w-5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* 3. 口语练习: 场景对话模拟 */}
-                <div 
-                  onClick={onStartSpeaking}
-                  className="bg-white border border-[#c3c6d4]/60 border-l-[4px] border-l-[#003178] rounded-2xl p-4.5 flex items-center justify-between group hover:shadow-2xs hover:border-[#003178]/50 transition-all cursor-pointer pointer-events-auto"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-[#eef7fc] border border-[#cfe6f2] flex items-center justify-center shrink-0 group-hover:bg-[#dbf1fe] transition-colors">
-                      <Mic className="h-5 w-5 text-[#003178]" />
-                    </div>
-                    <div>
-                      <h4 className="font-extrabold text-[#003178] text-sm group-hover:text-[#003178] transition-colors">
-                        场景对话模拟
-                      </h4>
-                      <p className="text-xs text-gray-400 font-bold mt-0.5">
-                        弱项巩固 · {speakingTask?.estimatedMinutes ?? 15}m
-                      </p>
-                    </div>
-                  </div>
-                  <div>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); onStartSpeaking(); }}
-                      className="p-2 text-gray-400 hover:text-[#003178] rounded-lg hover:bg-slate-50 transition-colors pointer-events-auto cursor-pointer"
-                    >
-                      <ChevronRight className="h-5 w-5" />
-                    </button>
-                  </div>
-                </div>
+                  );
+                })}
 
               </div>
             </div>
@@ -354,45 +436,29 @@ export default function TodayDashboard({
               {/* Custom micro metric bars matching screen perfectly */}
               <div className="space-y-4">
                 
-                {/* 1. 阅读 */}
-                <div className="space-y-1">
-                  <div className="flex justify-between text-[11px] font-bold">
-                    <span className="text-[#434652]">阅读: 细节定位</span>
-                    <span className="text-red-600">需关注</span>
+                {skillDiagnosticRows.map((row) => (
+                  <div key={row.label} className="space-y-1">
+                    <div className="flex justify-between text-[11px] font-bold">
+                      <span className="text-[#434652]">{row.label}</span>
+                      <span className={row.visual ? row.visual.className : 'text-slate-400'}>
+                        {row.visual && typeof row.score === 'number' ? `${row.visual.label} ${row.score}%` : '待诊断'}
+                      </span>
+                    </div>
+                    <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${row.visual ? row.visual.bar : 'bg-slate-300'}`}
+                        style={{ width: `${row.visual && typeof row.score === 'number' ? Math.max(8, row.score) : 12}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="w-[85%] h-full bg-rose-600" />
-                  </div>
-                </div>
-
-                {/* 2. 听力 */}
-                <div className="space-y-1 mr-0.5">
-                  <div className="flex justify-between text-[11px] font-bold">
-                    <span className="text-[#434652]">听力: 长对话推断</span>
-                    <span className="text-rose-500">薄弱</span>
-                  </div>
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="w-[58%] h-full bg-orange-500" />
-                  </div>
-                </div>
-
-                {/* 3. 翻译 */}
-                <div className="space-y-1">
-                  <div className="flex justify-between text-[11px] font-bold">
-                    <span className="text-[#434652]">翻译: 复杂句型结构</span>
-                    <span className="text-[#1b6d24]">一般</span>
-                  </div>
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="w-[42%] h-full bg-slate-600" />
-                  </div>
-                </div>
+                ))}
 
               </div>
 
               <div className="pt-2.5 border-t border-gray-100/70 flex items-center justify-center">
                 <span className="text-[10px] text-[#003178] font-black group-hover:underline flex items-center gap-1">
                   <Sparkles className="h-3 w-3 text-amber-500 fill-amber-400 animate-bounce" />
-                  <span>启动 AI 全自适应诊断与能力画像</span>
+                  <span>启动入门诊断与能力画像</span>
                 </span>
               </div>
             </div>
@@ -404,11 +470,13 @@ export default function TodayDashboard({
                   <BarChart2 className="h-4 w-4 text-[#003178]" />
                   突破进展
                 </span>
-                <span className="block text-[11px] text-gray-400 font-bold pt-1">阅读错误数 (篇)</span>
+                <span className="block text-[11px] text-gray-400 font-bold pt-1">
+                  {hasAbilityEvidence ? '训练证据增长' : '能力画像状态'}
+                </span>
                 <div className="flex items-baseline gap-2 pt-1 font-semibold">
-                  <span className="text-xl text-[#434652] opacity-60">5</span>
+                  <span className="text-xl text-[#434652] opacity-60">0</span>
                   <span className="text-xl text-gray-400">→</span>
-                  <span className="text-3xl font-extrabold text-[#1b6d24]">2</span>
+                  <span className="text-3xl font-extrabold text-[#1b6d24]">{abilityEvidenceCount}</span>
                 </div>
               </div>
 
@@ -455,7 +523,7 @@ export default function TodayDashboard({
               <div className="space-y-3 pt-1">
                 {/* Strategy Option A: 高效模式 */}
                 <div 
-                  onClick={() => setStrategy('efficient')}
+                  onClick={() => onStrategyChange('efficient')}
                   className={`border rounded-2xl p-3.5 flex items-center justify-between cursor-pointer transition-all ${
                     strategy === 'efficient' 
                       ? 'bg-[#eef7fc] border-[#cfe6f2] shadow-3xs' 
@@ -475,7 +543,7 @@ export default function TodayDashboard({
 
                 {/* Strategy Option B: 巩固模式 */}
                 <div 
-                  onClick={() => setStrategy('review')}
+                  onClick={() => onStrategyChange('review')}
                   className={`border rounded-2xl p-3.5 flex items-center justify-between cursor-pointer transition-all ${
                     strategy === 'review' 
                       ? 'bg-[#eef7fc] border-[#cfe6f2] shadow-3xs' 
@@ -499,6 +567,10 @@ export default function TodayDashboard({
           </div>
 
         </div>
+
+        {onTriggerModal && (
+          <LaunchReadinessNotice onOpen={onTriggerModal} />
+        )}
 
       </div>
 

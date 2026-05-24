@@ -27,7 +27,17 @@ describe('buildDailyPlan', () => {
           nextReviewAt: '2026-05-24T00:00:00.000Z',
         },
       ],
-      skillProfiles: [],
+      skillProfiles: [
+        {
+          id: 'cet4-reading-diagnostic',
+          skillArea: 'reading',
+          subSkillId: 'diagnostic-reading',
+          score: 70,
+          confidence: 3,
+          evidenceCount: 1,
+          lastUpdatedAt: '2026-05-24T00:00:00.000Z',
+        },
+      ],
     });
 
     expect(plan.tasks[0]).toMatchObject({
@@ -35,6 +45,48 @@ describe('buildDailyPlan', () => {
       priority: 'high',
     });
     expect(plan.rationale[0]).toContain('到期复习');
+  });
+
+  it('starts with diagnostic before recommending practice when there is no ability evidence', () => {
+    const plan = buildDailyPlan({
+      goal,
+      date: '2026-05-24',
+      skillProfiles: [],
+    });
+
+    expect(plan.tasks[0]).toMatchObject({
+      type: 'diagnostic',
+      priority: 'high',
+    });
+    expect(plan.rationale[0]).toContain('入门诊断');
+  });
+
+  it('keeps task minutes within the daily budget', () => {
+    const plan = buildDailyPlan({
+      goal: {
+        ...goal,
+        dailyMinutes: 20,
+      },
+      date: '2026-05-24',
+      reviewItems: [
+        {
+          id: 'review-1',
+          title: '阅读错因：定位失准',
+          category: '错题',
+          detail: 'test',
+          daysAgo: 0,
+          skillArea: 'reading',
+          priorityScore: 90,
+          nextReviewAt: '2026-05-24T00:00:00.000Z',
+        },
+      ],
+      skillProfiles: [],
+      strategy: 'review',
+    });
+
+    const totalMinutes = plan.tasks.reduce((sum, task) => sum + task.estimatedMinutes, 0);
+    expect(totalMinutes).toBeLessThanOrEqual(plan.plannedMinutes);
+    expect(plan.plannedMinutes).toBe(20);
   });
 
   it('uses the weakest skill profile for the main practice task', () => {

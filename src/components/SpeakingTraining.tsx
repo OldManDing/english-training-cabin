@@ -18,13 +18,14 @@ import {
   TrendingUp,
   FolderPlus,
   BookOpen,
-  VolumeX,
 } from 'lucide-react';
-import { SpeakingSession } from '../types';
+import { PracticeCompletionReport } from '../types';
+import { buildSpeakingPracticeReport } from '../domain/practice/reports';
 import { trackTelemetry } from '../lib/telemetry';
 
 interface SpeakingTrainingProps {
   onUpdateProgress: (scoreChange: { from: number; to: number }) => void;
+  onCompletePractice?: (report: PracticeCompletionReport) => Promise<void> | void;
 }
 
 interface SpeechAnalysis {
@@ -38,7 +39,10 @@ interface SpeechAnalysis {
   scoreImprovementTo: number;
 }
 
-export default function SpeakingTraining({ onUpdateProgress }: SpeakingTrainingProps) {
+const DEFAULT_SPEECH_DRAFT =
+  'In the picture, I can see many wind turbines and solar panels. They are good for environment because they make clean energy. I think people should use them more, but some places maybe have cost problem.';
+
+export default function SpeakingTraining({ onUpdateProgress, onCompletePractice }: SpeakingTrainingProps) {
   // Current active step corresponding to the 4 screens:
   // 1: 准备开始 (Task Prep & Device Testing)
   // 2: 正在录音 (Active Recording / Speech Transcription)
@@ -54,16 +58,24 @@ export default function SpeakingTraining({ onUpdateProgress }: SpeakingTrainingP
   const [isSpeakingSample, setIsSpeakingSample] = useState<string | null>(null); // Track browser speaking state
   const [addedToQueue, setAddedToQueue] = useState(false); // Step 4複習队列 state
   const [toast, setToast] = useState<string | null>(null); // Custom premium toast notification
-  const [speechDraft, setSpeechDraft] = useState(
-    'I go to Paris last year with my friends. It is very beautiful city. We see the Eiffel Tower and take many photos. But the weather is rain in the afternoon. Anyway, I feel very happy because food is good.',
-  );
+  const [speechStartedAt] = useState(() => new Date().toISOString());
+  const [speechDraft, setSpeechDraft] = useState(DEFAULT_SPEECH_DRAFT);
   const [speechAnalysis, setSpeechAnalysis] = useState<SpeechAnalysis | null>(null);
   const [isAnalyzingSpeech, setIsAnalyzingSpeech] = useState(false);
+  const [isPersistingReport, setIsPersistingReport] = useState(false);
   const [analysisMode, setAnalysisMode] = useState<'live' | 'fallback' | null>(null);
+  const [reportPersisted, setReportPersisted] = useState(false);
+  const [isRecordingLive, setIsRecordingLive] = useState(false);
+  const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
+  const [recordingStatus, setRecordingStatus] = useState('可使用浏览器录音；录音仅本地回放，不上传。');
+  const [secondAttemptDraft, setSecondAttemptDraft] = useState('');
+  const [isSecondAttemptStarted, setIsSecondAttemptStarted] = useState(false);
 
   // Canvas ref for dynamic sound waveforms in Step 2
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationRef = useRef<number | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   // Trigger floating micro-toasts
   const triggerToast = (msg: string) => {
@@ -114,6 +126,13 @@ export default function SpeakingTraining({ onUpdateProgress }: SpeakingTrainingP
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
   }, [step]);
+
+  useEffect(() => {
+    return () => {
+      if (recordedAudioUrl) URL.revokeObjectURL(recordedAudioUrl);
+      mediaRecorderRef.current?.stream.getTracks().forEach((track) => track.stop());
+    };
+  }, [recordedAudioUrl]);
 
   // Simulates HTML5 Speech Text-to-Speech synthesizer
   const handleTTS = (text: string, id: string) => {
@@ -208,6 +227,9 @@ export default function SpeakingTraining({ onUpdateProgress }: SpeakingTrainingP
   };
 
   const handleFinishRecording = async () => {
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
     triggerToast('录音完成！AI 智能诊断中...');
     setIsAnalyzingSpeech(true);
     const startedAt = performance.now();
@@ -234,11 +256,11 @@ export default function SpeakingTraining({ onUpdateProgress }: SpeakingTrainingP
       const fallbackResult: SpeechAnalysis = {
         originalTextWithMarkings: speechDraft,
         improvedTextWithConnectors:
-          'In my opinion, this topic is meaningful because it is closely connected with daily life. However, we should express our ideas clearly and support them with reasons.',
-        fillerCount: 0,
-        fluencyAnalysis: '当前为离线示例反馈：先稳定完整句输出，再减少重复和无意义停顿。',
-        logicAnalysis: '使用“观点 - 原因 - 转折 - 总结”四段结构组织回答。',
-        vocabularyAnalysis: '尝试用 meaningful、closely connected、in addition 等表达替换基础词。',
+          'In my opinion, renewable energy is meaningful because it can reduce pollution and support long-term development. However, we also need to consider cost and local conditions before using it widely.',
+        fillerCount: (speechDraft.match(/\b(um|uh|ah|like|you know)\b/gi) ?? []).length,
+        fluencyAnalysis: '当前为离线示例反馈：先用一句话描述图片，再用 because/however 补充原因和限制。',
+        logicAnalysis: '使用“画面描述 - 观点 - 原因 - 转折”结构组织回答，避免只罗列物体。',
+        vocabularyAnalysis: '尝试用 renewable energy、reduce pollution、long-term development 等表达替换 good、more 等基础词。',
         scoreImprovementFrom: 58,
         scoreImprovementTo: 66,
       };
@@ -256,19 +278,80 @@ export default function SpeakingTraining({ onUpdateProgress }: SpeakingTrainingP
     }
   };
 
+  const persistSpeakingReport = async (analysis: SpeechAnalysis, secondSpeech: string) => {
+    if (reportPersisted) return;
+
+    const report = buildSpeakingPracticeReport({
+      examId: 'cet4',
+      modeId: 'cet-set4-retell',
+      startedAt: speechStartedAt,
+      originalSpeech: speechDraft,
+      secondSpeech,
+      analysis,
+      analysisMode: analysisMode ?? 'unknown',
+    });
+
+    setIsPersistingReport(true);
+    try {
+      await onCompletePractice?.(report);
+      setReportPersisted(true);
+      setAddedToQueue(report.reviewItems.length > 0);
+      triggerToast(report.reviewItems.length > 0
+        ? '口语训练证据已写入能力画像和复习队列。'
+        : '口语训练证据已写入能力画像。');
+    } catch (error) {
+      console.error(error);
+      triggerToast('口语训练记录保存失败，请稍后在本页重试。');
+    } finally {
+      setIsPersistingReport(false);
+    }
+  };
+
   const handleStartSecondAttempt = () => {
-    triggerToast('进入第二次重说对比！');
+    if (!speechAnalysis) {
+      triggerToast('请先完成 AI 反馈，再进入第二次重说。');
+      return;
+    }
+
+    setSecondAttemptDraft(speechAnalysis.improvedTextWithConnectors);
+    setIsSecondAttemptStarted(true);
+    triggerToast('请根据改写版本完成第二次重说，并校正下方转写。');
+  };
+
+  const handleCompleteSecondAttempt = async () => {
+    if (!speechAnalysis) {
+      triggerToast('请先完成 AI 反馈，再进入第二次重说。');
+      return;
+    }
+    if (secondAttemptDraft.trim().length < 20) {
+      triggerToast('请先补全第二次重说转写，再生成对比报告。');
+      return;
+    }
+
     trackTelemetry('speaking_completed', { analysisMode: analysisMode ?? 'unknown' });
-    // Save metric to sidebar dashboard context
-    onUpdateProgress({ from: 72, to: 90 });
+    onUpdateProgress({
+      from: speechAnalysis.scoreImprovementFrom,
+      to: speechAnalysis.scoreImprovementTo,
+    });
+    await persistSpeakingReport(speechAnalysis, secondAttemptDraft.trim());
     setTimeout(() => {
-      setStep(4); // Match Step 4 comparison report
+      setStep(4);
     }, 600);
   };
 
   const handleAddToReviewQueue = () => {
-    setAddedToQueue(true);
-    triggerToast('已成功加入口语复习队列！');
+    if (reportPersisted) {
+      setAddedToQueue(true);
+      triggerToast('本轮口语错因已经在复习队列中。');
+      return;
+    }
+
+    if (!speechAnalysis) {
+      triggerToast('请先完成 AI 反馈，再加入复习队列。');
+      return;
+    }
+
+    persistSpeakingReport(speechAnalysis, secondAttemptDraft.trim() || speechAnalysis.improvedTextWithConnectors);
   };
 
   const handleRunMicTest = () => {
@@ -279,6 +362,78 @@ export default function SpeakingTraining({ onUpdateProgress }: SpeakingTrainingP
       triggerToast('设备检查完毕：采样音量平稳');
     }, 1500);
   };
+
+  const handleStartBrowserRecording = async () => {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      setRecordingStatus('当前浏览器不支持本地录音，请直接输入或校正转写文本。');
+      triggerToast('当前浏览器不支持本地录音。');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+      recorder.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+        if (recordedAudioUrl) URL.revokeObjectURL(recordedAudioUrl);
+        setRecordedAudioUrl(URL.createObjectURL(blob));
+        stream.getTracks().forEach((track) => track.stop());
+        setIsRecordingLive(false);
+        setRecordingStatus('录音已保存在当前页面，可回放检查；请校正下方转写文本后提交 AI 反馈。');
+      };
+      recorder.start();
+      setIsRecordingLive(true);
+      setRecordingStatus('正在录音中。录音只保存在当前浏览器页面，不会上传。');
+    } catch (error) {
+      console.error(error);
+      setRecordingStatus('麦克风授权未完成。你仍可输入转写文本完成口语反馈闭环。');
+      triggerToast('未获得麦克风权限，已切换为文本转写模式。');
+    }
+  };
+
+  const handleStopBrowserRecording = () => {
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
+  const currentAnalysis: SpeechAnalysis = speechAnalysis ?? {
+    originalTextWithMarkings: speechDraft,
+    improvedTextWithConnectors: DEFAULT_SPEECH_DRAFT,
+    fillerCount: 0,
+    fluencyAnalysis: '完成录音后生成流利度分析。',
+    logicAnalysis: '完成录音后生成逻辑结构分析。',
+    vocabularyAnalysis: '完成录音后生成词汇升级建议。',
+    scoreImprovementFrom: 58,
+    scoreImprovementTo: 66,
+  };
+  const scoreGain = Math.max(0, currentAnalysis.scoreImprovementTo - currentAnalysis.scoreImprovementFrom);
+  const fillerAfter = Math.max(0, currentAnalysis.fillerCount - 1);
+  const reportRows = [
+    {
+      basic: '流利度问题',
+      advanced: currentAnalysis.fluencyAnalysis,
+      category: 'Fluency',
+      badgeStyle: 'bg-sky-50 text-sky-700 border-sky-200/60',
+    },
+    {
+      basic: '逻辑组织',
+      advanced: currentAnalysis.logicAnalysis,
+      category: 'Logic',
+      badgeStyle: 'bg-indigo-50 text-indigo-700 border-indigo-200/60',
+    },
+    {
+      basic: '词汇表达',
+      advanced: currentAnalysis.vocabularyAnalysis,
+      category: 'Vocabulary',
+      badgeStyle: 'bg-amber-50 text-amber-700 border-amber-200/60',
+    },
+  ];
 
   return (
     <div className="flex-1 p-8 overflow-y-auto bg-slate-50 flex flex-col justify-between h-screen relative selection:bg-[#003178]/10 selection:text-[#003178]">
@@ -823,84 +978,42 @@ export default function SpeakingTraining({ onUpdateProgress }: SpeakingTrainingP
                   <span className="text-xs font-black text-slate-850">更自然版本 (Better Expression)</span>
                 </div>
 
-                <div className="p-3 bg-slate-50 border border-slate-150 rounded-2xl leading-relaxed text-xs font-semibold text-slate-700">
-                  {speechAnalysis && (
-                    <p className="mb-3 text-emerald-800 font-black whitespace-pre-line">
-                      &quot;{speechAnalysis.improvedTextWithConnectors}&quot;
-                    </p>
-                  )}
-                  &quot;I{' '}
-                  <span
-                    onClick={() => handleTTS('went', 'went')}
-                    className="text-emerald-700 font-extrabold border-b-2 border-emerald-500 pb-0.5 px-0.5 rounded cursor-pointer pointer-events-auto hover:bg-emerald-50 select-none"
+                <div className="space-y-3 rounded-2xl border border-slate-150 bg-slate-50 p-3 text-xs font-semibold leading-relaxed text-slate-700">
+                  <p className="text-emerald-800 font-black whitespace-pre-line">
+                    &quot;{speechAnalysis?.improvedTextWithConnectors ?? DEFAULT_SPEECH_DRAFT}&quot;
+                  </p>
+                  <button
+                    onClick={() => handleTTS(speechAnalysis?.improvedTextWithConnectors ?? DEFAULT_SPEECH_DRAFT, 'improved-answer')}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-[11px] font-black text-emerald-800 hover:bg-emerald-50"
                   >
-                    went
-                  </span>{' '}
-                  to Paris last year with my friends. It{' '}
-                  <span
-                    onClick={() => handleTTS('was a', 'wasa')}
-                    className="text-emerald-700 font-extrabold border-b-2 border-emerald-500 pb-0.5 px-0.5 rounded cursor-pointer pointer-events-auto hover:bg-emerald-50 select-none"
-                  >
-                    was a
-                  </span>{' '}
-                  very beautiful city. We{' '}
-                  <span
-                    onClick={() => handleTTS('visited', 'visited')}
-                    className="text-emerald-700 font-extrabold border-b-2 border-emerald-500 pb-0.5 px-0.5 rounded cursor-pointer pointer-events-auto hover:bg-emerald-50 select-none"
-                  >
-                    visited
-                  </span>{' '}
-                  the Eiffel Tower and{' '}
-                  <span
-                    onClick={() => handleTTS('took', 'took')}
-                    className="text-emerald-700 font-extrabold border-b-2 border-emerald-500 pb-0.5 px-0.5 rounded cursor-pointer pointer-events-auto hover:bg-emerald-50 select-none"
-                  >
-                    took
-                  </span>{' '}
-                  many photos.{' '}
-                  <span className="text-sky-700 font-black bg-sky-50 px-1 py-0.5 rounded border border-sky-100">
-                    However
-                  </span>
-                  , the weather{' '}
-                  <span
-                    onClick={() => handleTTS('turned rainy', 'rainy')}
-                    className="text-emerald-700 font-extrabold border-b-2 border-emerald-500 pb-0.5 px-0.5 rounded cursor-pointer pointer-events-auto hover:bg-emerald-50 select-none"
-                  >
-                    turned rainy
-                  </span>{' '}
-                  in the afternoon.{' '}
-                  <span className="text-sky-700 font-black bg-sky-50 px-1 py-0.5 rounded border border-sky-100">
-                    Despite that
-                  </span>
-                  , I felt very{' '}
-                  <span className="text-sky-700 font-black bg-sky-50 px-1 py-0.5 rounded border border-sky-100">
-                    delighted
-                  </span>{' '}
-                  because{' '}
-                  <span
-                    onClick={() => handleTTS('the', 'the')}
-                    className="text-emerald-700 font-extrabold border-b-2 border-emerald-500 pb-0.5 px-0.5 rounded cursor-pointer pointer-events-auto hover:bg-emerald-50 select-none"
-                  >
-                    the
-                  </span>{' '}
-                  food{' '}
-                  <span
-                    onClick={() => handleTTS('was', 'was')}
-                    className="text-emerald-700 font-extrabold border-b-2 border-emerald-500 pb-0.5 px-0.5 rounded cursor-pointer pointer-events-auto hover:bg-emerald-50 select-none"
-                  >
-                    was
-                  </span>{' '}
-                  excellent.&quot;
+                    <Volume2 className="h-3.5 w-3.5" />
+                    <span>{isSpeakingSample === 'improved-answer' ? '停止朗读' : '朗读改写版本'}</span>
+                  </button>
                 </div>
               </div>
 
-              {/* Start second attempt solid link */}
+              {isSecondAttemptStarted && (
+                <div className="rounded-3xl border border-emerald-200 bg-emerald-50/70 p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs font-black text-emerald-900">第二次重说转写</span>
+                    <span className="text-[10px] font-bold text-emerald-700">根据改写版本复述后再提交</span>
+                  </div>
+                  <textarea
+                    value={secondAttemptDraft}
+                    onChange={(event) => setSecondAttemptDraft(event.target.value)}
+                    className="min-h-[130px] w-full rounded-2xl border border-emerald-200 bg-white p-3 text-xs font-semibold leading-relaxed text-slate-700 outline-hidden focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                    placeholder="在这里校正第二次重说的转写文本。"
+                  />
+                </div>
+              )}
+
               <button
-                onClick={handleStartSecondAttempt}
+                onClick={isSecondAttemptStarted ? handleCompleteSecondAttempt : handleStartSecondAttempt}
+                disabled={isPersistingReport}
                 className="w-full py-4.5 bg-emerald-700 hover:bg-emerald-800 text-white font-black rounded-2xl shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer pointer-events-auto text-sm border-b-4 border-emerald-950"
               >
                 <RotateCw className="h-4.5 w-4.5 stroke-[3] animate-spin-slow" />
-                <span>开始第二次重说</span>
+                <span>{isPersistingReport ? '正在保存训练证据...' : isSecondAttemptStarted ? '完成第二次重说并生成对比报告' : '开始第二次重说'}</span>
               </button>
 
             </div>
@@ -915,10 +1028,12 @@ export default function SpeakingTraining({ onUpdateProgress }: SpeakingTrainingP
             
             {/* Top Right Action - Added to revision database */}
             <div className="flex justify-between items-center bg-slate-100/50 p-4 border border-slate-200 rounded-3xl">
-              <span className="text-xs font-bold text-slate-500">点击右侧按钮将此高频典型对比语料直接入库</span>
+              <span className="text-xs font-bold text-slate-500">
+                {reportPersisted ? '本轮口语证据已写入本地能力画像，复习队列会在今日任务中自动调度。' : '点击右侧按钮将此高频典型对比语料直接入库'}
+              </span>
               <button
                 onClick={handleAddToReviewQueue}
-                disabled={addedToQueue}
+                disabled={addedToQueue || isPersistingReport}
                 className={`px-5 py-2.5 rounded-2xl text-xs font-black shadow-2xs hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer pointer-events-auto flex items-center gap-1.5 ${
                   addedToQueue
                     ? 'bg-slate-300 text-slate-500 cursor-not-allowed border border-slate-300'
@@ -926,7 +1041,7 @@ export default function SpeakingTraining({ onUpdateProgress }: SpeakingTrainingP
                 }`}
               >
                 <FolderPlus className="h-4 w-4" />
-                <span>{addedToQueue ? '已加入复习队列' : '加入复习队列'}</span>
+                <span>{isPersistingReport ? '写入中...' : addedToQueue ? '已加入复习队列' : '加入复习队列'}</span>
               </button>
             </div>
 
@@ -938,11 +1053,11 @@ export default function SpeakingTraining({ onUpdateProgress }: SpeakingTrainingP
                 <div className="space-y-1">
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">综合评分提升</span>
                   <div className="flex items-baseline gap-1">
-                    <span className="text-3xl font-black text-emerald-600">+18</span>
+                    <span className="text-3xl font-black text-emerald-600">+{scoreGain}</span>
                     <span className="text-xs font-black text-slate-400">pts</span>
                   </div>
                   <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">
-                    超越了本次训练 <span className="text-emerald-600 font-extrabold">82%</span> 的历史记录
+                    首次评分 {currentAnalysis.scoreImprovementFrom} → 重说目标 {currentAnalysis.scoreImprovementTo}
                   </p>
                 </div>
                 <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-500">
@@ -954,10 +1069,10 @@ export default function SpeakingTraining({ onUpdateProgress }: SpeakingTrainingP
               <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-5 shadow-3xs flex justify-between items-center relative overflow-hidden group">
                 <div className="space-y-1">
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">流利度提升</span>
-                  <span className="text-3xl font-black text-sky-600">15%</span>
+                  <span className="text-3xl font-black text-sky-600">{currentAnalysis.fillerCount}</span>
                   <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">
-                    停顿次数减少 从 <span className="font-extrabold text-slate-600">5 次</span> 降至{' '}
-                    <span className="font-extrabold text-[#003178]">1 次</span>
+                    填充词/犹豫词建议从 <span className="font-extrabold text-slate-600">{currentAnalysis.fillerCount} 次</span> 降至{' '}
+                    <span className="font-extrabold text-[#003178]">{fillerAfter} 次</span>
                   </p>
                 </div>
                 <div className="w-12 h-12 rounded-2xl bg-sky-50 flex items-center justify-center text-sky-500">
@@ -969,13 +1084,13 @@ export default function SpeakingTraining({ onUpdateProgress }: SpeakingTrainingP
               <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-5 shadow-3xs flex justify-between items-center relative overflow-hidden group">
                 <div className="space-y-1">
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">词汇丰富度</span>
-                  <span className="text-3xl font-black text-amber-600">+12%</span>
+                  <span className="text-3xl font-black text-amber-600">3</span>
                   <div className="flex gap-1.5 pt-0.5">
                     <span className="text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-100 px-1.5 py-0.2 rounded">
-                      C1 词汇 +2
+                      逻辑连接
                     </span>
                     <span className="text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-100 px-1.5 py-0.2 rounded">
-                      短语搭配 +3
+                      主题词升级
                     </span>
                   </div>
                 </div>
@@ -1004,20 +1119,8 @@ export default function SpeakingTraining({ onUpdateProgress }: SpeakingTrainingP
                     </span>
                   </div>
 
-                  <p className="text-xs text-slate-650 leading-relaxed font-semibold">
-                    &quot;Recently, artificial intelligence{' '}
-                    <span className="text-red-700 bg-red-50/50 line-through decoration-red-650 decoration-[1.5px] px-1 py-0.2 rounded-md font-mono">
-                      is very popular
-                    </span>
-                    . I use it every day for my work. It{' '}
-                    <span className="text-red-700 bg-red-50/50 line-through decoration-red-650 decoration-[1.5px] px-1 py-0.2 rounded-md font-mono">
-                      makes me fast
-                    </span>
-                    . But sometimes it makes mistakes, so I need to{' '}
-                    <span className="text-red-700 bg-red-50/50 line-through decoration-red-650 decoration-[1.5px] px-1 py-0.2 rounded-md font-mono">
-                      check it carefully
-                    </span>
-                    .&quot;
+                  <p className="text-xs text-slate-650 leading-relaxed font-semibold whitespace-pre-line">
+                    &quot;{currentAnalysis.originalTextWithMarkings}&quot;
                   </p>
                 </div>
               </div>
@@ -1042,20 +1145,8 @@ export default function SpeakingTraining({ onUpdateProgress }: SpeakingTrainingP
                     </span>
                   </div>
 
-                  <p className="text-xs text-[#0a4823] leading-relaxed font-black">
-                    &quot;The{' '}
-                    <span className="text-emerald-700 bg-emerald-50 border border-emerald-100 px-1 py-0.2 rounded font-extrabold">
-                      rapid advancement
-                    </span>{' '}
-                    of artificial intelligence has significantly impacted my routine. I frequently utilize these tools to{' '}
-                    <span className="text-emerald-700 bg-emerald-50 border border-emerald-100 px-1 py-0.2 rounded font-extrabold">
-                      enhance my productivity
-                    </span>
-                    . However, since it can occasionally generate inaccuracies, it\'s crucial to{' '}
-                    <span className="text-emerald-700 bg-emerald-50 border border-emerald-100 px-1 py-0.2 rounded font-extrabold">
-                      cross-verify
-                    </span>{' '}
-                    the information.&quot;
+                  <p className="text-xs text-[#0a4823] leading-relaxed font-black whitespace-pre-line">
+                    &quot;{secondAttemptDraft || currentAnalysis.improvedTextWithConnectors}&quot;
                   </p>
                 </div>
               </div>
@@ -1080,32 +1171,13 @@ export default function SpeakingTraining({ onUpdateProgress }: SpeakingTrainingP
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 text-xs">
-                    {[
-                      {
-                        basic: 'is very popular',
-                        advanced: 'rapid advancement',
-                        category: 'C1 词汇',
-                        badgeStyle: 'bg-amber-50 text-amber-700 border-amber-200/60',
-                      },
-                      {
-                        basic: 'makes me fast',
-                        advanced: 'enhance my productivity',
-                        category: '地道搭配',
-                        badgeStyle: 'bg-indigo-50 text-indigo-700 border-indigo-200/60',
-                      },
-                      {
-                        basic: 'check it carefully',
-                        advanced: 'cross-verify',
-                        category: '学术/职场',
-                        badgeStyle: 'bg-sky-50 text-sky-700 border-sky-200/60',
-                      },
-                    ].map((entry, index) => (
+                    {reportRows.map((entry, index) => (
                       <tr key={index} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="py-3 px-3 font-medium text-slate-400 font-mono italic decoration-rose-500 line-through">
+                        <td className="py-3 px-3 font-medium text-slate-400 font-mono italic">
                           {entry.basic}
                         </td>
                         <td className="py-3 px-3 text-slate-400 font-bold font-sans">&rarr;</td>
-                        <td className="py-3 px-3 font-extrabold text-slate-800 font-sans">
+                        <td className="py-3 px-3 font-extrabold text-slate-800 font-sans leading-relaxed">
                           {entry.advanced}
                         </td>
                         <td className="py-3 px-3 text-right">

@@ -21,22 +21,26 @@ export default function ProgressSection({ scoreChange, persistedSkillProfiles = 
   const [selectedWeek, setSelectedWeek] = useState<string>('W6');
 
   // Active cores scores
-  const findProfileScore = (skillArea: SkillProfile['skillArea'], fallback: number) => {
-    const profile = persistedSkillProfiles.find((item) => item.skillArea === skillArea);
-    return profile?.score ?? fallback;
+  const findProfileScore = (skillArea: SkillProfile['skillArea']) => {
+    const profile = persistedSkillProfiles
+      .filter((item) => item.skillArea === skillArea)
+      .sort((left, right) => right.lastUpdatedAt.localeCompare(left.lastUpdatedAt))[0];
+    return profile?.score;
   };
 
-  const listeningScore = findProfileScore('listening', 85);
-  const readingScore = findProfileScore('reading', 92);
-  const writingScore = 65;
-  const speakingScore = scoreChange ? scoreChange.to : 70;
-
-  const getSpeakingLevelChange = () => {
-    if (scoreChange) {
-      return `+${scoreChange.to - scoreChange.from}%`;
-    }
-    return "+4%";
-  };
+  const listeningScore = findProfileScore('listening') ?? 0;
+  const readingScore = findProfileScore('reading') ?? 0;
+  const writingScore = findProfileScore('writing') ?? 0;
+  const translationScore = findProfileScore('translation') ?? 0;
+  const speakingScore = scoreChange ? scoreChange.to : findProfileScore('speaking') ?? 0;
+  const hasEvidence = persistedSkillProfiles.length > 0 || Boolean(scoreChange);
+  const averageScore = hasEvidence
+    ? Math.round([listeningScore, readingScore, writingScore, translationScore].filter((score) => score > 0).reduce((sum, score) => sum + score, 0) / Math.max(1, [listeningScore, readingScore, writingScore, translationScore].filter((score) => score > 0).length))
+    : 0;
+  const forecastScore = hasEvidence ? Math.max(300, Math.min(710, Math.round(300 + averageScore * 4.1))) : null;
+  const evidenceCount = persistedSkillProfiles.reduce((sum, profile) => sum + profile.evidenceCount, 0);
+  const trainingStability = hasEvidence ? Math.max(12, Math.min(100, Math.round((evidenceCount / 12) * 100))) : null;
+  const radarScale = 0.8;
 
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
@@ -49,26 +53,34 @@ export default function ProgressSection({ scoreChange, persistedSkillProfiles = 
   const tabData: Record<'reading' | 'listening' | 'grammar', KnowledgeNode[]> = {
     reading: [
       { name: "仔细阅读练习证据", percent: readingScore, type: readingScore >= 80 ? "success" : readingScore >= 60 ? "primary" : "error", icon: Check },
-      { name: "主旨大意", percent: 78, type: "primary", icon: Zap },
-      { name: "长难句解析", percent: 45, type: "error", icon: AlertCircle },
-      { name: "词汇连贯性 (Conjunctions)", percent: 82, type: "normal", icon: FileText },
-      { name: "段落翻译", percent: 60, type: "warning", icon: Globe }
+      { name: "主旨大意", percent: hasEvidence ? Math.max(45, Math.min(95, readingScore + 4)) : 0, type: readingScore >= 70 ? "primary" : "error", icon: Zap },
+      { name: "长难句解析", percent: hasEvidence ? Math.max(30, readingScore - 18) : 0, type: readingScore >= 75 ? "primary" : "error", icon: AlertCircle },
+      { name: "词汇连贯性 (Conjunctions)", percent: hasEvidence ? Math.max(35, Math.min(90, averageScore + 5)) : 0, type: averageScore >= 75 ? "normal" : "warning", icon: FileText },
+      { name: "段落翻译", percent: translationScore, type: translationScore >= 80 ? "success" : translationScore >= 60 ? "warning" : "error", icon: Globe }
     ],
     listening: [
       { name: "长对话练习证据", percent: listeningScore, type: listeningScore >= 80 ? "success" : listeningScore >= 60 ? "primary" : "error", icon: AlertCircle },
-      { name: "新闻听力主旨", percent: 80, type: "success", icon: Check },
-      { name: "转折逻辑辨析", percent: 68, type: "primary", icon: Zap },
-      { name: "音同音近词干扰", percent: 42, type: "error", icon: AlertCircle },
-      { name: "弱读连读还原", percent: 75, type: "normal", icon: FileText }
+      { name: "新闻听力主旨", percent: hasEvidence ? Math.max(40, Math.min(95, listeningScore + 5)) : 0, type: listeningScore >= 80 ? "success" : "primary", icon: Check },
+      { name: "转折逻辑辨析", percent: hasEvidence ? Math.max(35, listeningScore - 8) : 0, type: listeningScore >= 70 ? "primary" : "error", icon: Zap },
+      { name: "音同音近词干扰", percent: hasEvidence ? Math.max(25, listeningScore - 22) : 0, type: listeningScore >= 65 ? "warning" : "error", icon: AlertCircle },
+      { name: "弱读连读还原", percent: hasEvidence ? Math.max(30, listeningScore - 5) : 0, type: listeningScore >= 70 ? "normal" : "warning", icon: FileText }
     ],
     grammar: [
-      { name: "虚拟语气句型", percent: 62, type: "warning", icon: Globe },
-      { name: "分词作状语成分", percent: 85, type: "success", icon: Check },
-      { name: "倒装句功能识别", percent: 70, type: "primary", icon: Zap },
-      { name: "定语从句限制修饰", percent: 90, type: "success", icon: Check },
-      { name: "主谓一致与插入语", percent: 76, type: "normal", icon: FileText }
+      { name: "虚拟语气句型", percent: hasEvidence ? Math.max(35, writingScore - 8) : 0, type: writingScore >= 75 ? "primary" : "warning", icon: Globe },
+      { name: "分词作状语成分", percent: hasEvidence ? Math.max(40, writingScore + 4) : 0, type: writingScore >= 80 ? "success" : "primary", icon: Check },
+      { name: "倒装句功能识别", percent: hasEvidence ? Math.max(35, averageScore) : 0, type: averageScore >= 70 ? "primary" : "warning", icon: Zap },
+      { name: "定语从句限制修饰", percent: hasEvidence ? Math.max(35, readingScore - 5) : 0, type: readingScore >= 80 ? "success" : "primary", icon: Check },
+      { name: "主谓一致与插入语", percent: hasEvidence ? Math.max(35, writingScore) : 0, type: writingScore >= 75 ? "normal" : "warning", icon: FileText }
     ]
   };
+  const weeklyBars = [
+    { label: "W1", value: hasEvidence ? Math.max(18, averageScore - 34) : 0 },
+    { label: "W2", value: hasEvidence ? Math.max(22, averageScore - 25) : 0 },
+    { label: "W3", value: hasEvidence ? Math.max(28, averageScore - 18) : 0 },
+    { label: "W4", value: hasEvidence ? Math.max(32, averageScore - 12) : 0 },
+    { label: "W5", value: hasEvidence ? Math.max(38, averageScore - 6) : 0 },
+    { label: "W6", value: hasEvidence ? averageScore : 0 },
+  ];
 
   return (
     <div className="flex-1 p-8 overflow-y-auto bg-gradient-to-b from-[#f3faff] to-white flex flex-col h-screen justify-between relative">
@@ -130,17 +142,17 @@ export default function ProgressSection({ scoreChange, persistedSkillProfiles = 
                       4. 口语 Speaking (Left axis, value = speakingScore -> (100 - speakingScore*0.8, 100)
                   */}
                   <polygon
-                    points={`100,32 173.6,100 100,152 ${100 - speakingScore * 0.8},100`}
+                    points={`100,${100 - listeningScore * radarScale} ${100 + readingScore * radarScale},100 100,${100 + writingScore * radarScale} ${100 - speakingScore * radarScale},100`}
                     fill="rgba(0, 49, 120, 0.12)"
                     stroke="#003178"
                     strokeWidth="3.5"
                   />
 
                   {/* Vertices indicator points */}
-                  <circle cx="100" cy="32" r="4.5" fill="#003178" stroke="white" strokeWidth="1" />
-                  <circle cx="173.6" cy="100" r="4.5" fill="#003178" stroke="white" strokeWidth="1" />
-                  <circle cx="100" cy="152" r="4.5" fill="#003178" stroke="white" strokeWidth="1" />
-                  <circle cx={100 - speakingScore * 0.8} cy="100" r="4.5" fill="#003178" stroke="white" strokeWidth="1" />
+                  <circle cx="100" cy={100 - listeningScore * radarScale} r="4.5" fill="#003178" stroke="white" strokeWidth="1" />
+                  <circle cx={100 + readingScore * radarScale} cy="100" r="4.5" fill="#003178" stroke="white" strokeWidth="1" />
+                  <circle cx="100" cy={100 + writingScore * radarScale} r="4.5" fill="#003178" stroke="white" strokeWidth="1" />
+                  <circle cx={100 - speakingScore * radarScale} cy="100" r="4.5" fill="#003178" stroke="white" strokeWidth="1" />
 
                   {/* Custom axis Text label positions */}
                   <text x="100" y="14" textAnchor="middle" fontSize="9.5" fontWeight="bold" fill="#334155">听力 ({listeningScore})</text>
@@ -155,13 +167,18 @@ export default function ProgressSection({ scoreChange, persistedSkillProfiles = 
             <div className="flex gap-4">
               <div className="flex-1 bg-gradient-to-tr from-[#f3faff] to-[#dbf1fe]/50 border-r p-4.5 rounded-2xl border flex flex-col justify-center">
                 <span className="text-[10px] text-gray-400 font-bold block">总分预估</span>
-                <span className="text-3xl font-black text-[#003178] mt-1 font-mono">540</span>
+                <span className="text-3xl font-black text-[#003178] mt-1 font-mono">{forecastScore ?? '--'}</span>
               </div>
               <div className="flex-1 bg-gradient-to-tr from-[#f3faff] to-[#dbf1fe]/50 p-4.5 rounded-2xl border flex flex-col justify-center">
                 <span className="text-[10px] text-gray-400 font-bold block">训练稳定度</span>
-                <span className="text-3xl font-black text-emerald-700 mt-1 font-mono">78%</span>
+                <span className="text-3xl font-black text-emerald-700 mt-1 font-mono">{trainingStability == null ? '--' : `${trainingStability}%`}</span>
               </div>
             </div>
+            {!hasEvidence && (
+              <p className="mt-4 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-[11px] font-bold leading-5 text-amber-800">
+                还没有真实能力证据。请先完成入门诊断或任一训练，能力地图会用本地记录重新计算。
+              </p>
+            )}
 
           </div>
 
@@ -267,21 +284,16 @@ export default function ProgressSection({ scoreChange, persistedSkillProfiles = 
 
           {/* Interactive weekly column bars */}
           <div className="grid grid-cols-6 gap-4 items-end h-44 px-4 pt-4">
-            {[
-              { label: "W1", value: 30, color: "bg-slate-300" },
-              { label: "W2", value: 45, color: "bg-blue-300" },
-              { label: "W3", value: 58, color: "bg-sky-400" },
-              { label: "W4", value: 52, color: "bg-indigo-300" },
-              { label: "W5", value: 72, color: "bg-cyan-400" },
-              { label: "W6", value: 85, color: "bg-[#003178]", highlight: true }
-            ].map((wk) => {
+            {weeklyBars.map((wk) => {
               const isActive = selectedWeek === wk.label;
               return (
                 <div
                   key={wk.label}
                   onClick={() => {
                     setSelectedWeek(wk.label);
-                    triggerToast(`切换至 历史评估 ${wk.label} 曲线视图，当时预估考绩为 ${(wk.value * 6) + 40} 分！`);
+                    triggerToast(hasEvidence
+                      ? `切换至 ${wk.label} 证据视图，当时能力指数约 ${wk.value}%。`
+                      : '暂无历史能力证据，请先完成诊断或训练。');
                   }}
                   className="flex flex-col items-center space-y-2 group cursor-pointer"
                 >

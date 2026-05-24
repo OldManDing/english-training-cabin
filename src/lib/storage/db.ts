@@ -73,6 +73,27 @@ export async function upsertActiveGoal(changes: Partial<StudyGoal>): Promise<Stu
   return next;
 }
 
+function mergeSkillProfile(existing: SkillProfile, incoming: SkillProfile): SkillProfile {
+  const existingEvidence = Math.max(0, existing.evidenceCount ?? 0);
+  const incomingEvidence = Math.max(1, incoming.evidenceCount ?? 1);
+  const totalEvidence = existingEvidence + incomingEvidence;
+
+  return {
+    ...incoming,
+    score: Math.round(((existing.score * existingEvidence) + (incoming.score * incomingEvidence)) / totalEvidence),
+    confidence: Math.round(((existing.confidence * existingEvidence) + (incoming.confidence * incomingEvidence)) / totalEvidence),
+    evidenceCount: totalEvidence,
+    lastUpdatedAt: incoming.lastUpdatedAt >= existing.lastUpdatedAt ? incoming.lastUpdatedAt : existing.lastUpdatedAt,
+  };
+}
+
+async function mergeAndPutSkillProfiles(skillProfiles: SkillProfile[]): Promise<void> {
+  for (const profile of skillProfiles) {
+    const existing = await db.skillProfiles.get(profile.id);
+    await db.skillProfiles.put(existing ? mergeSkillProfile(existing, profile) : profile);
+  }
+}
+
 export async function persistPracticeCompletion(payload: {
   session: PracticeSession;
   attempts: Attempt[];
@@ -86,7 +107,7 @@ export async function persistPracticeCompletion(payload: {
       await db.reviewItems.bulkPut(payload.reviewItems);
     }
     if (payload.skillProfiles.length > 0) {
-      await db.skillProfiles.bulkPut(payload.skillProfiles);
+      await mergeAndPutSkillProfiles(payload.skillProfiles);
     }
   });
 }
@@ -97,6 +118,54 @@ export async function loadReviewItems(): Promise<ReviewItem[]> {
 
 export async function loadSkillProfiles(): Promise<SkillProfile[]> {
   return db.skillProfiles.orderBy('lastUpdatedAt').reverse().toArray();
+}
+
+export async function persistSkillProfiles(skillProfiles: SkillProfile[]): Promise<void> {
+  if (skillProfiles.length === 0) return;
+  await db.skillProfiles.bulkPut(skillProfiles);
+}
+
+export async function completeReviewItem(itemId: string): Promise<ReviewItem | undefined> {
+  let updatedItem: ReviewItem | undefined;
+
+  await db.transaction('rw', db.reviewItems, db.skillProfiles, async () => {
+    const current = await db.reviewItems.get(itemId);
+    if (!current) return;
+
+    const now = new Date();
+    const currentMastery = current.masteryScore ?? 35;
+    const masteryScore = Math.min(100, currentMastery + (currentMastery < 60 ? 25 : 15));
+    const reviewIntervalDays = masteryScore >= 85 ? 7 : masteryScore >= 65 ? 3 : 1;
+    const nextReview = new Date(now);
+    nextReview.setDate(nextReview.getDate() + reviewIntervalDays);
+
+    updatedItem = {
+      ...current,
+      masteryScore,
+      priorityScore: Math.max(10, (current.priorityScore ?? 50) - 25),
+      reviewIntervalDays,
+      lastReviewedAt: now.toISOString(),
+      nextReviewAt: nextReview.toISOString(),
+      daysAgo: 0,
+    };
+    await db.reviewItems.put(updatedItem);
+
+    if (current.skillArea) {
+      const reviewProfile: SkillProfile = {
+        id: `${current.examId ?? 'cet4'}-${current.skillArea}-review`,
+        skillArea: current.skillArea,
+        subSkillId: `review-${current.targetType ?? 'evidence'}`,
+        score: masteryScore,
+        confidence: 4,
+        evidenceCount: 1,
+        lastUpdatedAt: now.toISOString(),
+      };
+      const existingProfile = await db.skillProfiles.get(reviewProfile.id);
+      await db.skillProfiles.put(existingProfile ? mergeSkillProfile(existingProfile, reviewProfile) : reviewProfile);
+    }
+  });
+
+  return updatedItem;
 }
 
 function assertBackupArray(value: unknown, label: string): Record<string, unknown>[] {
