@@ -391,6 +391,145 @@ describe('server API', () => {
     expect(secondEntities.body.entities).toHaveLength(0);
   });
 
+  it('revokes server-side sessions on logout and rotates them on refresh', async () => {
+    const saasApp = createApp({
+      saasStore: createInMemorySaasStore(),
+      saasSessionSecret: 'session-rotation-secret',
+    });
+
+    const registerResponse = await request(saasApp)
+      .post('/api/auth/register')
+      .send({
+        email: 'session-owner@example.com',
+        password: 'secure-password-1',
+        name: '会话学习者',
+        organizationName: '会话团队',
+      })
+      .expect(201);
+
+    const firstToken = registerResponse.body.token as string;
+    const refreshResponse = await request(saasApp)
+      .post('/api/auth/refresh')
+      .set('Authorization', `Bearer ${firstToken}`)
+      .expect(200);
+
+    const secondToken = refreshResponse.body.token as string;
+    expect(secondToken).not.toBe(firstToken);
+
+    await request(saasApp)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${firstToken}`)
+      .expect(401);
+
+    await request(saasApp)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${secondToken}`)
+      .expect(200);
+
+    await request(saasApp)
+      .post('/api/auth/logout')
+      .set('Authorization', `Bearer ${secondToken}`)
+      .expect(204);
+
+    await request(saasApp)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${secondToken}`)
+      .expect(401);
+  });
+
+  it('supports workspace invitations, member onboarding, and owner-only admin overview', async () => {
+    const saasApp = createApp({
+      saasStore: createInMemorySaasStore(),
+      saasSessionSecret: 'workspace-secret',
+    });
+
+    const owner = await request(saasApp)
+      .post('/api/auth/register')
+      .send({
+        email: 'workspace-owner@example.com',
+        password: 'secure-password-1',
+        name: '团队所有者',
+        organizationName: '免费协作团队',
+      })
+      .expect(201);
+
+    const invitationResponse = await request(saasApp)
+      .post('/api/workspace/invitations')
+      .set('Authorization', `Bearer ${owner.body.token}`)
+      .send({
+        email: 'workspace-member@example.com',
+        role: 'member',
+      })
+      .expect(201);
+
+    expect(invitationResponse.body.invitation).toMatchObject({
+      email: 'workspace-member@example.com',
+      role: 'member',
+    });
+    expect(invitationResponse.body.invitation).not.toHaveProperty('tokenHash');
+    expect(invitationResponse.body.token).toEqual(expect.any(String));
+
+    const accepted = await request(saasApp)
+      .post('/api/workspace/invitations/accept')
+      .send({
+        token: invitationResponse.body.token,
+        name: '团队成员',
+        password: 'secure-password-2',
+      })
+      .expect(201);
+
+    expect(accepted.body.account.user).toMatchObject({
+      email: 'workspace-member@example.com',
+      role: 'member',
+      emailVerified: true,
+    });
+
+    await request(saasApp)
+      .post('/api/workspace/invitations/accept')
+      .send({
+        token: invitationResponse.body.token,
+        name: '重复成员',
+        password: 'secure-password-3',
+      })
+      .expect(400);
+
+    const membersResponse = await request(saasApp)
+      .get('/api/workspace/members')
+      .set('Authorization', `Bearer ${owner.body.token}`)
+      .expect(200);
+
+    expect(membersResponse.body.members.map((member: { email: string }) => member.email)).toEqual([
+      'workspace-owner@example.com',
+      'workspace-member@example.com',
+    ]);
+    expect(membersResponse.body.members[0]).not.toHaveProperty('passwordHash');
+    expect(membersResponse.body.invitations[0]).toHaveProperty('acceptedAt');
+
+    const adminOverview = await request(saasApp)
+      .get('/api/admin/overview')
+      .set('Authorization', `Bearer ${owner.body.token}`)
+      .expect(200);
+
+    expect(adminOverview.body.overview).toMatchObject({
+      members: 2,
+      pendingInvitations: 0,
+    });
+
+    await request(saasApp)
+      .get('/api/admin/overview')
+      .set('Authorization', `Bearer ${accepted.body.token}`)
+      .expect(403);
+
+    await request(saasApp)
+      .post('/api/workspace/invitations')
+      .set('Authorization', `Bearer ${accepted.body.token}`)
+      .send({
+        email: 'another-member@example.com',
+        role: 'member',
+      })
+      .expect(403);
+  });
+
   it('returns exam registry', async () => {
     const response = await request(app).get('/api/exams').expect(200);
 

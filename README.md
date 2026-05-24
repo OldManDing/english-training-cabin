@@ -99,7 +99,15 @@ APP_URL=http://localhost:3000
 
 - `POST /api/auth/register`：注册账号并创建默认组织租户和 Pro 试用权益。
 - `POST /api/auth/login`：登录并返回 Bearer token。
+- `POST /api/auth/refresh`：轮换当前登录会话，旧 token 立即失效。
+- `POST /api/auth/logout`：撤销当前服务端会话。
+- `POST /api/auth/email-verification/request` / `confirm`：邮箱验证 token。
+- `POST /api/auth/password-reset/request` / `confirm`：密码重置 token。
 - `GET /api/auth/me`：读取当前账号、租户和订阅权益。
+- `GET /api/workspace/members`：读取当前团队成员和邀请记录。
+- `POST /api/workspace/invitations`：团队 owner 邀请成员。
+- `POST /api/workspace/invitations/accept`：成员接受邀请并创建账号。
+- `GET /api/admin/overview`：团队 owner 查看聚合管理概览。
 - `GET /api/billing/entitlements`：读取当前订阅权益。
 - `POST /api/billing/webhook`：接收带 HMAC 签名的订阅状态变更事件。
 - `PUT /api/cloud/learning-data`：把当前浏览器学习数据备份同步到服务端。
@@ -107,4 +115,4 @@ APP_URL=http://localhost:3000
 - `PUT /api/cloud/learning-entities`：按实体增量同步目标、练习、作答、复习和能力画像。
 - `GET /api/cloud/learning-entities`：按用户和租户读取增量学习实体。
 
-当前已具备 Postgres schema、整包快照、增量实体同步、订阅 webhook、邮箱验证 token 和密码重置 token 的服务端基础。正式商业化还需要接入真实邮件服务、支付供应商控制台、团队邀请和运营后台。
+当前已具备 Postgres schema、整包快照、增量实体同步、服务端会话撤销、团队邀请、owner-only 管理概览、邮箱验证 token 和密码重置 token 的服务端基础。付费功能不是当前重点；后续如不做付费，可继续强化真实邮件服务、团队管理后台、内容授权后台和运营观测。

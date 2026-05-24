@@ -92,6 +92,28 @@ export interface BillingWebhookEventRecord {
   receivedAt: string;
 }
 
+export interface SaasSessionRecord {
+  id: string;
+  userId: string;
+  organizationId: string;
+  createdAt: string;
+  expiresAt: string;
+  lastUsedAt?: string;
+  revokedAt?: string;
+}
+
+export interface OrganizationInvitationRecord {
+  id: string;
+  organizationId: string;
+  email: string;
+  role: OrganizationRole;
+  invitedByUserId: string;
+  tokenHash: string;
+  expiresAt: string;
+  acceptedAt?: string;
+  createdAt: string;
+}
+
 export interface SaasDatabaseShape {
   schemaVersion: 2;
   users: SaasUserRecord[];
@@ -101,6 +123,8 @@ export interface SaasDatabaseShape {
   learningEntities: CloudLearningEntityRecord[];
   oneTimeTokens: SaasOneTimeTokenRecord[];
   billingWebhookEvents: BillingWebhookEventRecord[];
+  sessions: SaasSessionRecord[];
+  organizationInvitations: OrganizationInvitationRecord[];
 }
 
 export interface SaasAccountRecord {
@@ -121,6 +145,10 @@ export interface SaasStore {
   }): Promise<SaasAccountRecord>;
   updateUserLogin(userId: string, at: string): Promise<void>;
   getAccountForUser(userId: string): Promise<SaasAccountRecord | undefined>;
+  createSession(input: { userId: string; organizationId: string; expiresAt: string }): Promise<SaasSessionRecord>;
+  getActiveSession(sessionId: string, userId: string, now: string): Promise<SaasSessionRecord | undefined>;
+  touchSession(sessionId: string, at: string): Promise<void>;
+  revokeSession(sessionId: string, userId: string, at: string): Promise<boolean>;
   saveLearningSnapshot(input: {
     organizationId: string;
     userId: string;
@@ -151,6 +179,27 @@ export interface SaasStore {
   updateUserPassword(userId: string, passwordHash: string, at: string): Promise<SaasAccountRecord | undefined>;
   applyBillingEvent(input: BillingEventInput): Promise<SaasSubscriptionRecord>;
   hasBillingEvent(provider: string, eventId: string): Promise<boolean>;
+  createOrganizationInvitation(input: {
+    organizationId: string;
+    email: string;
+    role: OrganizationRole;
+    invitedByUserId: string;
+    expiresAt: string;
+  }): Promise<{ token: string; invitation: OrganizationInvitationRecord }>;
+  acceptOrganizationInvitation(input: {
+    token: string;
+    name: string;
+    passwordHash: string;
+    now: string;
+  }): Promise<SaasAccountRecord>;
+  listOrganizationMembers(organizationId: string): Promise<SaasUserRecord[]>;
+  listOrganizationInvitations(organizationId: string): Promise<OrganizationInvitationRecord[]>;
+  getOrganizationAdminOverview(organizationId: string): Promise<{
+    members: number;
+    pendingInvitations: number;
+    learningSnapshots: number;
+    learningEntities: number;
+  }>;
 }
 
 export interface PublicSaasAccountContext {
@@ -185,6 +234,7 @@ export interface PublicSaasAccountContext {
 export interface SaasSessionPayload {
   iss: 'english-training-cabin';
   aud: 'english-training-cabin-web';
+  jti: string;
   sub: string;
   org: string;
   role: OrganizationRole;
@@ -221,6 +271,10 @@ export interface BillingEventInput {
   currentPeriodEndsAt?: string;
 }
 
+export function getSessionExpiresAt(now = new Date()): string {
+  return new Date(now.getTime() + SESSION_TTL_SECONDS * 1000).toISOString();
+}
+
 function createEmptyDatabase(): SaasDatabaseShape {
   return {
     schemaVersion: 2,
@@ -231,6 +285,8 @@ function createEmptyDatabase(): SaasDatabaseShape {
     learningEntities: [],
     oneTimeTokens: [],
     billingWebhookEvents: [],
+    sessions: [],
+    organizationInvitations: [],
   };
 }
 
@@ -410,6 +466,44 @@ function createStoreFromDatabase(options: {
         return { user, organization, subscription };
       });
     },
+    createSession(input) {
+      return mutate((db) => {
+        const now = new Date().toISOString();
+        const session: SaasSessionRecord = {
+          id: crypto.randomUUID(),
+          userId: input.userId,
+          organizationId: input.organizationId,
+          createdAt: now,
+          expiresAt: input.expiresAt,
+        };
+        db.sessions.push(session);
+        return session;
+      });
+    },
+    getActiveSession(sessionId, userId, now) {
+      return read((db) => db.sessions.find((session) =>
+        session.id === sessionId &&
+        session.userId === userId &&
+        !session.revokedAt &&
+        session.expiresAt > now,
+      ));
+    },
+    touchSession(sessionId, at) {
+      return mutate((db) => {
+        const session = db.sessions.find((item) => item.id === sessionId);
+        if (session && !session.revokedAt) {
+          session.lastUsedAt = at;
+        }
+      });
+    },
+    revokeSession(sessionId, userId, at) {
+      return mutate((db) => {
+        const session = db.sessions.find((item) => item.id === sessionId && item.userId === userId);
+        if (!session || session.revokedAt) return false;
+        session.revokedAt = at;
+        return true;
+      });
+    },
     saveLearningSnapshot(input) {
       return mutate((db) => {
         const now = new Date().toISOString();
@@ -555,6 +649,87 @@ function createStoreFromDatabase(options: {
     hasBillingEvent(provider, eventId) {
       return read((db) => db.billingWebhookEvents.some((event) => event.id === eventId && event.provider === provider));
     },
+    createOrganizationInvitation(input) {
+      return mutate((db) => {
+        const organization = db.organizations.find((item) => item.id === input.organizationId);
+        if (!organization) {
+          throw new SaasApiError(404, 'organization_not_found', '团队不存在。');
+        }
+        if (db.users.some((user) => user.email === input.email)) {
+          throw new SaasApiError(409, 'email_exists', '该邮箱已是系统用户。');
+        }
+
+        const token = crypto.randomBytes(32).toString('base64url');
+        const invitation: OrganizationInvitationRecord = {
+          id: crypto.randomUUID(),
+          organizationId: input.organizationId,
+          email: input.email,
+          role: input.role,
+          invitedByUserId: input.invitedByUserId,
+          tokenHash: hashOneTimeToken(token),
+          expiresAt: input.expiresAt,
+          createdAt: new Date().toISOString(),
+        };
+        db.organizationInvitations.push(invitation);
+        return { token, invitation };
+      });
+    },
+    acceptOrganizationInvitation(input) {
+      return mutate((db) => {
+        const invitation = db.organizationInvitations.find((item) =>
+          item.tokenHash === hashOneTimeToken(input.token) &&
+          !item.acceptedAt &&
+          item.expiresAt > input.now,
+        );
+        if (!invitation) {
+          throw new SaasApiError(400, 'invalid_invitation', '邀请链接无效或已过期。');
+        }
+        if (db.users.some((user) => user.email === invitation.email)) {
+          throw new SaasApiError(409, 'email_exists', '该邮箱已是系统用户。');
+        }
+
+        const organization = db.organizations.find((item) => item.id === invitation.organizationId);
+        const subscription = db.subscriptions.find((item) => item.organizationId === invitation.organizationId);
+        if (!organization || !subscription) {
+          throw new SaasApiError(404, 'organization_not_found', '团队不存在。');
+        }
+
+        const user: SaasUserRecord = {
+          id: crypto.randomUUID(),
+          email: invitation.email,
+          name: input.name,
+          passwordHash: input.passwordHash,
+          organizationId: invitation.organizationId,
+          role: invitation.role,
+          emailVerifiedAt: input.now,
+          createdAt: input.now,
+          updatedAt: input.now,
+        };
+        invitation.acceptedAt = input.now;
+        db.users.push(user);
+        return { user, organization, subscription };
+      });
+    },
+    listOrganizationMembers(organizationId) {
+      return read((db) => db.users
+        .filter((user) => user.organizationId === organizationId)
+        .sort((left, right) => left.createdAt.localeCompare(right.createdAt)));
+    },
+    listOrganizationInvitations(organizationId) {
+      return read((db) => db.organizationInvitations
+        .filter((invitation) => invitation.organizationId === organizationId)
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt)));
+    },
+    getOrganizationAdminOverview(organizationId) {
+      return read((db) => ({
+        members: db.users.filter((user) => user.organizationId === organizationId).length,
+        pendingInvitations: db.organizationInvitations.filter((invitation) =>
+          invitation.organizationId === organizationId && !invitation.acceptedAt && invitation.expiresAt > new Date().toISOString(),
+        ).length,
+        learningSnapshots: db.learningSnapshots.filter((snapshot) => snapshot.organizationId === organizationId).length,
+        learningEntities: db.learningEntities.filter((entity) => entity.organizationId === organizationId && !entity.deletedAt).length,
+      }));
+    },
   };
 }
 
@@ -580,6 +755,8 @@ function normalizeDatabaseShape(value: unknown): SaasDatabaseShape {
     learningEntities: Array.isArray(input.learningEntities) ? input.learningEntities : [],
     oneTimeTokens: Array.isArray(input.oneTimeTokens) ? input.oneTimeTokens : [],
     billingWebhookEvents: Array.isArray(input.billingWebhookEvents) ? input.billingWebhookEvents : [],
+    sessions: Array.isArray(input.sessions) ? input.sessions : [],
+    organizationInvitations: Array.isArray(input.organizationInvitations) ? input.organizationInvitations : [],
   };
 }
 
@@ -639,11 +816,12 @@ function signTokenSegment(value: string, secret: string): string {
   return crypto.createHmac('sha256', secret).update(value).digest('base64url');
 }
 
-export function issueSessionToken(account: SaasAccountRecord, secret: string, now = Math.floor(Date.now() / 1000)): string {
+export function issueSessionToken(account: SaasAccountRecord, secret: string, now = Math.floor(Date.now() / 1000), sessionId: string = crypto.randomUUID()): string {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
   const payload: SaasSessionPayload = {
     iss: 'english-training-cabin',
     aud: 'english-training-cabin-web',
+    jti: sessionId,
     sub: account.user.id,
     org: account.organization.id,
     role: account.user.role,
@@ -677,6 +855,7 @@ export function verifySessionToken(token: string, secret: string, now = Math.flo
   if (
     payload.iss !== 'english-training-cabin' ||
     payload.aud !== 'english-training-cabin-web' ||
+    typeof payload.jti !== 'string' ||
     typeof payload.sub !== 'string' ||
     typeof payload.org !== 'string' ||
     (payload.role !== 'owner' && payload.role !== 'member') ||
@@ -792,6 +971,66 @@ export async function confirmPasswordReset(store: SaasStore, value: unknown): Pr
     throw new SaasApiError(404, 'account_not_found', '账号不存在。');
   }
   return account;
+}
+
+export async function createWorkspaceInvitation(store: SaasStore, actor: SaasAccountRecord, value: unknown): Promise<{
+  token: string;
+  invitation: OrganizationInvitationRecord;
+}> {
+  if (actor.user.role !== 'owner') {
+    throw new SaasApiError(403, 'forbidden', '只有团队所有者可以邀请成员。');
+  }
+  const input = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const email = normalizeEmail(input.email);
+  const role: OrganizationRole = input.role === 'owner' ? 'owner' : 'member';
+
+  return store.createOrganizationInvitation({
+    organizationId: actor.organization.id,
+    email,
+    role,
+    invitedByUserId: actor.user.id,
+    expiresAt: addDays(new Date(), 7),
+  });
+}
+
+export async function acceptWorkspaceInvitation(store: SaasStore, value: unknown): Promise<SaasAccountRecord> {
+  const input = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const token = typeof input.token === 'string' ? input.token : '';
+  if (token.length < 24 || token.length > 256) {
+    throw new SaasApiError(400, 'invalid_invitation', '邀请链接无效。');
+  }
+  const name = normalizeName(input.name);
+  const password = assertPassword(input.password);
+
+  return store.acceptOrganizationInvitation({
+    token,
+    name,
+    passwordHash: hashPassword(password),
+    now: new Date().toISOString(),
+  });
+}
+
+export function toPublicMembers(users: SaasUserRecord[]) {
+  return users.map((user) => ({
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    emailVerified: Boolean(user.emailVerifiedAt),
+    createdAt: user.createdAt,
+    lastLoginAt: user.lastLoginAt,
+  }));
+}
+
+export function toPublicInvitations(invitations: OrganizationInvitationRecord[]) {
+  return invitations.map((invitation) => ({
+    id: invitation.id,
+    email: invitation.email,
+    role: invitation.role,
+    expiresAt: invitation.expiresAt,
+    acceptedAt: invitation.acceptedAt,
+    createdAt: invitation.createdAt,
+  }));
 }
 
 export function toPublicAccountContext(account: SaasAccountRecord): PublicSaasAccountContext {

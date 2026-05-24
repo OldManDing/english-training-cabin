@@ -17,6 +17,8 @@
 - `learning_entities`：目标、练习、作答、复习、能力画像的增量同步实体。
 - `one_time_tokens`：邮箱验证和密码重置的一次性 token 哈希。
 - `billing_webhook_events`：支付 webhook 幂等记录。
+- `sessions`：服务端登录会话，用于 token 撤销、刷新和最后使用时间记录。
+- `organization_invitations`：团队成员邀请，一次性 token 只保存哈希。
 - `saas_migrations`：迁移执行记录。
 
 ## 应用切换规则
@@ -42,7 +44,7 @@
 
 - `npm.cmd run lint`：通过。
 - `npm.cmd run test`：4 个测试文件，34 个用例通过。
-- API 测试覆盖：账号注册登录、邮箱验证、密码重置、订阅 webhook 签名、订阅幂等、增量学习实体同步、跨租户隔离。
+- API 测试覆盖：账号注册登录、邮箱验证、密码重置、订阅 webhook 签名、订阅幂等、增量学习实体同步、跨租户隔离、会话刷新撤销、团队邀请、成员列表和 owner-only 管理概览。
 
 ## 下一步
 

@@ -4,10 +4,12 @@ import {
   BillingEventInput,
   CloudLearningEntityRecord,
   CloudLearningSnapshotRecord,
+  OrganizationInvitationRecord,
   SaasAccountRecord,
   SaasApiError,
   SaasOneTimeTokenRecord,
   SaasOrganizationRecord,
+  SaasSessionRecord,
   SaasStore,
   SaasSubscriptionRecord,
   SaasUserRecord,
@@ -98,6 +100,39 @@ CREATE TABLE IF NOT EXISTS billing_webhook_events (
   received_at timestamptz NOT NULL,
   PRIMARY KEY (id, provider)
 );
+
+CREATE TABLE IF NOT EXISTS sessions (
+  id uuid PRIMARY KEY,
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL,
+  expires_at timestamptz NOT NULL,
+  last_used_at timestamptz,
+  revoked_at timestamptz
+);
+
+CREATE INDEX IF NOT EXISTS sessions_active_idx
+  ON sessions (id, user_id, expires_at)
+  WHERE revoked_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS organization_invitations (
+  id uuid PRIMARY KEY,
+  organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  email text NOT NULL,
+  role text NOT NULL CHECK (role IN ('owner', 'member')),
+  invited_by_user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash text NOT NULL UNIQUE,
+  expires_at timestamptz NOT NULL,
+  accepted_at timestamptz,
+  created_at timestamptz NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS organization_invitations_org_idx
+  ON organization_invitations (organization_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS organization_invitations_token_idx
+  ON organization_invitations (token_hash, expires_at)
+  WHERE accepted_at IS NULL;
 `;
 
 function toIso(value: Date | string | null | undefined): string | undefined {
@@ -156,6 +191,32 @@ function mapEntity(row: Record<string, unknown>): CloudLearningEntityRecord {
     payload: row.payload,
     updatedAt: toIso(row.updated_at as Date | string)!,
     deletedAt: toIso(row.deleted_at as Date | string | null),
+  };
+}
+
+function mapSession(row: Record<string, unknown>): SaasSessionRecord {
+  return {
+    id: String(row.id),
+    userId: String(row.user_id),
+    organizationId: String(row.organization_id),
+    createdAt: toIso(row.created_at as Date | string)!,
+    expiresAt: toIso(row.expires_at as Date | string)!,
+    lastUsedAt: toIso(row.last_used_at as Date | string | null),
+    revokedAt: toIso(row.revoked_at as Date | string | null),
+  };
+}
+
+function mapInvitation(row: Record<string, unknown>): OrganizationInvitationRecord {
+  return {
+    id: String(row.id),
+    organizationId: String(row.organization_id),
+    email: String(row.email),
+    role: row.role === 'owner' ? 'owner' : 'member',
+    invitedByUserId: String(row.invited_by_user_id),
+    tokenHash: String(row.token_hash),
+    expiresAt: toIso(row.expires_at as Date | string)!,
+    acceptedAt: toIso(row.accepted_at as Date | string | null),
+    createdAt: toIso(row.created_at as Date | string)!,
   };
 }
 
@@ -245,6 +306,10 @@ export function createPostgresSaasStore(databaseUrl: string): SaasStore {
         'INSERT INTO saas_migrations (id) VALUES ($1) ON CONFLICT (id) DO NOTHING',
         ['0001_saas_core'],
       );
+      await pool.query(
+        'INSERT INTO saas_migrations (id) VALUES ($1) ON CONFLICT (id) DO NOTHING',
+        ['0002_workspace_sessions'],
+      );
     })();
     await migrated;
   }
@@ -328,6 +393,40 @@ export function createPostgresSaasStore(databaseUrl: string): SaasStore {
     },
     getAccountForUser(userId) {
       return withClient((client) => getAccountForUserId(client, userId));
+    },
+    createSession(input) {
+      return withClient(async (client) => {
+        const now = new Date().toISOString();
+        const result = await client.query(
+          `INSERT INTO sessions (id, user_id, organization_id, created_at, expires_at)
+           VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+          [crypto.randomUUID(), input.userId, input.organizationId, now, input.expiresAt],
+        );
+        return mapSession(result.rows[0]);
+      });
+    },
+    getActiveSession(sessionId, userId, now) {
+      return withClient(async (client) => {
+        const result = await client.query(
+          'SELECT * FROM sessions WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL AND expires_at > $3',
+          [sessionId, userId, now],
+        );
+        return result.rows[0] ? mapSession(result.rows[0]) : undefined;
+      });
+    },
+    touchSession(sessionId, at) {
+      return withClient(async (client) => {
+        await client.query('UPDATE sessions SET last_used_at = $2 WHERE id = $1 AND revoked_at IS NULL', [sessionId, at]);
+      });
+    },
+    revokeSession(sessionId, userId, at) {
+      return withClient(async (client) => {
+        const result = await client.query(
+          'UPDATE sessions SET revoked_at = $3 WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL',
+          [sessionId, userId, at],
+        );
+        return Boolean(result.rowCount);
+      });
     },
     saveLearningSnapshot(input) {
       return withClient(async (client) => {
@@ -500,6 +599,109 @@ export function createPostgresSaasStore(databaseUrl: string): SaasStore {
       return withClient(async (client) => {
         const result = await client.query('SELECT id FROM billing_webhook_events WHERE id = $1 AND provider = $2', [eventId, provider]);
         return Boolean(result.rowCount);
+      });
+    },
+    createOrganizationInvitation(input) {
+      return withClient(async (client) => {
+        const token = crypto.randomBytes(32).toString('base64url');
+        try {
+          const result = await client.query(
+            `INSERT INTO organization_invitations
+             (id, organization_id, email, role, invited_by_user_id, token_hash, expires_at, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             RETURNING *`,
+            [
+              crypto.randomUUID(),
+              input.organizationId,
+              input.email,
+              input.role,
+              input.invitedByUserId,
+              hashOneTimeToken(token),
+              input.expiresAt,
+              new Date().toISOString(),
+            ],
+          );
+          return { token, invitation: mapInvitation(result.rows[0]) };
+        } catch (error) {
+          if ((error as { code?: string }).code === '23503') {
+            throw new SaasApiError(404, 'organization_not_found', '团队不存在。');
+          }
+          throw error;
+        }
+      });
+    },
+    acceptOrganizationInvitation(input) {
+      return withTransaction(async (client) => {
+        const invitationResult = await client.query(
+          `UPDATE organization_invitations
+           SET accepted_at = $3
+           WHERE token_hash = $1 AND accepted_at IS NULL AND expires_at > $2
+           RETURNING *`,
+          [hashOneTimeToken(input.token), input.now, input.now],
+        );
+        const invitation = invitationResult.rows[0] ? mapInvitation(invitationResult.rows[0]) : undefined;
+        if (!invitation) {
+          throw new SaasApiError(400, 'invalid_invitation', '邀请链接无效或已过期。');
+        }
+
+        try {
+          const userResult = await client.query(
+            `INSERT INTO users (id, email, name, password_hash, organization_id, role, email_verified_at, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $7)
+             RETURNING *`,
+            [
+              crypto.randomUUID(),
+              invitation.email,
+              input.name,
+              input.passwordHash,
+              invitation.organizationId,
+              invitation.role,
+              input.now,
+            ],
+          );
+          const account = await getAccountForUserId(client, userResult.rows[0].id);
+          if (!account) throw new SaasApiError(404, 'organization_not_found', '团队不存在。');
+          return account;
+        } catch (error) {
+          if ((error as { code?: string }).code === '23505') {
+            throw new SaasApiError(409, 'email_exists', '该邮箱已是系统用户。');
+          }
+          throw error;
+        }
+      });
+    },
+    listOrganizationMembers(organizationId) {
+      return withClient(async (client) => {
+        const result = await client.query('SELECT * FROM users WHERE organization_id = $1 ORDER BY created_at ASC', [organizationId]);
+        return result.rows.map((row) => mapUser(row));
+      });
+    },
+    listOrganizationInvitations(organizationId) {
+      return withClient(async (client) => {
+        const result = await client.query(
+          'SELECT * FROM organization_invitations WHERE organization_id = $1 ORDER BY created_at DESC',
+          [organizationId],
+        );
+        return result.rows.map((row) => mapInvitation(row));
+      });
+    },
+    getOrganizationAdminOverview(organizationId) {
+      return withClient(async (client) => {
+        const result = await client.query(
+          `SELECT
+             (SELECT count(*)::int FROM users WHERE organization_id = $1) AS members,
+             (SELECT count(*)::int FROM organization_invitations WHERE organization_id = $1 AND accepted_at IS NULL AND expires_at > now()) AS pending_invitations,
+             (SELECT count(*)::int FROM learning_snapshots WHERE organization_id = $1) AS learning_snapshots,
+             (SELECT count(*)::int FROM learning_entities WHERE organization_id = $1 AND deleted_at IS NULL) AS learning_entities`,
+          [organizationId],
+        );
+        const row = result.rows[0] as Record<string, unknown>;
+        return {
+          members: Number(row.members),
+          pendingInvitations: Number(row.pending_invitations),
+          learningSnapshots: Number(row.learning_snapshots),
+          learningEntities: Number(row.learning_entities),
+        };
       });
     },
   };

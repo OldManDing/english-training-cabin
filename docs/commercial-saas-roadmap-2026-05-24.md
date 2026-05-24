@@ -43,14 +43,23 @@
 - 增量同步：新增 `/api/cloud/learning-entities`，按 `studyGoal`、`practiceSession`、`attempt`、`reviewItem`、`skillProfile` 增量 upsert 和拉取。
 - API 测试：新增邮箱验证、密码重置、订阅签名、订阅幂等、权益变更、增量同步和跨租户隔离用例。
 
+## 第三批已落地（无付费方向）
+
+- 服务端会话治理：新增 `sessions` 表和服务端 session 记录，`/api/auth/logout` 可撤销 token，`/api/auth/refresh` 可轮换 token。
+- 团队协作：新增团队邀请、成员接受邀请、成员列表和邀请列表。
+- 权限边界：只有 owner 可以邀请成员和查看管理概览，member 调用会返回 403。
+- 管理概览：新增 `/api/admin/overview`，仅返回成员数、待接受邀请数、学习快照数、增量实体数，不泄露原文、密码哈希或密钥。
+- 数据库迁移：新增 `migrations/0002_workspace_sessions.sql`，扩展 sessions 和 organization_invitations。
+- API 测试：新增会话刷新/撤销、邀请一次性消费、owner/member 权限矩阵和管理概览用例。
+
 ## 仍需完成的商业化能力
 
 | 优先级 | 能力 | 上线意义 | 建议实现 |
 | --- | --- | --- | --- |
 | P0 | 真实 Postgres 验证 | 本地没有真实数据库实例 | 在部署环境配置 `DATABASE_URL`，执行冷启动 smoke 和备份策略 |
-| P0 | 真实邮件服务 | 当前开发环境直接返回 token | 接入 Resend/SendGrid/SMTP，发送验证和重置邮件 |
-| P0 | 真实支付供应商 | 当前是标准化 webhook 入口 | Stripe/Creem 等支付集成、provider payload 映射、退款/取消处理 |
-| P0 | 会话治理 | 当前是 7 天 Bearer token | refresh token、会话撤销、设备列表、异常登录提醒 |
+| P0 | 真实邮件服务 | 当前开发环境直接返回 token | 接入 Resend/SendGrid/SMTP，发送验证、重置和邀请邮件 |
+| P0 | 管理后台 UI | 当前管理能力主要是 API | 团队成员、邀请、学习概览、内容审核的前端后台 |
+| P0 | 会话治理增强 | 已支持撤销和轮换，但没有设备列表 | refresh token、设备列表、异常登录提醒 |
 | P1 | 内容授权后台 | 避免题库版权和内容质量风险 | 题材库、版本、来源、授权状态、下架机制 |
 | P1 | 团队/学校管理 | 面向 B 端销售必须可管理席位 | 成员邀请、班级、学习报表、角色权限 |
 | P1 | 运营后台 | 商业上线需要服务健康和用户漏斗 | 管理员仪表盘、AI 成本、错误率、活跃度 |
@@ -75,7 +84,7 @@
 
 不可对外宣传口径：
 
-- 不能宣传为完整支付订阅系统。
+- 本轮不做付费能力，因此不能宣传为完整支付订阅系统。
 - 不能宣传为完整云端增量学习档案。
 - 不能宣传为学校/团队管理平台。
 - 不能宣传为官方或完整授权题库。

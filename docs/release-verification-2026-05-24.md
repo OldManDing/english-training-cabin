@@ -31,6 +31,7 @@
 - SaaS 安全：密码使用 PBKDF2-SHA256 加盐哈希，生产环境要求 `SAAS_SESSION_SECRET`，云端学习快照按当前用户和租户隔离。
 - SaaS 配置：新增 `SAAS_SESSION_SECRET` 与 `SAAS_DATA_FILE`，当前文件存储为第一阶段基座，商业化终态建议迁移 Postgres。
 - SaaS 第二批：新增 Postgres 适配器、`0001_saas_core` 迁移、邮箱验证、密码重置、订阅 webhook 和增量学习实体同步。
+- SaaS 第三批：不继续付费方向，新增服务端 session 撤销/刷新、团队邀请、成员列表和 owner-only 管理概览。
 - 本机环境：已安装 Playwright Chromium，E2E 可在当前机器直接运行。
 - 供应商验证：BaseUI `/models` 可访问，本机 `.env.local` 使用 `gpt-5.4-mini`。
 - 供应商验证：生产包在 `PORT=3200` 下调用 `/api/ai/analyze-speech` 与 `/api/ai/generate-passage` 成功，2 次 AI 请求、0 次兜底，平均耗时约 7.2 秒。
@@ -42,7 +43,7 @@
 | 门禁 | 命令 | 结果 |
 | --- | --- | --- |
 | TypeScript 类型检查 | `npm run lint` | 通过 |
-| 单元/API 测试 | `npm run test` | 4 个测试文件，34 个用例通过 |
+| 单元/API 测试 | `npm run test` | 4 个测试文件，36 个用例通过 |
 | 生产构建 | `npm run build` | 通过，无 chunk 体积告警 |
 | 浏览器 E2E | `playwright test` | 10 个桌面 Chromium 用例 + 1 个移动 Chromium 用例通过 |
 | 串行总验证 | `npm run verify` | 通过 |
@@ -71,6 +72,7 @@
 | 安全响应头 | API 测试 | 健康检查返回 CSP、nosniff、Referrer-Policy 和麦克风权限策略 |
 | SaaS 账号与租户 | API + E2E | 注册、登录、权益读取、未登录拒绝、跨租户云快照隔离、设置页云同步恢复均通过 |
 | SaaS 第二批商业化能力 | API 测试 | 邮箱验证、密码重置、订阅 webhook 签名、订阅幂等、增量实体同步和跨租户隔离通过 |
+| SaaS 协作与会话治理 | API 测试 | token 刷新、登出撤销、团队邀请、邀请一次性消费、成员列表、owner-only 管理概览通过 |
 
 ## 测试验收结论
 
@@ -80,6 +82,7 @@
 - 通过：前端关键闭环覆盖到阅读训练写入 IndexedDB、复习项生成、主动复习、入门诊断持久化、口语二次重说、翻译评阅、能力画像更新、材料导入、数据导出与恢复。
 - 通过：SaaS 第一阶段基座覆盖账号注册登录、组织租户、订阅权益、云端学习快照同步和租户隔离。
 - 通过：SaaS 第二阶段服务端能力覆盖 Postgres schema、账号恢复、订阅权益变更和增量云同步 API。
+- 通过：SaaS 第三阶段服务端能力覆盖会话撤销/刷新、团队协作邀请和管理概览，且 member 无权访问 owner 管理接口。
 
 ## 产品验收结论
 

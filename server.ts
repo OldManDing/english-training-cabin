@@ -18,12 +18,15 @@ import {
 } from './src/domain/practice/reports';
 import { MistakeReason, ReviewItem, SkillArea, SkillProfile, StudyGoal } from './src/types';
 import {
+  acceptWorkspaceInvitation,
   confirmEmailVerification,
   confirmPasswordReset,
   createFileSaasStore,
   createInMemorySaasStore,
+  createWorkspaceInvitation,
   getDefaultSaasDataFile,
   getSaasSessionSecret,
+  getSessionExpiresAt,
   issueSessionToken,
   loginSaasAccount,
   registerSaasAccount,
@@ -33,9 +36,10 @@ import {
   SaasApiError,
   SaasSessionPayload,
   SaasStore,
-  signBillingWebhookPayload,
   summarizeLearningSnapshot,
   toPublicAccountContext,
+  toPublicInvitations,
+  toPublicMembers,
   validateBillingEvent,
   validateLearningEntities,
   validateLearningBackup,
@@ -718,6 +722,16 @@ export function createApp(options: CreateAppOptions = {}) {
   const saasSessionSecret = options.saasSessionSecret ?? getSaasSessionSecret();
   const billingWebhookSecret = options.billingWebhookSecret ?? readEnvironmentValue('BILLING_WEBHOOK_SECRET');
 
+  const issueAccountSession = async (account: SaasAccountRecord) => {
+    const secret = requireSaasSessionSecret(saasSessionSecret);
+    const session = await saasStore.createSession({
+      userId: account.user.id,
+      organizationId: account.organization.id,
+      expiresAt: getSessionExpiresAt(),
+    });
+    return issueSessionToken(account, secret, Math.floor(Date.now() / 1000), session.id);
+  };
+
   app.disable('x-powered-by');
   app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -747,12 +761,15 @@ export function createApp(options: CreateAppOptions = {}) {
   const requireSaasAuth = asyncRoute(async (req, res, next) => {
     const secret = requireSaasSessionSecret(saasSessionSecret);
     const session = verifySessionToken(getBearerToken(req), secret);
+    const now = new Date().toISOString();
     const account = await saasStore.getAccountForUser(session.sub);
+    const activeSession = await saasStore.getActiveSession(session.jti, session.sub, now);
 
-    if (!account || account.organization.id !== session.org || account.user.role !== session.role) {
+    if (!account || !activeSession || account.organization.id !== session.org || account.user.role !== session.role) {
       throw new SaasApiError(401, 'invalid_token', '登录状态无效，请重新登录。');
     }
 
+    await saasStore.touchSession(session.jti, now);
     res.locals.saas = { session, account } satisfies AuthenticatedSaasContext;
     next();
   });
@@ -794,9 +811,8 @@ export function createApp(options: CreateAppOptions = {}) {
   });
 
   app.post('/api/auth/register', authLimiter, asyncRoute(async (req, res) => {
-    const secret = requireSaasSessionSecret(saasSessionSecret);
     const account = await registerSaasAccount(saasStore, req.body);
-    const token = issueSessionToken(account, secret);
+    const token = await issueAccountSession(account);
 
     res.status(201).json({
       token,
@@ -805,9 +821,8 @@ export function createApp(options: CreateAppOptions = {}) {
   }));
 
   app.post('/api/auth/login', authLimiter, asyncRoute(async (req, res) => {
-    const secret = requireSaasSessionSecret(saasSessionSecret);
     const account = await loginSaasAccount(saasStore, req.body);
-    const token = issueSessionToken(account, secret);
+    const token = await issueAccountSession(account);
 
     res.json({
       token,
@@ -826,9 +841,8 @@ export function createApp(options: CreateAppOptions = {}) {
   }));
 
   app.post('/api/auth/email-verification/confirm', authLimiter, asyncRoute(async (req, res) => {
-    const secret = requireSaasSessionSecret(saasSessionSecret);
     const account = await confirmEmailVerification(saasStore, req.body?.token);
-    const token = issueSessionToken(account, secret);
+    const token = await issueAccountSession(account);
     res.json({
       token,
       account: toPublicAccountContext(account),
@@ -845,9 +859,8 @@ export function createApp(options: CreateAppOptions = {}) {
   }));
 
   app.post('/api/auth/password-reset/confirm', authLimiter, asyncRoute(async (req, res) => {
-    const secret = requireSaasSessionSecret(saasSessionSecret);
     const account = await confirmPasswordReset(saasStore, req.body);
-    const token = issueSessionToken(account, secret);
+    const token = await issueAccountSession(account);
     res.json({
       token,
       account: toPublicAccountContext(account),
@@ -859,8 +872,68 @@ export function createApp(options: CreateAppOptions = {}) {
     res.json({ account: toPublicAccountContext(account) });
   }));
 
+  app.post('/api/auth/refresh', requireSaasAuth, authLimiter, asyncRoute(async (_req, res) => {
+    const { session, account } = getSaasContext(res);
+    await saasStore.revokeSession(session.jti, account.user.id, new Date().toISOString());
+    const token = await issueAccountSession(account);
+    res.json({
+      token,
+      account: toPublicAccountContext(account),
+    });
+  }));
+
   app.post('/api/auth/logout', requireSaasAuth, asyncRoute(async (_req, res) => {
+    const { session, account } = getSaasContext(res);
+    await saasStore.revokeSession(session.jti, account.user.id, new Date().toISOString());
     res.status(204).end();
+  }));
+
+  app.get('/api/workspace/members', requireSaasAuth, asyncRoute(async (_req, res) => {
+    const { account } = getSaasContext(res);
+    const [members, invitations] = await Promise.all([
+      saasStore.listOrganizationMembers(account.organization.id),
+      saasStore.listOrganizationInvitations(account.organization.id),
+    ]);
+
+    res.json({
+      members: toPublicMembers(members),
+      invitations: toPublicInvitations(invitations),
+    });
+  }));
+
+  app.post('/api/workspace/invitations', requireSaasAuth, authLimiter, asyncRoute(async (req, res) => {
+    const { account } = getSaasContext(res);
+    const result = await createWorkspaceInvitation(saasStore, account, req.body);
+
+    res.status(201).json({
+      invitation: toPublicInvitations([result.invitation])[0],
+      delivery: process.env.NODE_ENV === 'production' ? 'email' : 'development-token',
+      token: process.env.NODE_ENV === 'production' ? undefined : result.token,
+    });
+  }));
+
+  app.post('/api/workspace/invitations/accept', authLimiter, asyncRoute(async (req, res) => {
+    const account = await acceptWorkspaceInvitation(saasStore, req.body);
+    const token = await issueAccountSession(account);
+    res.status(201).json({
+      token,
+      account: toPublicAccountContext(account),
+    });
+  }));
+
+  app.get('/api/admin/overview', requireSaasAuth, asyncRoute(async (_req, res) => {
+    const { account } = getSaasContext(res);
+    if (account.user.role !== 'owner') {
+      throw new SaasApiError(403, 'forbidden', '只有团队所有者可以查看管理概览。');
+    }
+    const overview = await saasStore.getOrganizationAdminOverview(account.organization.id);
+    res.json({
+      organization: {
+        id: account.organization.id,
+        name: account.organization.name,
+      },
+      overview,
+    });
   }));
 
   app.get('/api/billing/entitlements', requireSaasAuth, asyncRoute(async (_req, res) => {
