@@ -167,6 +167,12 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
       setAccount(payload.account);
       if (mode === 'register') {
         try {
+          const health = await apiRequest<{ emailDelivery?: { configured?: boolean } }>('/api/health')
+            .catch(() => null);
+          if (health?.emailDelivery?.configured === false) {
+            setStatusText('云端账号已创建；当前生产环境尚未配置邮件交付，请稍后完成邮箱验证。');
+            return;
+          }
           const verification = await apiRequest<{ delivery: 'email' | 'development-token' }>(
             '/api/auth/email-verification/request',
             { method: 'POST' },
