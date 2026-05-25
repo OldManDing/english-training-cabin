@@ -303,6 +303,14 @@ function slugifyOrganization(name: string): string {
   return normalized || `org-${crypto.randomUUID().slice(0, 8)}`;
 }
 
+function createOrganizationSlug(name: string): string {
+  const suffix = crypto.randomUUID().slice(0, 8);
+  const base = slugifyOrganization(name)
+    .slice(0, 39)
+    .replace(/-+$/g, '') || 'org';
+  return `${base}-${suffix}`;
+}
+
 function addDays(date: Date, days: number): string {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
@@ -429,7 +437,7 @@ export function createPostgresSaasStore(databaseUrl: string): SaasStore {
         const organizationId = crypto.randomUUID();
         const userId = crypto.randomUUID();
         const organizationName = input.organizationName ?? `${input.name}的英语训练舱`;
-        const slug = slugifyOrganization(organizationName);
+        const slug = createOrganizationSlug(organizationName);
 
         try {
           const organizationResult = await client.query(
@@ -453,8 +461,12 @@ export function createPostgresSaasStore(databaseUrl: string): SaasStore {
             subscription: mapSubscription(subscriptionResult.rows[0]),
           };
         } catch (error) {
-          if ((error as { code?: string }).code === '23505') {
+          const databaseError = error as { code?: string; constraint?: string };
+          if (databaseError.code === '23505' && databaseError.constraint === 'users_email_key') {
             throw new SaasApiError(409, 'email_exists', '该邮箱已注册，请直接登录。');
+          }
+          if (databaseError.code === '23505' && databaseError.constraint === 'organizations_slug_key') {
+            throw new SaasApiError(409, 'organization_slug_conflict', '团队标识冲突，请重试。');
           }
           throw error;
         }

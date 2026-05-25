@@ -165,6 +165,21 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
       localStorage.setItem(SAAS_TOKEN_KEY, payload.token);
       setToken(payload.token);
       setAccount(payload.account);
+      if (mode === 'register') {
+        try {
+          const verification = await apiRequest<{ delivery: 'email' | 'development-token' }>(
+            '/api/auth/email-verification/request',
+            { method: 'POST' },
+            payload.token,
+          );
+          setStatusText(verification.delivery === 'email'
+            ? '云端账号已创建，验证邮件已发送，请查收并完成邮箱验证。'
+            : '云端账号已创建，请在下方完成邮箱验证后使用团队功能。');
+        } catch (error) {
+          setStatusText(`云端账号已创建，但验证邮件发送失败：${getApiMessage(error)}`);
+        }
+        return;
+      }
       const statusByMode: Record<AuthMode, string> = {
         register: '云端账号已创建，学习档案同步能力已开通。',
         login: '已登录云端账号。',

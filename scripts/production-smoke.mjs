@@ -1,5 +1,9 @@
+import crypto from 'node:crypto';
+
 const baseUrl = (process.env.SMOKE_BASE_URL || process.env.APP_URL || 'http://127.0.0.1:3000').replace(/\/$/, '');
 const timeoutMs = Number(process.env.SMOKE_TIMEOUT_MS || 20000);
+const smokeRunId = crypto.randomUUID();
+const smokeEmailDomain = (process.env.SMOKE_EMAIL_DOMAIN || 'example.com').trim();
 
 function withTimeout(promise, label) {
   const controller = new AbortController();
@@ -65,18 +69,27 @@ const plan = await requestJson('/api/study/daily-plan', {
 assert(Array.isArray(plan.plan?.tasks) && plan.plan.tasks.length > 0, 'daily plan returned no tasks');
 checks.push('daily plan ok');
 
-const registerEmail = `smoke-${Date.now()}@example.com`;
+const registerEmail = `smoke-${smokeRunId}@${smokeEmailDomain}`;
 const register = await requestJson('/api/auth/register', {
   method: 'POST',
   body: JSON.stringify({
     email: registerEmail,
-    password: `smoke-password-${Date.now()}`,
+    password: `smoke-password-${smokeRunId}`,
     name: '上线冒烟账号',
-    organizationName: '英语训练舱冒烟组织',
+    organizationName: `英语训练舱冒烟组织-${smokeRunId.slice(0, 8)}`,
   }),
 });
 assert(register.token && register.account?.user?.email === registerEmail, 'account registration failed');
 checks.push('account registration ok');
+
+if (process.env.REQUIRE_EMAIL_DELIVERY === 'true') {
+  const verification = await requestJson('/api/auth/email-verification/request', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${register.token}` },
+  });
+  assert(verification.delivery === 'email', 'email verification was not delivered through the production adapter');
+  checks.push(`email verification dispatch ok (${registerEmail})`);
+}
 
 const cloud = await requestJson('/api/cloud/learning-data', {
   method: 'PUT',

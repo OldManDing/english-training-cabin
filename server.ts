@@ -846,6 +846,14 @@ export function createApp(options: CreateAppOptions = {}) {
     next();
   });
 
+  const requireVerifiedEmail = asyncRoute(async (_req, res, next) => {
+    const { account } = getSaasContext(res);
+    if (!account.user.emailVerifiedAt) {
+      throw new SaasApiError(403, 'email_verification_required', '请先完成邮箱验证后再执行此操作。');
+    }
+    next();
+  });
+
   app.get('/api/health', (_req, res) => {
     const ai = getAiProviderStatus();
     res.json({
@@ -1031,7 +1039,7 @@ export function createApp(options: CreateAppOptions = {}) {
     });
   }));
 
-  app.post('/api/workspace/invitations', requireSaasAuth, authLimiter, asyncRoute(async (req, res) => {
+  app.post('/api/workspace/invitations', requireSaasAuth, requireVerifiedEmail, authLimiter, asyncRoute(async (req, res) => {
     const { account } = getSaasContext(res);
     const result = await createWorkspaceInvitation(saasStore, account, req.body);
     const invitationUrl = buildActionUrl('/workspace/accept-invitation', result.token);

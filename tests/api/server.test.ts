@@ -159,6 +159,50 @@ describe('server API', () => {
     expect(cloudResponse.body.snapshot.backup.data.practiceSessions).toHaveLength(1);
   });
 
+  it('allows repeated organization names without blocking public self-service signup', async () => {
+    const saasApp = createApp({
+      saasStore: createInMemorySaasStore(),
+      saasSessionSecret: 'duplicate-organization-secret',
+    });
+    const organizationName = '同名公开训练团队';
+
+    const first = await request(saasApp)
+      .post('/api/auth/register')
+      .send({
+        email: 'same-org-first@example.com',
+        password: 'secure-password-1',
+        name: '同名团队用户一',
+        organizationName,
+      })
+      .expect(201);
+
+    const second = await request(saasApp)
+      .post('/api/auth/register')
+      .send({
+        email: 'same-org-second@example.com',
+        password: 'secure-password-1',
+        name: '同名团队用户二',
+        organizationName,
+      })
+      .expect(201);
+
+    expect(first.body.account.organization.name).toBe(organizationName);
+    expect(second.body.account.organization.name).toBe(organizationName);
+    expect(first.body.account.organization.slug).not.toBe(second.body.account.organization.slug);
+
+    const duplicateEmail = await request(saasApp)
+      .post('/api/auth/register')
+      .send({
+        email: 'same-org-first@example.com',
+        password: 'secure-password-1',
+        name: '重复邮箱用户',
+        organizationName: '另一个团队',
+      })
+      .expect(409);
+
+    expect(duplicateEmail.body.error).toBe('email_exists');
+  });
+
   it('isolates SaaS cloud snapshots by authenticated user and tenant', async () => {
     const saasApp = createApp({
       saasStore: createInMemorySaasStore(),
@@ -474,6 +518,27 @@ describe('server API', () => {
         organizationName: '免费协作团队',
       })
       .expect(201);
+
+    const unverifiedInvitation = await request(saasApp)
+      .post('/api/workspace/invitations')
+      .set('Authorization', `Bearer ${owner.body.token}`)
+      .send({
+        email: 'workspace-member@example.com',
+        role: 'member',
+      })
+      .expect(403);
+
+    expect(unverifiedInvitation.body.error).toBe('email_verification_required');
+
+    const verification = await request(saasApp)
+      .post('/api/auth/email-verification/request')
+      .set('Authorization', `Bearer ${owner.body.token}`)
+      .expect(200);
+
+    await request(saasApp)
+      .post('/api/auth/email-verification/confirm')
+      .send({ token: verification.body.token })
+      .expect(200);
 
     const invitationResponse = await request(saasApp)
       .post('/api/workspace/invitations')

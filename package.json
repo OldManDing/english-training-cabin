@@ -13,7 +13,8 @@
     "test": "vitest run tests/domain tests/api",
     "test:e2e": "npm run build && playwright test",
     "verify": "npm run lint && npm run test && npm run build && playwright test",
-    "smoke:production": "node scripts/production-smoke.mjs"
+    "smoke:production": "node scripts/production-smoke.mjs",
+    "smoke:ga": "node scripts/ga-smoke.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

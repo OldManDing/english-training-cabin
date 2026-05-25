@@ -52,10 +52,11 @@ docker run --rm -p 3000:3000 --env-file .env.local english-training-cabin
 ```bash
 cp deploy/.env.production.example .env.production
 docker compose -p english-training-cabin --env-file .env.production -f docker-compose.production.yml up -d --build
-SMOKE_BASE_URL=https://study.xmlga.top REQUIRE_EMAIL_DELIVERY=true SMOKE_LIVE_AI=true npm run smoke:production
+SMOKE_BASE_URL=https://study.xmlga.top npm run smoke:production
+SMOKE_BASE_URL=https://study.xmlga.top SMOKE_EMAIL_DOMAIN=qa.example.com npm run smoke:ga
 ```
 
-公开生产环境必须提供 `SAAS_SESSION_SECRET`、`POSTGRES_PASSWORD`、`AI_API_KEY` 和真实邮件交付配置；不要开启 `ALLOW_DEVELOPMENT_EMAIL_TOKENS`。
+`smoke:production` 验证线上健康、账号注册、云同步和 AI；`smoke:ga` 会额外强制调用真实邮件交付适配器，`SMOKE_EMAIL_DOMAIN` 应设置为可接收测试邮件的域名。公开生产环境必须提供 `SAAS_SESSION_SECRET`、`POSTGRES_PASSWORD`、`AI_API_KEY` 和真实邮件交付配置；不要开启 `ALLOW_DEVELOPMENT_EMAIL_TOKENS`。
 Nginx 配置模板见 `deploy/nginx-study.xmlga.top.conf`，证书建议用 certbot 签发到 `/etc/letsencrypt/live/study.xmlga.top/`。
 
 ## 质量门禁
@@ -65,6 +66,7 @@ npm run lint
 npm run test
 npm run test:e2e
 npm run verify
+SMOKE_BASE_URL=https://study.xmlga.top SMOKE_EMAIL_DOMAIN=qa.example.com npm run smoke:ga
 ```
 
 第一次运行 E2E 前需要安装浏览器：

@@ -483,6 +483,14 @@ function slugifyOrganization(name: string): string {
   return normalized || `org-${crypto.randomUUID().slice(0, 8)}`;
 }
 
+function createOrganizationSlug(name: string): string {
+  const suffix = crypto.randomUUID().slice(0, 8);
+  const base = slugifyOrganization(name)
+    .slice(0, 39)
+    .replace(/-+$/g, '') || 'org';
+  return `${base}-${suffix}`;
+}
+
 function addDays(date: Date, days: number): string {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
@@ -564,7 +572,7 @@ function createStoreFromDatabase(options: {
         const organization: SaasOrganizationRecord = {
           id: organizationId,
           name: organizationName,
-          slug: slugifyOrganization(organizationName),
+          slug: createOrganizationSlug(organizationName),
           createdAt: now,
           updatedAt: now,
         };

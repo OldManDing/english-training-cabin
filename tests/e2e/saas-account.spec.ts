@@ -14,6 +14,7 @@ test('SaaS account trial can sync and restore local learning data', async ({ pag
   await page.getByTestId('saas-auth-submit').click();
 
   await expect(page.getByText(email, { exact: true })).toBeVisible();
+  await expect(page.getByText('云端账号已创建，请在下方完成邮箱验证后使用团队功能。')).toBeVisible();
   await expect(page.getByText('云同步 已开通')).toBeVisible();
 
   await page.getByRole('button', { name: '同步到云端' }).click();
