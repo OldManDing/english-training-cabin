@@ -364,16 +364,24 @@ export default function SaasOperationsPanel({ token, account, onTokenChanged, on
             </button>
           </div>
           <input value={verificationToken} onChange={(event) => setVerificationToken(event.target.value)} data-testid="saas-verification-token" className="w-full rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-3 py-2 text-[10px] font-bold text-[#003178]" placeholder="邮件链接中的一次性验证 token" />
+          <form
+            className="space-y-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!isBusy && resetToken && newPassword.length >= 8) void confirmPasswordReset();
+            }}
+          >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <button type="button" onClick={requestPasswordReset} disabled={isBusy} className="rounded-xl border border-[#cfe6f2] px-3 py-2 text-[10px] font-black text-[#003178] disabled:text-gray-400">
               发送重置邮件
             </button>
-            <button type="button" onClick={confirmPasswordReset} disabled={isBusy || !resetToken || newPassword.length < 8} className="rounded-xl bg-[#003178] px-3 py-2 text-[10px] font-black text-white disabled:bg-gray-400">
+            <button type="submit" disabled={isBusy || !resetToken || newPassword.length < 8} className="rounded-xl bg-[#003178] px-3 py-2 text-[10px] font-black text-white disabled:bg-gray-400">
               确认重置
             </button>
           </div>
           <input value={resetToken} onChange={(event) => setResetToken(event.target.value)} data-testid="saas-reset-token" className="w-full rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-3 py-2 text-[10px] font-bold text-[#003178]" placeholder="邮件链接中的一次性重置 token" />
-          <input value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="w-full rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-3 py-2 text-[10px] font-bold text-[#003178]" placeholder="新密码至少 8 位" type="password" />
+          <input value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="w-full rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-3 py-2 text-[10px] font-bold text-[#003178]" placeholder="新密码至少 8 位" autoComplete="new-password" type="password" />
+          </form>
         </section>
 
         <section className="rounded-2xl bg-white border border-[#dbeafe] p-4 space-y-3">

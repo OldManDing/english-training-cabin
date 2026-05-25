@@ -287,7 +287,13 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
       </div>
 
       {!account ? (
-        <div className="space-y-3">
+        <form
+          className="space-y-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleAuthSubmit();
+          }}
+        >
           {(mode === 'register' || mode === 'login') ? <div className="flex rounded-2xl bg-[#f0f7fc] p-1 border border-[#cfe6f2]">
             <button
               type="button"
@@ -319,6 +325,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 className="rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-4 py-3 text-xs font-bold text-[#003178] outline-none focus:ring-1 focus:ring-[#003178]"
+                autoComplete="name"
                 placeholder="姓名"
               />
               {mode === 'register' && <input
@@ -326,6 +333,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
                 value={organizationName}
                 onChange={(event) => setOrganizationName(event.target.value)}
                 className="rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-4 py-3 text-xs font-bold text-[#003178] outline-none focus:ring-1 focus:ring-[#003178]"
+                autoComplete="organization"
                 placeholder="团队 / 学校名称"
               />}
             </div>
@@ -338,6 +346,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
               onChange={(event) => setEmail(event.target.value)}
               className="rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-4 py-3 text-xs font-bold text-[#003178] outline-none focus:ring-1 focus:ring-[#003178]"
               placeholder="邮箱"
+              autoComplete="username"
               type="email"
             />
             {mode !== 'verify' && <input
@@ -346,6 +355,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
               onChange={(event) => setPassword(event.target.value)}
               className="rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-4 py-3 text-xs font-bold text-[#003178] outline-none focus:ring-1 focus:ring-[#003178]"
               placeholder="密码至少 8 位"
+              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
               type="password"
             />}
           </div>}
@@ -357,6 +367,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
               onChange={(event) => setPassword(event.target.value)}
               className="w-full rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-4 py-3 text-xs font-bold text-[#003178] outline-none focus:ring-1 focus:ring-[#003178]"
               placeholder={mode === 'reset' ? '设置新密码（至少 8 位）' : '创建密码（至少 8 位）'}
+              autoComplete="new-password"
               type="password"
             />
           )}
@@ -373,8 +384,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
 
           <button
             data-testid="saas-auth-submit"
-            type="button"
-            onClick={handleAuthSubmit}
+            type="submit"
             disabled={isBusy}
             className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#003178] px-4 py-3 text-xs font-black text-white transition hover:bg-[#07244f] disabled:bg-gray-400"
           >
@@ -387,7 +397,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
               忘记密码？发送重置邮件
             </button>
           )}
-        </div>
+        </form>
       ) : (
         <div className="space-y-4">
           <div className="rounded-2xl bg-[#f7fbff] border border-[#cfe6f2] p-4 space-y-2">
