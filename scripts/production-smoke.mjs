@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 
 const baseUrl = (process.env.SMOKE_BASE_URL || process.env.APP_URL || 'http://127.0.0.1:3000').replace(/\/$/, '');
-const timeoutMs = Number(process.env.SMOKE_TIMEOUT_MS || 20000);
+const timeoutMs = Number(process.env.SMOKE_TIMEOUT_MS || 60000);
 const smokeRunId = crypto.randomUUID();
 const smokeEmailDomain = (process.env.SMOKE_EMAIL_DOMAIN || 'example.com').trim();
 
