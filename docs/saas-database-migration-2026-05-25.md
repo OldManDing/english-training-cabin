@@ -4,7 +4,7 @@
 
 ## 迁移范围
 
-迁移文件：`migrations/0001_saas_core.sql`
+迁移文件：`migrations/0001_saas_core.sql`、`migrations/0002_workspace_sessions.sql`、`migrations/0003_commercial_ops.sql`
 
 本次是扩展式迁移，只新增表、索引和约束，不删除本地 IndexedDB 数据，也不破坏文件存储兜底。
 
@@ -19,14 +19,17 @@
 - `billing_webhook_events`：支付 webhook 幂等记录。
 - `sessions`：服务端登录会话，用于 token 撤销、刷新和最后使用时间记录。
 - `organization_invitations`：团队成员邀请，一次性 token 只保存哈希。
+- `content_assets`：内容资产、来源类型、授权状态和阻断标记。
+- `data_requests`：用户数据导出/删除请求及处理状态。
 - `saas_migrations`：迁移执行记录。
 
 ## 应用切换规则
 
-- 配置 `DATABASE_URL` 时，服务端使用 Postgres SaaS Store，并在首次访问账号/云同步 API 时执行 `0001_saas_core`。
+- 配置 `DATABASE_URL` 时，服务端使用 Postgres SaaS Store，并在首次访问账号/云同步/API 管理能力时执行三批 additive migration。
 - 未配置 `DATABASE_URL` 时，继续使用 `SAAS_DATA_FILE` 文件存储，适合本地开发和演示。
 - 生产环境必须配置 `SAAS_SESSION_SECRET`。
 - 使用订阅 webhook 时必须配置 `BILLING_WEBHOOK_SECRET`。
+- 生产环境要发送邮箱验证、密码重置和团队邀请邮件时，必须配置 `EMAIL_DELIVERY_WEBHOOK_URL`；未配置会返回 `email_delivery_not_configured`，不会假装邮件已发送。
 
 ## 回滚策略
 
@@ -44,11 +47,11 @@
 
 - `npm.cmd run lint`：通过。
 - `npm.cmd run test`：4 个测试文件，34 个用例通过。
-- API 测试覆盖：账号注册登录、邮箱验证、密码重置、订阅 webhook 签名、订阅幂等、增量学习实体同步、跨租户隔离、会话刷新撤销、团队邀请、成员列表和 owner-only 管理概览。
+- API 测试覆盖：账号注册登录、邮箱验证、密码重置、订阅 webhook 签名、订阅幂等、增量学习实体同步、跨租户隔离、会话刷新撤销、团队邀请、成员列表、owner-only 管理概览、设备会话、内容授权治理、数据权利请求和运营概览。
 
 ## 下一步
 
 - 在真实 Postgres 实例上执行一次冷启动 smoke。
-- 接入真实邮件服务，替换开发环境返回 token 的方式。
+- 在真实部署环境配置邮件 webhook，验证邮箱验证、密码重置和团队邀请邮件真实送达。
 - 接入真实支付供应商 webhook，并将 provider event payload 映射到当前标准事件。
-- 增加团队成员邀请、角色权限和后台运营页。
+- 将设置页轻量操作台升级为独立 admin 路由，并补班级报表、内容版本和运营告警。

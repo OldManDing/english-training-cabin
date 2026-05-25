@@ -59,6 +59,15 @@ describe('server API', () => {
       .get('/api/cloud/learning-data')
       .expect(401);
 
+    const anonymousSession = await request(saasApp)
+      .get('/api/auth/session')
+      .set('Authorization', 'Bearer stale-token')
+      .expect(200);
+    expect(anonymousSession.body).toMatchObject({
+      authenticated: false,
+      account: null,
+    });
+
     const registerResponse = await request(saasApp)
       .post('/api/auth/register')
       .send({
@@ -88,6 +97,19 @@ describe('server API', () => {
     });
 
     const token = registerResponse.body.token as string;
+    const sessionResponse = await request(saasApp)
+      .get('/api/auth/session')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(sessionResponse.body).toMatchObject({
+      authenticated: true,
+      account: {
+        user: {
+          email,
+        },
+      },
+    });
+
     const meResponse = await request(saasApp)
       .get('/api/auth/me')
       .set('Authorization', `Bearer ${token}`)
@@ -775,6 +797,201 @@ describe('server API', () => {
       .expect(200);
 
     expect(response.body).toHaveProperty('improvedTextWithConnectors');
+  });
+
+  it('supports non-payment SaaS commercial operations from API to governance queues', async () => {
+    const saasApp = createApp({
+      saasStore: createInMemorySaasStore(),
+      saasSessionSecret: 'commercial-ops-secret',
+    });
+
+    const owner = await request(saasApp)
+      .post('/api/auth/register')
+      .set('User-Agent', 'Playwright Chrome Owner')
+      .send({
+        email: 'commercial-owner@example.com',
+        password: 'secure-password-1',
+        name: '商业化所有者',
+        organizationName: '商业化运营团队',
+      })
+      .expect(201);
+
+    const verification = await request(saasApp)
+      .post('/api/auth/email-verification/request')
+      .set('Authorization', `Bearer ${owner.body.token}`)
+      .expect(200);
+
+    expect(verification.body).toMatchObject({
+      delivery: 'development-token',
+      token: expect.any(String),
+    });
+
+    const verified = await request(saasApp)
+      .post('/api/auth/email-verification/confirm')
+      .send({ token: verification.body.token })
+      .expect(200);
+
+    expect(verified.body.account.user.emailVerified).toBe(true);
+
+    const reset = await request(saasApp)
+      .post('/api/auth/password-reset/request')
+      .send({ email: 'commercial-owner@example.com' })
+      .expect(200);
+
+    expect(reset.body.token).toEqual(expect.any(String));
+
+    const resetConfirmed = await request(saasApp)
+      .post('/api/auth/password-reset/confirm')
+      .send({ token: reset.body.token, password: 'new-secure-password-2' })
+      .expect(200);
+
+    const ownerToken = resetConfirmed.body.token as string;
+
+    const sessions = await request(saasApp)
+      .get('/api/auth/sessions')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .expect(200);
+
+    expect(sessions.body.sessions.length).toBeGreaterThanOrEqual(2);
+    expect(sessions.body.sessions.some((session: { current: boolean }) => session.current)).toBe(true);
+
+    const staleSession = sessions.body.sessions.find((session: { current: boolean; active: boolean }) => !session.current && session.active);
+    if (staleSession) {
+      await request(saasApp)
+        .delete(`/api/auth/sessions/${staleSession.id}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(204);
+    }
+
+    const invitation = await request(saasApp)
+      .post('/api/workspace/invitations')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ email: 'commercial-member@example.com', role: 'member' })
+      .expect(201);
+
+    expect(invitation.body.token).toEqual(expect.any(String));
+
+    const member = await request(saasApp)
+      .post('/api/workspace/invitations/accept')
+      .send({
+        token: invitation.body.token,
+        name: '商业化成员',
+        password: 'member-secure-password-1',
+      })
+      .expect(201);
+
+    await request(saasApp)
+      .get('/api/admin/overview')
+      .set('Authorization', `Bearer ${member.body.token}`)
+      .expect(403);
+
+    const workspace = await request(saasApp)
+      .get('/api/workspace/members')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .expect(200);
+
+    expect(workspace.body.members).toHaveLength(2);
+    expect(workspace.body.invitations[0].acceptedAt).toEqual(expect.any(String));
+
+    const content = await request(saasApp)
+      .post('/api/admin/content-assets')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({
+        title: 'CET-4 原创阅读模拟题 A',
+        assetType: 'reading',
+        sourceType: 'original',
+        licenseStatus: 'needs_review',
+        notes: '原创模拟题，等待上线前复核。',
+      })
+      .expect(201);
+
+    expect(content.body.asset.licenseStatus).toBe('needs_review');
+
+    await request(saasApp)
+      .patch(`/api/admin/content-assets/${content.body.asset.id}`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ licenseStatus: 'cleared', notes: '已确认原创，可用于公开训练。' })
+      .expect(200);
+
+    await request(saasApp)
+      .put('/api/cloud/learning-data')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({
+        backup: {
+          app: 'english-training-cabin',
+          schemaVersion: 1,
+          exportedAt: new Date().toISOString(),
+          data: {
+            studyGoals: [{ id: 'compliance-goal' }],
+            practiceSessions: [],
+            attempts: [],
+            reviewItems: [],
+            skillProfiles: [],
+          },
+        },
+      })
+      .expect(200);
+
+    const archive = await request(saasApp)
+      .get('/api/compliance/export')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .expect(200);
+
+    expect(archive.body.learningSnapshot.data.studyGoals).toHaveLength(1);
+
+    const exportRequest = await request(saasApp)
+      .post('/api/compliance/data-requests')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ requestType: 'export', note: '用户请求导出学习档案。' })
+      .expect(201);
+
+    expect(exportRequest.body.request.status).toBe('queued');
+
+    const queuedRequests = await request(saasApp)
+      .get('/api/compliance/data-requests')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .expect(200);
+
+    expect(queuedRequests.body.requests[0].requester.email).toBe('commercial-owner@example.com');
+
+    await request(saasApp)
+      .post(`/api/compliance/data-requests/${exportRequest.body.request.id}/resolve`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ status: 'completed', note: '已导出学习档案。' })
+      .expect(200);
+
+    const deleteRequest = await request(saasApp)
+      .post('/api/compliance/data-requests')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ requestType: 'delete', note: '用户请求删除学习档案。' })
+      .expect(201);
+
+    const deleted = await request(saasApp)
+      .post(`/api/compliance/data-requests/${deleteRequest.body.request.id}/resolve`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ status: 'completed', note: '已删除学习档案。' })
+      .expect(200);
+
+    expect(deleted.body.deletion.snapshotsDeleted).toBe(1);
+
+    const afterDeletion = await request(saasApp)
+      .get('/api/cloud/learning-data')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .expect(200);
+
+    expect(afterDeletion.body.snapshot).toBeNull();
+
+    const operations = await request(saasApp)
+      .get('/api/admin/operational-summary')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .expect(200);
+
+    expect(operations.body.overview).toMatchObject({
+      members: 2,
+      contentAssets: 1,
+      openDataRequests: 0,
+    });
+    expect(operations.body.observability.api.requestsTotal).toBeGreaterThan(0);
   });
 
   it('keeps strict CSP in test and production-like runtime', () => {

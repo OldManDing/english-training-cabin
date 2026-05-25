@@ -100,6 +100,40 @@ export interface SaasSessionRecord {
   expiresAt: string;
   lastUsedAt?: string;
   revokedAt?: string;
+  userAgent?: string;
+  ipAddress?: string;
+}
+
+export type ContentAssetType = 'reading' | 'listening' | 'writing' | 'translation' | 'speaking';
+export type ContentSourceType = 'original' | 'licensed' | 'user-imported' | 'ai-generated';
+export type ContentLicenseStatus = 'draft' | 'cleared' | 'needs_review' | 'blocked';
+
+export interface ContentAssetRecord {
+  id: string;
+  organizationId: string;
+  title: string;
+  assetType: ContentAssetType;
+  sourceType: ContentSourceType;
+  licenseStatus: ContentLicenseStatus;
+  ownerUserId: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type DataRequestType = 'export' | 'delete';
+export type DataRequestStatus = 'queued' | 'processing' | 'completed' | 'rejected';
+
+export interface DataRequestRecord {
+  id: string;
+  organizationId: string;
+  userId: string;
+  requestType: DataRequestType;
+  status: DataRequestStatus;
+  note?: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
 }
 
 export interface OrganizationInvitationRecord {
@@ -115,7 +149,7 @@ export interface OrganizationInvitationRecord {
 }
 
 export interface SaasDatabaseShape {
-  schemaVersion: 2;
+  schemaVersion: 3;
   users: SaasUserRecord[];
   organizations: SaasOrganizationRecord[];
   subscriptions: SaasSubscriptionRecord[];
@@ -125,6 +159,8 @@ export interface SaasDatabaseShape {
   billingWebhookEvents: BillingWebhookEventRecord[];
   sessions: SaasSessionRecord[];
   organizationInvitations: OrganizationInvitationRecord[];
+  contentAssets: ContentAssetRecord[];
+  dataRequests: DataRequestRecord[];
 }
 
 export interface SaasAccountRecord {
@@ -145,10 +181,17 @@ export interface SaasStore {
   }): Promise<SaasAccountRecord>;
   updateUserLogin(userId: string, at: string): Promise<void>;
   getAccountForUser(userId: string): Promise<SaasAccountRecord | undefined>;
-  createSession(input: { userId: string; organizationId: string; expiresAt: string }): Promise<SaasSessionRecord>;
+  createSession(input: {
+    userId: string;
+    organizationId: string;
+    expiresAt: string;
+    userAgent?: string;
+    ipAddress?: string;
+  }): Promise<SaasSessionRecord>;
   getActiveSession(sessionId: string, userId: string, now: string): Promise<SaasSessionRecord | undefined>;
   touchSession(sessionId: string, at: string): Promise<void>;
   revokeSession(sessionId: string, userId: string, at: string): Promise<boolean>;
+  listUserSessions(userId: string): Promise<SaasSessionRecord[]>;
   saveLearningSnapshot(input: {
     organizationId: string;
     userId: string;
@@ -165,6 +208,10 @@ export interface SaasStore {
     userId: string;
     since?: string;
   }): Promise<CloudLearningEntityRecord[]>;
+  deleteLearningData(organizationId: string, userId: string): Promise<{
+    snapshotsDeleted: number;
+    entitiesDeleted: number;
+  }>;
   createOneTimeToken(input: {
     userId: string;
     purpose: SaasOneTimeTokenRecord['purpose'];
@@ -194,11 +241,47 @@ export interface SaasStore {
   }): Promise<SaasAccountRecord>;
   listOrganizationMembers(organizationId: string): Promise<SaasUserRecord[]>;
   listOrganizationInvitations(organizationId: string): Promise<OrganizationInvitationRecord[]>;
+  createContentAsset(input: {
+    organizationId: string;
+    ownerUserId: string;
+    title: string;
+    assetType: ContentAssetType;
+    sourceType: ContentSourceType;
+    licenseStatus: ContentLicenseStatus;
+    notes?: string;
+  }): Promise<ContentAssetRecord>;
+  listContentAssets(organizationId: string): Promise<ContentAssetRecord[]>;
+  updateContentAsset(input: {
+    organizationId: string;
+    assetId: string;
+    licenseStatus: ContentLicenseStatus;
+    notes?: string;
+  }): Promise<ContentAssetRecord>;
+  createDataRequest(input: {
+    organizationId: string;
+    userId: string;
+    requestType: DataRequestType;
+    note?: string;
+  }): Promise<DataRequestRecord>;
+  listDataRequests(input: {
+    organizationId: string;
+    userId?: string;
+  }): Promise<DataRequestRecord[]>;
+  resolveDataRequest(input: {
+    organizationId: string;
+    requestId: string;
+    status: Exclude<DataRequestStatus, 'queued'>;
+    note?: string;
+  }): Promise<DataRequestRecord>;
   getOrganizationAdminOverview(organizationId: string): Promise<{
     members: number;
     pendingInvitations: number;
     learningSnapshots: number;
     learningEntities: number;
+    activeSessions: number;
+    contentAssets: number;
+    blockedContentAssets: number;
+    openDataRequests: number;
   }>;
 }
 
@@ -277,7 +360,7 @@ export function getSessionExpiresAt(now = new Date()): string {
 
 function createEmptyDatabase(): SaasDatabaseShape {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     users: [],
     organizations: [],
     subscriptions: [],
@@ -287,6 +370,8 @@ function createEmptyDatabase(): SaasDatabaseShape {
     billingWebhookEvents: [],
     sessions: [],
     organizationInvitations: [],
+    contentAssets: [],
+    dataRequests: [],
   };
 }
 
@@ -321,6 +406,61 @@ function normalizeOrganizationName(value: unknown, fallbackName: string): string
     throw new SaasApiError(400, 'invalid_organization_name', '团队名称需为 2-60 个字符。');
   }
   return name;
+}
+
+function normalizeOptionalText(value: unknown, maxLength: number): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'string') {
+    throw new SaasApiError(400, 'invalid_text', '文本字段格式不正确。');
+  }
+  const text = value.trim().replace(/[\u0000-\u001F\u007F]/g, ' ');
+  if (!text) return undefined;
+  if (text.length > maxLength) {
+    throw new SaasApiError(400, 'invalid_text', `文本最多 ${maxLength} 个字符。`);
+  }
+  return text;
+}
+
+function normalizeContentTitle(value: unknown): string {
+  const title = normalizeOptionalText(value, 120);
+  if (!title || title.length < 2) {
+    throw new SaasApiError(400, 'invalid_content_title', '内容标题需为 2-120 个字符。');
+  }
+  return title;
+}
+
+function normalizeContentAssetType(value: unknown): ContentAssetType {
+  const types: ContentAssetType[] = ['reading', 'listening', 'writing', 'translation', 'speaking'];
+  if (typeof value === 'string' && types.includes(value as ContentAssetType)) {
+    return value as ContentAssetType;
+  }
+  throw new SaasApiError(400, 'invalid_content_asset_type', '内容类型不支持。');
+}
+
+function normalizeContentSourceType(value: unknown): ContentSourceType {
+  const types: ContentSourceType[] = ['original', 'licensed', 'user-imported', 'ai-generated'];
+  if (typeof value === 'string' && types.includes(value as ContentSourceType)) {
+    return value as ContentSourceType;
+  }
+  throw new SaasApiError(400, 'invalid_content_source_type', '内容来源类型不支持。');
+}
+
+function normalizeContentLicenseStatus(value: unknown): ContentLicenseStatus {
+  const statuses: ContentLicenseStatus[] = ['draft', 'cleared', 'needs_review', 'blocked'];
+  if (typeof value === 'string' && statuses.includes(value as ContentLicenseStatus)) {
+    return value as ContentLicenseStatus;
+  }
+  throw new SaasApiError(400, 'invalid_content_license_status', '授权状态不支持。');
+}
+
+function normalizeDataRequestType(value: unknown): DataRequestType {
+  if (value === 'export' || value === 'delete') return value;
+  throw new SaasApiError(400, 'invalid_data_request_type', '数据请求类型不支持。');
+}
+
+function normalizeDataRequestStatus(value: unknown): Exclude<DataRequestStatus, 'queued'> {
+  if (value === 'processing' || value === 'completed' || value === 'rejected') return value;
+  throw new SaasApiError(400, 'invalid_data_request_status', '数据请求状态不支持。');
 }
 
 function assertPassword(value: unknown): string {
@@ -475,6 +615,8 @@ function createStoreFromDatabase(options: {
           organizationId: input.organizationId,
           createdAt: now,
           expiresAt: input.expiresAt,
+          userAgent: input.userAgent,
+          ipAddress: input.ipAddress,
         };
         db.sessions.push(session);
         return session;
@@ -503,6 +645,11 @@ function createStoreFromDatabase(options: {
         session.revokedAt = at;
         return true;
       });
+    },
+    listUserSessions(userId) {
+      return read((db) => db.sessions
+        .filter((session) => session.userId === userId)
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt)));
     },
     saveLearningSnapshot(input) {
       return mutate((db) => {
@@ -556,6 +703,22 @@ function createStoreFromDatabase(options: {
           (!input.since || entity.updatedAt > input.since),
         )
         .sort((left, right) => left.updatedAt.localeCompare(right.updatedAt)));
+    },
+    deleteLearningData(organizationId, userId) {
+      return mutate((db) => {
+        const snapshotCount = db.learningSnapshots.length;
+        const entityCount = db.learningEntities.length;
+        db.learningSnapshots = db.learningSnapshots.filter((snapshot) =>
+          snapshot.organizationId !== organizationId || snapshot.userId !== userId,
+        );
+        db.learningEntities = db.learningEntities.filter((entity) =>
+          entity.organizationId !== organizationId || entity.userId !== userId,
+        );
+        return {
+          snapshotsDeleted: snapshotCount - db.learningSnapshots.length,
+          entitiesDeleted: entityCount - db.learningEntities.length,
+        };
+      });
     },
     createOneTimeToken(input) {
       return mutate((db) => {
@@ -720,14 +883,106 @@ function createStoreFromDatabase(options: {
         .filter((invitation) => invitation.organizationId === organizationId)
         .sort((left, right) => right.createdAt.localeCompare(left.createdAt)));
     },
+    createContentAsset(input) {
+      return mutate((db) => {
+        const now = new Date().toISOString();
+        const asset: ContentAssetRecord = {
+          id: crypto.randomUUID(),
+          organizationId: input.organizationId,
+          title: normalizeContentTitle(input.title),
+          assetType: normalizeContentAssetType(input.assetType),
+          sourceType: normalizeContentSourceType(input.sourceType),
+          licenseStatus: normalizeContentLicenseStatus(input.licenseStatus),
+          ownerUserId: input.ownerUserId,
+          notes: normalizeOptionalText(input.notes, 600),
+          createdAt: now,
+          updatedAt: now,
+        };
+        db.contentAssets.push(asset);
+        return asset;
+      });
+    },
+    listContentAssets(organizationId) {
+      return read((db) => db.contentAssets
+        .filter((asset) => asset.organizationId === organizationId)
+        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)));
+    },
+    updateContentAsset(input) {
+      return mutate((db) => {
+        const asset = db.contentAssets.find((item) =>
+          item.id === input.assetId && item.organizationId === input.organizationId,
+        );
+        if (!asset) {
+          throw new SaasApiError(404, 'content_asset_not_found', '内容资产不存在。');
+        }
+        asset.licenseStatus = normalizeContentLicenseStatus(input.licenseStatus);
+        asset.notes = normalizeOptionalText(input.notes, 600);
+        asset.updatedAt = new Date().toISOString();
+        return asset;
+      });
+    },
+    createDataRequest(input) {
+      return mutate((db) => {
+        const now = new Date().toISOString();
+        const request: DataRequestRecord = {
+          id: crypto.randomUUID(),
+          organizationId: input.organizationId,
+          userId: input.userId,
+          requestType: normalizeDataRequestType(input.requestType),
+          status: 'queued',
+          note: normalizeOptionalText(input.note, 600),
+          createdAt: now,
+          updatedAt: now,
+        };
+        db.dataRequests.push(request);
+        return request;
+      });
+    },
+    listDataRequests(input) {
+      return read((db) => db.dataRequests
+        .filter((request) =>
+          request.organizationId === input.organizationId &&
+          (!input.userId || request.userId === input.userId),
+        )
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt)));
+    },
+    resolveDataRequest(input) {
+      return mutate((db) => {
+        const request = db.dataRequests.find((item) =>
+          item.id === input.requestId && item.organizationId === input.organizationId,
+        );
+        if (!request) {
+          throw new SaasApiError(404, 'data_request_not_found', '数据请求不存在。');
+        }
+        const now = new Date().toISOString();
+        request.status = normalizeDataRequestStatus(input.status);
+        request.note = normalizeOptionalText(input.note, 600);
+        request.updatedAt = now;
+        if (request.status === 'completed' || request.status === 'rejected') {
+          request.completedAt = now;
+        }
+        return request;
+      });
+    },
     getOrganizationAdminOverview(organizationId) {
+      const now = new Date().toISOString();
       return read((db) => ({
         members: db.users.filter((user) => user.organizationId === organizationId).length,
         pendingInvitations: db.organizationInvitations.filter((invitation) =>
-          invitation.organizationId === organizationId && !invitation.acceptedAt && invitation.expiresAt > new Date().toISOString(),
+          invitation.organizationId === organizationId && !invitation.acceptedAt && invitation.expiresAt > now,
         ).length,
         learningSnapshots: db.learningSnapshots.filter((snapshot) => snapshot.organizationId === organizationId).length,
         learningEntities: db.learningEntities.filter((entity) => entity.organizationId === organizationId && !entity.deletedAt).length,
+        activeSessions: db.sessions.filter((session) =>
+          session.organizationId === organizationId && !session.revokedAt && session.expiresAt > now,
+        ).length,
+        contentAssets: db.contentAssets.filter((asset) => asset.organizationId === organizationId).length,
+        blockedContentAssets: db.contentAssets.filter((asset) =>
+          asset.organizationId === organizationId && asset.licenseStatus === 'blocked',
+        ).length,
+        openDataRequests: db.dataRequests.filter((request) =>
+          request.organizationId === organizationId && (request.status === 'queued' || request.status === 'processing'),
+        ).length,
       }));
     },
   };
@@ -739,7 +994,9 @@ export function createInMemorySaasStore(initial?: Partial<SaasDatabaseShape>): S
     initial: {
       ...createEmptyDatabase(),
       ...initial,
-      schemaVersion: 2,
+      contentAssets: initial?.contentAssets ?? [],
+      dataRequests: initial?.dataRequests ?? [],
+      schemaVersion: 3,
     },
   });
 }
@@ -747,7 +1004,7 @@ export function createInMemorySaasStore(initial?: Partial<SaasDatabaseShape>): S
 function normalizeDatabaseShape(value: unknown): SaasDatabaseShape {
   const input = value && typeof value === 'object' ? value as Partial<SaasDatabaseShape> : {};
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     users: Array.isArray(input.users) ? input.users : [],
     organizations: Array.isArray(input.organizations) ? input.organizations : [],
     subscriptions: Array.isArray(input.subscriptions) ? input.subscriptions : [],
@@ -757,6 +1014,8 @@ function normalizeDatabaseShape(value: unknown): SaasDatabaseShape {
     billingWebhookEvents: Array.isArray(input.billingWebhookEvents) ? input.billingWebhookEvents : [],
     sessions: Array.isArray(input.sessions) ? input.sessions : [],
     organizationInvitations: Array.isArray(input.organizationInvitations) ? input.organizationInvitations : [],
+    contentAssets: Array.isArray(input.contentAssets) ? input.contentAssets : [],
+    dataRequests: Array.isArray(input.dataRequests) ? input.dataRequests : [],
   };
 }
 
@@ -1030,6 +1289,47 @@ export function toPublicInvitations(invitations: OrganizationInvitationRecord[])
     expiresAt: invitation.expiresAt,
     acceptedAt: invitation.acceptedAt,
     createdAt: invitation.createdAt,
+  }));
+}
+
+export function toPublicSessions(sessions: SaasSessionRecord[], currentSessionId?: string) {
+  const now = new Date().toISOString();
+  return sessions.map((session) => ({
+    id: session.id,
+    current: session.id === currentSessionId,
+    active: !session.revokedAt && session.expiresAt > now,
+    createdAt: session.createdAt,
+    lastUsedAt: session.lastUsedAt,
+    expiresAt: session.expiresAt,
+    revokedAt: session.revokedAt,
+    userAgent: session.userAgent,
+    ipAddress: session.ipAddress,
+  }));
+}
+
+export function toPublicContentAssets(assets: ContentAssetRecord[]) {
+  return assets.map((asset) => ({
+    id: asset.id,
+    title: asset.title,
+    assetType: asset.assetType,
+    sourceType: asset.sourceType,
+    licenseStatus: asset.licenseStatus,
+    notes: asset.notes,
+    createdAt: asset.createdAt,
+    updatedAt: asset.updatedAt,
+  }));
+}
+
+export function toPublicDataRequests(requests: DataRequestRecord[]) {
+  return requests.map((request) => ({
+    id: request.id,
+    userId: request.userId,
+    requestType: request.requestType,
+    status: request.status,
+    note: request.note,
+    createdAt: request.createdAt,
+    updatedAt: request.updatedAt,
+    completedAt: request.completedAt,
   }));
 }
 

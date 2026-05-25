@@ -4,6 +4,8 @@ import {
   BillingEventInput,
   CloudLearningEntityRecord,
   CloudLearningSnapshotRecord,
+  ContentAssetRecord,
+  DataRequestRecord,
   OrganizationInvitationRecord,
   SaasAccountRecord,
   SaasApiError,
@@ -108,8 +110,14 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at timestamptz NOT NULL,
   expires_at timestamptz NOT NULL,
   last_used_at timestamptz,
-  revoked_at timestamptz
+  revoked_at timestamptz,
+  user_agent text,
+  ip_address text
 );
+
+ALTER TABLE sessions
+  ADD COLUMN IF NOT EXISTS user_agent text,
+  ADD COLUMN IF NOT EXISTS ip_address text;
 
 CREATE INDEX IF NOT EXISTS sessions_active_idx
   ON sessions (id, user_id, expires_at)
@@ -133,6 +141,37 @@ CREATE INDEX IF NOT EXISTS organization_invitations_org_idx
 CREATE INDEX IF NOT EXISTS organization_invitations_token_idx
   ON organization_invitations (token_hash, expires_at)
   WHERE accepted_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS content_assets (
+  id uuid PRIMARY KEY,
+  organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  title text NOT NULL,
+  asset_type text NOT NULL CHECK (asset_type IN ('reading', 'listening', 'writing', 'translation', 'speaking')),
+  source_type text NOT NULL CHECK (source_type IN ('original', 'licensed', 'user-imported', 'ai-generated')),
+  license_status text NOT NULL CHECK (license_status IN ('draft', 'cleared', 'needs_review', 'blocked')),
+  owner_user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  notes text,
+  created_at timestamptz NOT NULL,
+  updated_at timestamptz NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS content_assets_org_idx
+  ON content_assets (organization_id, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS data_requests (
+  id uuid PRIMARY KEY,
+  organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  request_type text NOT NULL CHECK (request_type IN ('export', 'delete')),
+  status text NOT NULL CHECK (status IN ('queued', 'processing', 'completed', 'rejected')),
+  note text,
+  created_at timestamptz NOT NULL,
+  updated_at timestamptz NOT NULL,
+  completed_at timestamptz
+);
+
+CREATE INDEX IF NOT EXISTS data_requests_org_idx
+  ON data_requests (organization_id, created_at DESC);
 `;
 
 function toIso(value: Date | string | null | undefined): string | undefined {
@@ -203,6 +242,8 @@ function mapSession(row: Record<string, unknown>): SaasSessionRecord {
     expiresAt: toIso(row.expires_at as Date | string)!,
     lastUsedAt: toIso(row.last_used_at as Date | string | null),
     revokedAt: toIso(row.revoked_at as Date | string | null),
+    userAgent: row.user_agent ? String(row.user_agent) : undefined,
+    ipAddress: row.ip_address ? String(row.ip_address) : undefined,
   };
 }
 
@@ -217,6 +258,35 @@ function mapInvitation(row: Record<string, unknown>): OrganizationInvitationReco
     expiresAt: toIso(row.expires_at as Date | string)!,
     acceptedAt: toIso(row.accepted_at as Date | string | null),
     createdAt: toIso(row.created_at as Date | string)!,
+  };
+}
+
+function mapContentAsset(row: Record<string, unknown>): ContentAssetRecord {
+  return {
+    id: String(row.id),
+    organizationId: String(row.organization_id),
+    title: String(row.title),
+    assetType: row.asset_type as ContentAssetRecord['assetType'],
+    sourceType: row.source_type as ContentAssetRecord['sourceType'],
+    licenseStatus: row.license_status as ContentAssetRecord['licenseStatus'],
+    ownerUserId: String(row.owner_user_id),
+    notes: row.notes ? String(row.notes) : undefined,
+    createdAt: toIso(row.created_at as Date | string)!,
+    updatedAt: toIso(row.updated_at as Date | string)!,
+  };
+}
+
+function mapDataRequest(row: Record<string, unknown>): DataRequestRecord {
+  return {
+    id: String(row.id),
+    organizationId: String(row.organization_id),
+    userId: String(row.user_id),
+    requestType: row.request_type as DataRequestRecord['requestType'],
+    status: row.status as DataRequestRecord['status'],
+    note: row.note ? String(row.note) : undefined,
+    createdAt: toIso(row.created_at as Date | string)!,
+    updatedAt: toIso(row.updated_at as Date | string)!,
+    completedAt: toIso(row.completed_at as Date | string | null),
   };
 }
 
@@ -310,6 +380,10 @@ export function createPostgresSaasStore(databaseUrl: string): SaasStore {
         'INSERT INTO saas_migrations (id) VALUES ($1) ON CONFLICT (id) DO NOTHING',
         ['0002_workspace_sessions'],
       );
+      await pool.query(
+        'INSERT INTO saas_migrations (id) VALUES ($1) ON CONFLICT (id) DO NOTHING',
+        ['0003_commercial_ops'],
+      );
     })();
     await migrated;
   }
@@ -398,9 +472,9 @@ export function createPostgresSaasStore(databaseUrl: string): SaasStore {
       return withClient(async (client) => {
         const now = new Date().toISOString();
         const result = await client.query(
-          `INSERT INTO sessions (id, user_id, organization_id, created_at, expires_at)
-           VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-          [crypto.randomUUID(), input.userId, input.organizationId, now, input.expiresAt],
+          `INSERT INTO sessions (id, user_id, organization_id, created_at, expires_at, user_agent, ip_address)
+           VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+          [crypto.randomUUID(), input.userId, input.organizationId, now, input.expiresAt, input.userAgent, input.ipAddress],
         );
         return mapSession(result.rows[0]);
       });
@@ -426,6 +500,12 @@ export function createPostgresSaasStore(databaseUrl: string): SaasStore {
           [sessionId, userId, at],
         );
         return Boolean(result.rowCount);
+      });
+    },
+    listUserSessions(userId) {
+      return withClient(async (client) => {
+        const result = await client.query('SELECT * FROM sessions WHERE user_id = $1 ORDER BY created_at DESC', [userId]);
+        return result.rows.map((row) => mapSession(row));
       });
     },
     saveLearningSnapshot(input) {
@@ -493,6 +573,22 @@ export function createPostgresSaasStore(databaseUrl: string): SaasStore {
           params,
         );
         return result.rows.map((row) => mapEntity(row));
+      });
+    },
+    deleteLearningData(organizationId, userId) {
+      return withTransaction(async (client) => {
+        const snapshotResult = await client.query(
+          'DELETE FROM learning_snapshots WHERE organization_id = $1 AND user_id = $2',
+          [organizationId, userId],
+        );
+        const entityResult = await client.query(
+          'DELETE FROM learning_entities WHERE organization_id = $1 AND user_id = $2',
+          [organizationId, userId],
+        );
+        return {
+          snapshotsDeleted: snapshotResult.rowCount ?? 0,
+          entitiesDeleted: entityResult.rowCount ?? 0,
+        };
       });
     },
     createOneTimeToken(input) {
@@ -685,6 +781,97 @@ export function createPostgresSaasStore(databaseUrl: string): SaasStore {
         return result.rows.map((row) => mapInvitation(row));
       });
     },
+    createContentAsset(input) {
+      return withClient(async (client) => {
+        const now = new Date().toISOString();
+        const result = await client.query(
+          `INSERT INTO content_assets
+           (id, organization_id, title, asset_type, source_type, license_status, owner_user_id, notes, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
+           RETURNING *`,
+          [
+            crypto.randomUUID(),
+            input.organizationId,
+            input.title,
+            input.assetType,
+            input.sourceType,
+            input.licenseStatus,
+            input.ownerUserId,
+            input.notes,
+            now,
+          ],
+        );
+        return mapContentAsset(result.rows[0]);
+      });
+    },
+    listContentAssets(organizationId) {
+      return withClient(async (client) => {
+        const result = await client.query(
+          'SELECT * FROM content_assets WHERE organization_id = $1 ORDER BY updated_at DESC',
+          [organizationId],
+        );
+        return result.rows.map((row) => mapContentAsset(row));
+      });
+    },
+    updateContentAsset(input) {
+      return withClient(async (client) => {
+        const result = await client.query(
+          `UPDATE content_assets
+           SET license_status = $3, notes = $4, updated_at = $5
+           WHERE organization_id = $1 AND id = $2
+           RETURNING *`,
+          [input.organizationId, input.assetId, input.licenseStatus, input.notes, new Date().toISOString()],
+        );
+        if (!result.rows[0]) {
+          throw new SaasApiError(404, 'content_asset_not_found', '内容资产不存在。');
+        }
+        return mapContentAsset(result.rows[0]);
+      });
+    },
+    createDataRequest(input) {
+      return withClient(async (client) => {
+        const now = new Date().toISOString();
+        const result = await client.query(
+          `INSERT INTO data_requests
+           (id, organization_id, user_id, request_type, status, note, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, 'queued', $5, $6, $6)
+           RETURNING *`,
+          [crypto.randomUUID(), input.organizationId, input.userId, input.requestType, input.note, now],
+        );
+        return mapDataRequest(result.rows[0]);
+      });
+    },
+    listDataRequests(input) {
+      return withClient(async (client) => {
+        const result = input.userId
+          ? await client.query(
+            'SELECT * FROM data_requests WHERE organization_id = $1 AND user_id = $2 ORDER BY created_at DESC',
+            [input.organizationId, input.userId],
+          )
+          : await client.query(
+            'SELECT * FROM data_requests WHERE organization_id = $1 ORDER BY created_at DESC',
+            [input.organizationId],
+          );
+        return result.rows.map((row) => mapDataRequest(row));
+      });
+    },
+    resolveDataRequest(input) {
+      return withClient(async (client) => {
+        const now = new Date().toISOString();
+        const completedAt = input.status === 'completed' || input.status === 'rejected' ? now : null;
+        const result = await client.query(
+          `UPDATE data_requests
+           SET status = $3, note = $4, updated_at = $5, completed_at = $6
+           WHERE organization_id = $1 AND id = $2
+           RETURNING *`,
+          [input.organizationId, input.requestId, input.status, input.note, now, completedAt],
+        );
+        if (!result.rows[0]) {
+          throw new SaasApiError(404, 'data_request_not_found', '数据请求不存在。');
+        }
+        return mapDataRequest(result.rows[0]);
+      });
+    },
     getOrganizationAdminOverview(organizationId) {
       return withClient(async (client) => {
         const result = await client.query(
@@ -692,7 +879,11 @@ export function createPostgresSaasStore(databaseUrl: string): SaasStore {
              (SELECT count(*)::int FROM users WHERE organization_id = $1) AS members,
              (SELECT count(*)::int FROM organization_invitations WHERE organization_id = $1 AND accepted_at IS NULL AND expires_at > now()) AS pending_invitations,
              (SELECT count(*)::int FROM learning_snapshots WHERE organization_id = $1) AS learning_snapshots,
-             (SELECT count(*)::int FROM learning_entities WHERE organization_id = $1 AND deleted_at IS NULL) AS learning_entities`,
+             (SELECT count(*)::int FROM learning_entities WHERE organization_id = $1 AND deleted_at IS NULL) AS learning_entities,
+             (SELECT count(*)::int FROM sessions WHERE organization_id = $1 AND revoked_at IS NULL AND expires_at > now()) AS active_sessions,
+             (SELECT count(*)::int FROM content_assets WHERE organization_id = $1) AS content_assets,
+             (SELECT count(*)::int FROM content_assets WHERE organization_id = $1 AND license_status = 'blocked') AS blocked_content_assets,
+             (SELECT count(*)::int FROM data_requests WHERE organization_id = $1 AND status IN ('queued', 'processing')) AS open_data_requests`,
           [organizationId],
         );
         const row = result.rows[0] as Record<string, unknown>;
@@ -701,6 +892,10 @@ export function createPostgresSaasStore(databaseUrl: string): SaasStore {
           pendingInvitations: Number(row.pending_invitations),
           learningSnapshots: Number(row.learning_snapshots),
           learningEntities: Number(row.learning_entities),
+          activeSessions: Number(row.active_sessions),
+          contentAssets: Number(row.content_assets),
+          blockedContentAssets: Number(row.blocked_content_assets),
+          openDataRequests: Number(row.open_data_requests),
         };
       });
     },

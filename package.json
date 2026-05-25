@@ -1,7 +1,7 @@
 {
   "name": "english-training-cabin",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -12,7 +12,8 @@
     "lint": "tsc --noEmit",
     "test": "vitest run tests/domain tests/api",
     "test:e2e": "npm run build && playwright test",
-    "verify": "npm run lint && npm run test && npm run build && playwright test"
+    "verify": "npm run lint && npm run test && npm run build && playwright test",
+    "smoke:production": "node scripts/production-smoke.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

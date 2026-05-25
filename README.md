@@ -47,6 +47,17 @@ docker run --rm -p 3000:3000 --env-file .env.local english-training-cabin
 
 部署平台只需要提供 Node 22 或 Docker 运行环境，并配置下方 AI 环境变量。静态前端和 Express API 会由同一个服务提供。
 
+生产服务器推荐使用仓库内的 Compose 编排，包含应用和 Postgres；服务器入口由现有 Nginx 代理到 `127.0.0.1:3312`：
+
+```bash
+cp deploy/.env.production.example .env.production
+docker compose -p english-training-cabin --env-file .env.production -f docker-compose.production.yml up -d --build
+SMOKE_BASE_URL=https://study.xmlga.top REQUIRE_EMAIL_DELIVERY=true SMOKE_LIVE_AI=true npm run smoke:production
+```
+
+公开生产环境必须提供 `SAAS_SESSION_SECRET`、`POSTGRES_PASSWORD`、`AI_API_KEY` 和真实邮件交付配置；不要开启 `ALLOW_DEVELOPMENT_EMAIL_TOKENS`。
+Nginx 配置模板见 `deploy/nginx-study.xmlga.top.conf`，证书建议用 certbot 签发到 `/etc/letsencrypt/live/study.xmlga.top/`。
+
 ## 质量门禁
 
 ```bash
@@ -96,21 +107,29 @@ SAAS_SESSION_SECRET=change-me-to-a-long-random-secret
 SAAS_DATA_FILE=.data/saas-store.json
 DATABASE_URL=
 BILLING_WEBHOOK_SECRET=change-me-to-a-long-random-billing-webhook-secret
+POSTGRES_DB=english_training
+POSTGRES_USER=english_training
+POSTGRES_PASSWORD=change-me-to-a-long-random-postgres-password
+EMAIL_DELIVERY_WEBHOOK_URL=
+EMAIL_DELIVERY_WEBHOOK_SECRET=
 APP_URL=http://localhost:3000
 ```
 
 推荐环境变量值不加引号，以便直接用于 Docker `--env-file`；服务端也兼容已有的带引号配置。AI 接口按 OpenAI-compatible `/v1/chat/completions` 调用。应用侧 API 使用 `/api/ai/generate-passage` 和 `/api/ai/analyze-speech`；旧版 `/api/gemini/*` 路径仅作为兼容别名保留。没有可用供应商配置时，AI 阅读生成和口语分析接口会返回离线模拟结果，保证核心训练闭环可用。
 
-`SAAS_SESSION_SECRET` 用于签发登录会话，生产环境必须设置为高强度随机字符串；`DATABASE_URL` 存在时服务端会使用 Postgres SaaS 存储并自动执行 `0001_saas_core` 扩展迁移，否则使用 `SAAS_DATA_FILE` 文件存储作为本地兜底。`BILLING_WEBHOOK_SECRET` 用于校验订阅 webhook 的 HMAC 签名。
+`SAAS_SESSION_SECRET` 用于签发登录会话，生产环境必须设置为高强度随机字符串；`DATABASE_URL` 存在时服务端会使用 Postgres SaaS 存储并自动执行 `0001_saas_core`、`0002_workspace_sessions` 和 `0003_commercial_ops` 扩展迁移，否则使用 `SAAS_DATA_FILE` 文件存储作为本地兜底。`BILLING_WEBHOOK_SECRET` 用于校验订阅 webhook 的 HMAC 签名。`EMAIL_DELIVERY_WEBHOOK_URL` 用于生产环境发送邮箱验证、密码重置和团队邀请邮件；未配置时生产环境会拒绝发送，避免假装已发邮件。`ALLOW_DEVELOPMENT_EMAIL_TOKENS=true` 仅用于本地/E2E，让生产构建也能返回一次性 token 进行自动化验证，公开生产环境不要开启。
 
-## SaaS 基座 API
+## 云端账号与团队协作 API
 
-当前已提供商业化 SaaS 第一阶段基础接口：
+当前已提供非付费的云端账号、团队协作、内容治理和合规基础接口：
 
-- `POST /api/auth/register`：注册账号并创建默认组织租户和 Pro 试用权益。
+- `POST /api/auth/register`：注册账号并创建默认团队空间和云端学习档案能力。
 - `POST /api/auth/login`：登录并返回 Bearer token。
+- `GET /api/auth/session`：静默检查当前登录状态；无效 token 返回匿名状态，不制造浏览器控制台 401 噪声。
 - `POST /api/auth/refresh`：轮换当前登录会话，旧 token 立即失效。
 - `POST /api/auth/logout`：撤销当前服务端会话。
+- `GET /api/auth/sessions`：查看当前账号的登录设备与服务端会话。
+- `DELETE /api/auth/sessions/:sessionId`：撤销指定非当前设备会话。
 - `POST /api/auth/email-verification/request` / `confirm`：邮箱验证 token。
 - `POST /api/auth/password-reset/request` / `confirm`：密码重置 token。
 - `GET /api/auth/me`：读取当前账号、租户和订阅权益。
@@ -118,11 +137,16 @@ APP_URL=http://localhost:3000
 - `POST /api/workspace/invitations`：团队 owner 邀请成员。
 - `POST /api/workspace/invitations/accept`：成员接受邀请并创建账号。
 - `GET /api/admin/overview`：团队 owner 查看聚合管理概览。
-- `GET /api/billing/entitlements`：读取当前订阅权益。
-- `POST /api/billing/webhook`：接收带 HMAC 签名的订阅状态变更事件。
+- `GET /api/admin/operational-summary`：团队 owner 查看聚合运营概览、API/AI 观测和存储模式。
+- `GET/POST/PATCH /api/admin/content-assets`：登记内容资产、维护授权状态和阻断风险内容。
+- `GET /api/compliance/export`：立即导出当前用户自己的云端学习档案。
+- `GET/POST /api/compliance/data-requests`：提交和查看数据导出/删除请求。
+- `POST /api/compliance/data-requests/:requestId/resolve`：团队 owner 处理数据权利请求；删除请求完成时清除目标用户云端学习快照与增量实体。
+- `GET /api/billing/entitlements`：读取当前云端能力开通状态。
+- `POST /api/billing/webhook`：保留为后续权益变更集成入口；当前公开版本不需要接入付费流程。
 - `PUT /api/cloud/learning-data`：把当前浏览器学习数据备份同步到服务端。
 - `GET /api/cloud/learning-data`：从服务端读取当前用户自己的学习数据快照。
 - `PUT /api/cloud/learning-entities`：按实体增量同步目标、练习、作答、复习和能力画像。
 - `GET /api/cloud/learning-entities`：按用户和租户读取增量学习实体。
 
-当前已具备 Postgres schema、整包快照、增量实体同步、服务端会话撤销、团队邀请、owner-only 管理概览、邮箱验证 token 和密码重置 token 的服务端基础。付费功能不是当前重点；后续如不做付费，可继续强化真实邮件服务、团队管理后台、内容授权后台和运营观测。
+当前已具备 Postgres schema、整包快照、增量实体同步、服务端会话撤销、团队邀请、owner-only 管理概览、邮箱验证/密码重置/邀请邮件交付适配、团队管理 UI、内容授权治理、数据权利请求和运营观测。付费功能不是当前重点；后续如不做付费，可继续强化学校/班级报表、真实内容授权流程和生产告警。

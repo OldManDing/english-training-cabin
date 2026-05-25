@@ -1,0 +1,57 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-english_training}
+      POSTGRES_USER: ${POSTGRES_USER:-english_training}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-english_training} -d ${POSTGRES_DB:-english_training}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - web
+
+  app:
+    image: ${ENGLISH_TRAINING_IMAGE:-english-training-cabin:production}
+    build:
+      context: .
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      APP_URL: https://study.xmlga.top
+      DATABASE_URL: postgresql://${POSTGRES_USER:-english_training}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-english_training}
+      SAAS_DATA_FILE: /data/saas-store.json
+      ALLOW_DEVELOPMENT_EMAIL_TOKENS: "false"
+    volumes:
+      - app-data:/data
+    ports:
+      - "127.0.0.1:${HOST_APP_PORT:-3312}:3000"
+    expose:
+      - "3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "const port=process.env.PORT||3000; fetch('http://127.0.0.1:'+port+'/api/health').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - web
+
+volumes:
+  postgres-data:
+  app-data:
+
+networks:
+  web:
+    driver: bridge

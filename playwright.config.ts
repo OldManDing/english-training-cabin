@@ -11,7 +11,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: 'cmd /c "set PORT=3310&& set SAAS_SESSION_SECRET=playwright-saas-secret&& set SAAS_DATA_FILE=test-results\\saas-e2e-store.json&& npm.cmd start"',
+    command: 'cmd /c "set PORT=3310&& set SAAS_SESSION_SECRET=playwright-saas-secret&& set SAAS_DATA_FILE=test-results\\saas-e2e-store.json&& set ALLOW_DEVELOPMENT_EMAIL_TOKENS=true&& npm.cmd start"',
     url: 'http://127.0.0.1:3310/api/health',
     reuseExistingServer: false,
     timeout: 20_000,
