@@ -37,13 +37,11 @@ interface SaasAccountPanelProps {
 
 const SAAS_TOKEN_KEY = 'english-training-cabin:saas-token';
 const INITIAL_CLOUD_STATUS = '登录后可把当前浏览器的学习记录同步到服务端，形成可恢复的云端学习档案。';
-type AuthMode = 'login' | 'register' | 'verify' | 'reset' | 'invitation';
+type AuthMode = 'login' | 'register' | 'invitation';
 
 function getInitialAuthAction(): { mode?: AuthMode; token?: string } {
   const token = new URLSearchParams(window.location.search).get('token') ?? undefined;
   if (!token) return {};
-  if (window.location.pathname.includes('/auth/verify-email')) return { mode: 'verify', token };
-  if (window.location.pathname.includes('/auth/reset-password')) return { mode: 'reset', token };
   if (window.location.pathname.includes('/workspace/accept-invitation')) return { mode: 'invitation', token };
   return {};
 }
@@ -141,20 +139,12 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
         ? '/api/auth/register'
         : mode === 'login'
           ? '/api/auth/login'
-          : mode === 'verify'
-            ? '/api/auth/email-verification/confirm'
-            : mode === 'reset'
-              ? '/api/auth/password-reset/confirm'
-              : '/api/workspace/invitations/accept';
+          : '/api/workspace/invitations/accept';
       const body = mode === 'register'
         ? { email, password, name, organizationName }
         : mode === 'login'
           ? { email, password }
-          : mode === 'verify'
-            ? { token: actionToken }
-            : mode === 'reset'
-              ? { token: actionToken, password }
-              : { token: actionToken, name, password };
+          : { token: actionToken, name, password };
       const payload = await apiRequest<{ token: string; account: PublicSaasAccountContext }>(
         endpoint,
         {
@@ -166,55 +156,15 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
       setToken(payload.token);
       setAccount(payload.account);
       if (mode === 'register') {
-        try {
-          const health = await apiRequest<{ emailDelivery?: { configured?: boolean } }>('/api/health')
-            .catch(() => null);
-          if (health?.emailDelivery?.configured === false) {
-            setStatusText('云端账号已创建；当前生产环境尚未配置邮件交付，请稍后完成邮箱验证。');
-            return;
-          }
-          const verification = await apiRequest<{ delivery: 'email' | 'development-token' }>(
-            '/api/auth/email-verification/request',
-            { method: 'POST' },
-            payload.token,
-          );
-          setStatusText(verification.delivery === 'email'
-            ? '云端账号已创建，验证邮件已发送，请查收并完成邮箱验证。'
-            : '云端账号已创建，请在下方完成邮箱验证后使用团队功能。');
-        } catch (error) {
-          setStatusText(`云端账号已创建，但验证邮件发送失败：${getApiMessage(error)}`);
-        }
+        setStatusText('云端账号已创建，可同步学习数据；团队邀请会生成可复制的邀请链接。');
         return;
       }
       const statusByMode: Record<AuthMode, string> = {
         register: '云端账号已创建，学习档案同步能力已开通。',
         login: '已登录云端账号。',
-        verify: '邮箱验证完成，账号已登录。',
-        reset: '密码已重置，账号已登录。',
         invitation: '邀请已接受，您已加入团队。',
       };
       setStatusText(statusByMode[mode]);
-    } catch (error) {
-      setStatusText(getApiMessage(error));
-    } finally {
-      setIsBusy(false);
-    }
-  };
-
-  const handlePasswordResetRequest = async () => {
-    setIsBusy(true);
-    try {
-      const payload = await apiRequest<{ delivery: string; token?: string }>(
-        '/api/auth/password-reset/request',
-        { method: 'POST', body: JSON.stringify({ email }) },
-      );
-      if (payload.token) {
-        setActionToken(payload.token);
-        setMode('reset');
-        setStatusText('已生成一次性重置 token，请设置新密码。');
-      } else {
-        setStatusText('如该邮箱已注册，重置邮件将在稍后送达。');
-      }
     } catch (error) {
       setStatusText(getApiMessage(error));
     } finally {
@@ -289,8 +239,8 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
   };
 
   return (
-    <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-6.5 shadow-sm space-y-4">
-      <div className="flex items-start justify-between gap-4">
+    <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-4 sm:p-6.5 shadow-sm space-y-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h3 className="text-sm font-black text-[#003178] flex items-center gap-2">
             <Cloud className="h-4 w-4 text-[#003178]" />
@@ -333,7 +283,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
           </div> : (
             <div className="rounded-2xl bg-[#eef7fc] border border-[#d2e2ec] p-3 flex items-center justify-between gap-3">
               <p className="text-[10.5px] font-black text-[#003178]">
-                {mode === 'verify' ? '确认邮箱验证' : mode === 'reset' ? '设置新密码' : '接受团队邀请'}
+                接受团队邀请
               </p>
               <button type="button" onClick={() => setMode('login')} className="text-[10px] font-black text-[#003178]">返回登录</button>
             </div>
@@ -370,7 +320,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
               autoComplete="username"
               type="email"
             />
-            {mode !== 'verify' && <input
+            <input
               data-testid="saas-password-input"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
@@ -378,28 +328,28 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
               placeholder="密码至少 8 位"
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
               type="password"
-            />}
+            />
           </div>}
 
-          {(mode === 'reset' || mode === 'invitation') && (
+          {mode === 'invitation' && (
             <input
               data-testid="saas-password-input"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               className="w-full rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-4 py-3 text-xs font-bold text-[#003178] outline-none focus:ring-1 focus:ring-[#003178]"
-              placeholder={mode === 'reset' ? '设置新密码（至少 8 位）' : '创建密码（至少 8 位）'}
+              placeholder="创建密码（至少 8 位）"
               autoComplete="new-password"
               type="password"
             />
           )}
 
-          {(mode === 'verify' || mode === 'reset' || mode === 'invitation') && (
+          {mode === 'invitation' && (
             <input
               data-testid="saas-action-token"
               value={actionToken}
               onChange={(event) => setActionToken(event.target.value)}
               className="w-full rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-4 py-3 text-xs font-bold text-[#003178] outline-none focus:ring-1 focus:ring-[#003178]"
-              placeholder="一次性验证 token"
+              placeholder="邀请链接中的一次性 token"
             />
           )}
 
@@ -410,19 +360,19 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
             className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#003178] px-4 py-3 text-xs font-black text-white transition hover:bg-[#07244f] disabled:bg-gray-400"
           >
             {isBusy ? <RefreshCw className="h-4 w-4 animate-spin" /> : mode === 'register' || mode === 'invitation' ? <UserPlus className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
-            {mode === 'register' ? '创建云端账号' : mode === 'login' ? '登录云端账号' : mode === 'verify' ? '完成邮箱验证' : mode === 'reset' ? '完成密码重置' : '接受邀请并加入团队'}
+            {mode === 'register' ? '创建云端账号' : mode === 'login' ? '登录云端账号' : '接受邀请并加入团队'}
           </button>
 
           {mode === 'login' && (
-            <button type="button" onClick={handlePasswordResetRequest} disabled={isBusy || !email} className="w-full text-[10.5px] font-black text-[#003178] disabled:text-gray-400">
-              忘记密码？发送重置邮件
-            </button>
+            <p className="text-center text-[10.5px] font-bold text-[#5d6472]">
+              当前版本不提供找回密码，请妥善保存密码。
+            </p>
           )}
         </form>
       ) : (
         <div className="space-y-4">
           <div className="rounded-2xl bg-[#f7fbff] border border-[#cfe6f2] p-4 space-y-2">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-black text-[#003178]">{account.user.name}</p>
                 <p className="text-[10px] font-bold text-[#434652]">{account.user.email}</p>
@@ -467,11 +417,6 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
           <SaasOperationsPanel
             token={token}
             account={account}
-            onTokenChanged={(nextToken, nextAccount) => {
-              localStorage.setItem(SAAS_TOKEN_KEY, nextToken);
-              setToken(nextToken);
-              setAccount(nextAccount);
-            }}
             onStatus={setStatusText}
           />
         </div>

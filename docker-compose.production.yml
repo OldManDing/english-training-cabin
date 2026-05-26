@@ -29,7 +29,6 @@ services:
       APP_URL: https://study.xmlga.top
       DATABASE_URL: postgresql://${POSTGRES_USER:-english_training}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-english_training}
       SAAS_DATA_FILE: /data/saas-store.json
-      ALLOW_DEVELOPMENT_EMAIL_TOKENS: "false"
     volumes:
       - app-data:/data
     ports:

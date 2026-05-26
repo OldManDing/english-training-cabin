@@ -244,10 +244,10 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
   const currentFeedback = isSubmitted ? getAIBehaviorFeedback() : null;
 
   return (
-    <div className="flex-1 flex flex-col h-screen overflow-hidden bg-white">
+    <div className="flex-1 flex flex-col min-h-[100svh] lg:h-screen overflow-hidden bg-white">
       {/* Exercise Top Bar */}
-      <div className="h-16 px-6 border-b border-[#cfe6f2] flex items-center justify-between shrink-0 bg-gradient-to-r from-[#f3faff] to-white">
-        <div className="flex items-center space-x-4">
+      <div className="min-h-16 px-4 sm:px-6 py-3 border-b border-[#cfe6f2] flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between shrink-0 bg-gradient-to-r from-[#f3faff] to-white">
+        <div className="flex items-center space-x-3 sm:space-x-4 min-w-0">
           <button
             onClick={onBack}
             className="p-2 hover:bg-[#dbf1fe] text-[#003178] rounded-xl transition-colors cursor-pointer pointer-events-auto"
@@ -260,7 +260,7 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
           </h3>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 overflow-x-auto pb-1 sm:pb-0">
           {passage.questions.map((_, i) => (
             <div
               key={i}
@@ -279,12 +279,12 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
       </div>
 
       {/* Split Screens Panel */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
         
         {/* Left Side: Passage Container */}
-        <div className="w-1/2 p-8 overflow-y-auto border-r border-[#c3c6d4] bg-neutral-50/50 flex flex-col">
-          <div className="bg-white border border-[#cfe6f2] rounded-3xl p-8 shadow-xs flex-1">
-            <header className="mb-6 flex justify-between items-center pb-4 border-b border-[#f3faff]">
+        <div className="w-full lg:w-1/2 p-4 sm:p-6 lg:p-8 overflow-y-auto border-b lg:border-b-0 lg:border-r border-[#c3c6d4] bg-neutral-50/50 flex flex-col">
+          <div className="bg-white border border-[#cfe6f2] rounded-3xl p-4 sm:p-6 lg:p-8 shadow-xs flex-1">
+            <header className="mb-6 flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center pb-4 border-b border-[#f3faff]">
               <h2 className="text-xl font-bold text-[#003178] leading-tight flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-[#3b82f6]" /> {passage.title}
               </h2>
@@ -298,7 +298,7 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
 
             {/* Custom Interactive Legend (Only visible after submittng response) */}
             {isSubmitted && (
-              <div className="mt-8 pt-6 border-t border-dashed border-gray-200 grid grid-cols-2 gap-4 text-xs font-semibold">
+              <div className="mt-8 pt-6 border-t border-dashed border-gray-200 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-semibold">
                 <div className="flex items-start gap-2 bg-[#d1e7dd]/50 p-2.5 rounded-xl border border-green-200">
                   <span className="w-3 h-3 bg-[#198754] rounded-full translate-y-0.5" />
                   <div>
@@ -319,11 +319,11 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
         </div>
 
         {/* Right Side: Questions & Explanations Panel */}
-        <div className="w-1/2 p-8 overflow-y-auto flex flex-col justify-between bg-white">
+        <div className="w-full lg:w-1/2 p-4 sm:p-6 lg:p-8 overflow-y-auto flex flex-col justify-between bg-white">
           <div className="space-y-6">
             
             {/* Steps & Topic */}
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
               <span className="text-xs font-bold text-[#003178] bg-[#dbf1fe] px-2.5 py-1 rounded-full border border-[#cfe6f2]">
                 第 {currentIdx + 1} 题 / 共 {passage.questions.length} 题
               </span>
@@ -370,7 +370,7 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
                     key={opt}
                     onClick={() => handleOptionClick(opt)}
                     disabled={isSubmitted}
-                    className={`w-full p-4 rounded-2xl border text-left flex items-start gap-4 transition-all duration-150 relative ${cardStyle} ${
+                className={`w-full p-4 rounded-2xl border text-left flex items-start gap-3 sm:gap-4 transition-all duration-150 relative ${cardStyle} ${
                       !isSubmitted ? 'hover:scale-[1.01] pointer-events-auto cursor-pointer' : 'cursor-default'
                     }`}
                   >
@@ -392,7 +392,7 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
                   <HelpCircle className="h-4 w-4 text-[#003178]" />
                   <span>答题把握度诊断 (影响错因分析和复习优先级)：</span>
                 </div>
-                <div className="flex gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {[
                     { id: 'sure', label: '非常有把握', color: 'peer-checked:bg-[#003178]/10 peer-checked:text-[#003178] peer-checked:border-[#003178]' },
                     { id: 'not_sure', label: '不太确定', color: 'peer-checked:bg-amber-100 peer-checked:text-amber-800 peer-checked:border-amber-600' },
@@ -422,7 +422,7 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
                 
                 {/* AI Behavioral Diagnostic Panel */}
                 <div className="bg-[#f3faff] border border-[#cfe6f2] rounded-2xl p-4">
-                  <div className="flex justify-between items-center mb-2">
+                  <div className="flex flex-col gap-2 mb-2 sm:flex-row sm:justify-between sm:items-center">
                     <div className="text-xs font-bold text-[#003178] flex items-center gap-1">
                       <Sparkles className="h-3.5 w-3.5 animate-bounce" />
                       <span>错因行为诊断反馈</span>
@@ -466,7 +466,7 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
           </div>
 
           {/* Bottom Action Footer */}
-          <div className="pt-6 border-t border-[#cfe6f2] mt-8 flex justify-between items-center bg-white">
+          <div className="pt-6 border-t border-[#cfe6f2] mt-8 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center bg-white">
             <div className="text-xs text-gray-400">
               {isSubmitted ? '仔细核对线索，点按右侧按键递进。' : '请勾选选项以及把握度后，提交诊断。'}
             </div>
@@ -475,7 +475,7 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
               <button
                 onClick={handleSubmit}
                 disabled={!selectedOpt || !confidence}
-                className={`px-8 py-3 rounded-xl font-bold text-sm shadow-md transition-all ${
+                className={`w-full sm:w-auto px-6 sm:px-8 py-3 rounded-xl font-bold text-sm shadow-md transition-all ${
                   selectedOpt && confidence
                     ? 'bg-[#003178] hover:bg-[#0d47a1] text-white hover:translate-y-[-1px] cursor-pointer pointer-events-auto'
                     : 'bg-gray-200 text-gray-400 cursor-not-allowed text-xs'
@@ -486,7 +486,7 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
             ) : (
               <button
                 onClick={handleNext}
-                className="px-8 py-3 bg-[#1b6d24] hover:bg-[#1b6d24]/90 text-white font-bold text-sm rounded-xl hover:-translate-y-0.5 shadow-md flex items-center gap-2 transition-all cursor-pointer pointer-events-auto"
+                className="w-full sm:w-auto justify-center px-6 sm:px-8 py-3 bg-[#1b6d24] hover:bg-[#1b6d24]/90 text-white font-bold text-sm rounded-xl hover:-translate-y-0.5 shadow-md flex items-center gap-2 transition-all cursor-pointer pointer-events-auto"
               >
                 <span>
                   {currentIdx === passage.questions.length - 1 ? '完成训练，提交今日总战报' : '进入第 ' + (currentIdx + 2) + ' 题'}

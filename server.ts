@@ -1,6 +1,5 @@
 import express, { NextFunction, Request, Response } from 'express';
 import path from 'path';
-import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
@@ -20,8 +19,6 @@ import {
 import { MistakeReason, ReviewItem, SkillArea, SkillProfile, StudyGoal } from './src/types';
 import {
   acceptWorkspaceInvitation,
-  confirmEmailVerification,
-  confirmPasswordReset,
   createFileSaasStore,
   createInMemorySaasStore,
   createWorkspaceInvitation,
@@ -31,8 +28,6 @@ import {
   issueSessionToken,
   loginSaasAccount,
   registerSaasAccount,
-  requestEmailVerification,
-  requestPasswordReset,
   SaasAccountRecord,
   SaasApiError,
   SaasSessionPayload,
@@ -73,14 +68,6 @@ function isProductionServerRuntime() {
   return process.env.NODE_ENV === 'production' || path.basename(process.argv[1] ?? '') === 'server.cjs';
 }
 
-type TransactionalEmailPayload = {
-  to: string;
-  subject: string;
-  text: string;
-  actionUrl: string;
-  template: 'email_verification' | 'password_reset' | 'workspace_invitation';
-};
-
 function getPublicAppUrl() {
   return readEnvironmentValue('APP_URL') ?? `http://localhost:${PORT}`;
 }
@@ -89,40 +76,6 @@ function buildActionUrl(pathname: string, token: string) {
   const url = new URL(pathname, getPublicAppUrl());
   url.searchParams.set('token', token);
   return url.toString();
-}
-
-function usesDevelopmentEmailTokens() {
-  return !isProductionServerRuntime() || readEnvironmentValue('ALLOW_DEVELOPMENT_EMAIL_TOKENS') === 'true';
-}
-
-async function deliverTransactionalEmail(payload: TransactionalEmailPayload) {
-  if (usesDevelopmentEmailTokens()) {
-    return { delivery: 'development-token' as const };
-  }
-
-  const webhookUrl = readEnvironmentValue('EMAIL_DELIVERY_WEBHOOK_URL');
-  if (!webhookUrl) {
-    throw new SaasApiError(503, 'email_delivery_not_configured', '生产环境尚未配置邮件交付服务。');
-  }
-
-  const body = JSON.stringify(payload);
-  const secret = readEnvironmentValue('EMAIL_DELIVERY_WEBHOOK_SECRET');
-  const response = await fetch(webhookUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(secret ? {
-        'x-english-email-signature': crypto.createHmac('sha256', secret).update(body).digest('hex'),
-      } : {}),
-    },
-    body,
-  });
-
-  if (!response.ok) {
-    throw new SaasApiError(502, 'email_delivery_failed', '邮件服务暂时不可用，请稍后重试。');
-  }
-
-  return { delivery: 'email' as const };
 }
 
 export function buildContentSecurityPolicy() {
@@ -846,14 +799,6 @@ export function createApp(options: CreateAppOptions = {}) {
     next();
   });
 
-  const requireVerifiedEmail = asyncRoute(async (_req, res, next) => {
-    const { account } = getSaasContext(res);
-    if (!account.user.emailVerifiedAt) {
-      throw new SaasApiError(403, 'email_verification_required', '请先完成邮箱验证后再执行此操作。');
-    }
-    next();
-  });
-
   app.get('/api/health', (_req, res) => {
     const ai = getAiProviderStatus();
     res.json({
@@ -867,9 +812,8 @@ export function createApp(options: CreateAppOptions = {}) {
         authConfigured: Boolean(saasSessionSecret),
         store: saasStore.kind,
       },
-      emailDelivery: {
-        configured: usesDevelopmentEmailTokens() || Boolean(readEnvironmentValue('EMAIL_DELIVERY_WEBHOOK_URL')),
-        mode: usesDevelopmentEmailTokens() ? 'development-token' : 'webhook',
+      collaboration: {
+        invitationDelivery: 'manual-link',
       },
       timestamp: new Date().toISOString(),
     });
@@ -908,62 +852,6 @@ export function createApp(options: CreateAppOptions = {}) {
     const account = await loginSaasAccount(saasStore, req.body);
     const token = await issueAccountSession(account, req);
 
-    res.json({
-      token,
-      account: toPublicAccountContext(account),
-    });
-  }));
-
-  app.post('/api/auth/email-verification/request', requireSaasAuth, authLimiter, asyncRoute(async (_req, res) => {
-    const { account } = getSaasContext(res);
-    const result = await requestEmailVerification(saasStore, account.user.id);
-    const actionUrl = buildActionUrl('/auth/verify-email', result.token);
-    const delivery = await deliverTransactionalEmail({
-      to: account.user.email,
-      subject: '验证您的英语训练舱账号邮箱',
-      text: `请打开以下链接完成邮箱验证：${actionUrl}`,
-      actionUrl,
-      template: 'email_verification',
-    });
-    res.json({
-      delivery: delivery.delivery,
-      expiresAt: result.expiresAt,
-      token: delivery.delivery === 'development-token' ? result.token : undefined,
-    });
-  }));
-
-  app.post('/api/auth/email-verification/confirm', authLimiter, asyncRoute(async (req, res) => {
-    const account = await confirmEmailVerification(saasStore, req.body?.token);
-    const token = await issueAccountSession(account, req);
-    res.json({
-      token,
-      account: toPublicAccountContext(account),
-    });
-  }));
-
-  app.post('/api/auth/password-reset/request', authLimiter, asyncRoute(async (req, res) => {
-    const result = await requestPasswordReset(saasStore, req.body);
-    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
-    if (result.token) {
-      const actionUrl = buildActionUrl('/auth/reset-password', result.token);
-      await deliverTransactionalEmail({
-        to: email,
-        subject: '重置您的英语训练舱账号密码',
-        text: `请打开以下链接重置密码：${actionUrl}`,
-        actionUrl,
-        template: 'password_reset',
-      });
-    }
-    res.json({
-      delivery: usesDevelopmentEmailTokens() ? 'development-token' : 'email',
-      expiresAt: result.expiresAt,
-      token: usesDevelopmentEmailTokens() ? result.token : undefined,
-    });
-  }));
-
-  app.post('/api/auth/password-reset/confirm', authLimiter, asyncRoute(async (req, res) => {
-    const account = await confirmPasswordReset(saasStore, req.body);
-    const token = await issueAccountSession(account, req);
     res.json({
       token,
       account: toPublicAccountContext(account),
@@ -1039,22 +927,14 @@ export function createApp(options: CreateAppOptions = {}) {
     });
   }));
 
-  app.post('/api/workspace/invitations', requireSaasAuth, requireVerifiedEmail, authLimiter, asyncRoute(async (req, res) => {
+  app.post('/api/workspace/invitations', requireSaasAuth, authLimiter, asyncRoute(async (req, res) => {
     const { account } = getSaasContext(res);
     const result = await createWorkspaceInvitation(saasStore, account, req.body);
-    const invitationUrl = buildActionUrl('/workspace/accept-invitation', result.token);
-    const delivery = await deliverTransactionalEmail({
-      to: result.invitation.email,
-      subject: `加入 ${account.organization.name} 的英语训练舱团队`,
-      text: `请打开以下链接接受团队邀请：${invitationUrl}`,
-      actionUrl: invitationUrl,
-      template: 'workspace_invitation',
-    });
 
     res.status(201).json({
       invitation: toPublicInvitations([result.invitation])[0],
-      delivery: delivery.delivery,
-      token: delivery.delivery === 'development-token' ? result.token : undefined,
+      delivery: 'manual-link',
+      invitationUrl: buildActionUrl('/workspace/accept-invitation', result.token),
     });
   }));
 

@@ -436,12 +436,12 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
   ];
 
   return (
-    <div className="flex-1 p-8 overflow-y-auto bg-slate-50 flex flex-col justify-between h-screen relative selection:bg-[#003178]/10 selection:text-[#003178]">
+    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto overflow-x-hidden bg-slate-50 flex flex-col justify-between min-h-[calc(100svh-9rem)] lg:h-screen relative selection:bg-[#003178]/10 selection:text-[#003178]">
       
       {/* Floating high fidelity custom premium Toast */}
       {toast && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 transform transition-all duration-300 animate-bounce">
-          <div className="bg-[#003178] border border-[#cfe6f2] text-white px-5 py-3 rounded-full text-xs font-black flex items-center gap-2 shadow-2xl">
+        <div className="fixed top-4 left-4 right-4 z-50 transform transition-all duration-300 animate-bounce sm:left-1/2 sm:right-auto sm:-translate-x-1/2">
+          <div className="bg-[#003178] border border-[#cfe6f2] text-white px-4 sm:px-5 py-3 rounded-2xl sm:rounded-full text-xs font-black flex items-center gap-2 shadow-2xl">
             <Sparkles className="h-4 w-4 text-amber-300 fill-amber-300 animate-pulse" />
             <span>{toast}</span>
           </div>
@@ -450,8 +450,8 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
 
       {/* Countdown modal overlay */}
       {countdown !== null && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex flex-col items-center justify-center">
-          <div className="bg-white rounded-3xl p-10 max-w-sm text-center shadow-2xl border border-white/20 animate-scale-up space-y-6">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex flex-col items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-10 max-w-sm w-full text-center shadow-2xl border border-white/20 animate-scale-up space-y-6">
             <div className="relative flex items-center justify-center">
               <div className="absolute inset-0 rounded-full bg-[#003178]/10 animate-ping" />
               <div className="w-24 h-24 rounded-full bg-[#dbf1fe] text-[#003178] flex items-center justify-center text-5xl font-black">
@@ -468,10 +468,10 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
 
       {/* HEADER SECTION - Dynamically adaptive based on the steps */}
       <div className="shrink-0">
-        <header className="mb-6 pb-4 border-b border-slate-200/80 flex justify-between items-center">
-          <div>
-            <h2 className="text-2xl font-black text-[#003178] flex items-center gap-2">
-              <Speech className="h-7 w-7 text-[#003178]" />
+        <header className="mb-6 pb-4 border-b border-slate-200/80 flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
+          <div className="min-w-0">
+            <h2 className="text-xl sm:text-2xl font-black text-[#003178] flex items-center gap-2">
+              <Speech className="h-6 w-6 sm:h-7 sm:w-7 text-[#003178] shrink-0" />
               {step === 1 && '口语重说 - 准备开始'}
               {step === 2 && '口语重说 - 正在录音'}
               {step === 3 && '口语重说 - AI 反馈与改写'}
@@ -502,7 +502,7 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
         </header>
 
         {/* Dynamic Step indicator capsules matching screenshots */}
-        <div className="grid grid-cols-4 gap-4 mb-7">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-4 mb-5 sm:mb-7">
           {[
             { num: 1, label: '准备开始' },
             { num: 2, label: '正在录音' },
@@ -518,7 +518,7 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
                   // Allow clicking backwards for high usability demonstration
                   if (s.num < step) setStep(s.num as any);
                 }}
-                className={`p-3 rounded-2xl border text-center transition-all ${
+                className={`p-2.5 sm:p-3 rounded-2xl border text-center transition-all ${
                   isActive
                     ? 'border-2 border-[#003178] bg-[#dbf1fe]/45 text-[#003178] font-bold shadow-2xs scale-[1.01]'
                     : isCompleted
@@ -541,15 +541,15 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
         
         {/* ==================== STEP 1: PREP & TEST VIEW ==================== */}
         {step === 1 && (
-          <div className="grid grid-cols-1 lg:grid-cols-10 gap-7 items-stretch flex-1">
+          <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 sm:gap-7 items-stretch flex-1">
             
             {/* Left Column (60% equivalent span): Prompt details */}
-            <div className="lg:col-span-6 bg-white border border-[#c3c6d4]/60 rounded-3xl p-6.5 shadow-2xs flex flex-col justify-between space-y-5">
+            <div className="lg:col-span-6 bg-white border border-[#c3c6d4]/60 rounded-3xl p-4 sm:p-6.5 shadow-2xs flex flex-col justify-between space-y-5">
               
               {/* Task title segment */}
               <div className="space-y-4">
-                <div className="flex justify-between items-center pb-3 border-b border-slate-100">
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-3 pb-3 border-b border-slate-100 sm:flex-row sm:justify-between sm:items-center">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="text-[10px] uppercase font-black tracking-widest text-[#003178] bg-[#dbf1fe] px-2.5 py-1 rounded-md border border-[#cfe6f2]">
                       CET-SET4
                     </span>
@@ -659,7 +659,7 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
             <div className="lg:col-span-4 flex flex-col gap-6">
               
               {/* Mic device test card */}
-              <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-5.5 shadow-b-md flex flex-col justify-between space-y-4">
+              <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-4 sm:p-5.5 shadow-b-md flex flex-col justify-between space-y-4">
                 <div className="flex justify-between items-center pb-2.5 border-b border-slate-100">
                   <span className="text-sm font-black text-slate-800 flex items-center gap-2">
                     <Mic className="h-4.5 w-4.5 text-[#003178]" />
@@ -705,7 +705,7 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
               </div>
 
               {/* Ready layout container */}
-              <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-6 shadow-b-md text-center space-y-4">
+              <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-4 sm:p-6 shadow-b-md text-center space-y-4">
                 <div className="space-y-1">
                   <h4 className="font-extrabold text-slate-800 text-lg">准备好了吗？</h4>
                   <p className="text-xs text-slate-400 font-bold">点击下方按钮，将有 3 秒倒计时</p>
@@ -740,10 +740,10 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
 
         {/* ==================== STEP 2: ACTIVE RECORDING VIEW ==================== */}
         {step === 2 && (
-          <div className="grid grid-cols-1 lg:grid-cols-10 gap-7 items-stretch flex-1">
+          <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 sm:gap-7 items-stretch flex-1">
             
             {/* Left Column (60% Equivalent): Task material checklist */}
-            <div className="lg:col-span-6 bg-white border border-[#c3c6d4]/60 rounded-3xl p-6 shadow-2xs space-y-6 flex flex-col justify-between">
+            <div className="lg:col-span-6 bg-white border border-[#c3c6d4]/60 rounded-3xl p-4 sm:p-6 shadow-2xs space-y-6 flex flex-col justify-between">
               
               {/* Task source detail header */}
               <div className="space-y-4">
@@ -806,7 +806,7 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
             </div>
 
             {/* Right Column (40% Equivalent): Wave display, timer & control buttons */}
-            <div className="lg:col-span-4 bg-white border border-[#c3c6d4]/60 rounded-3xl p-6 shadow-2xs flex flex-col justify-between text-center items-stretch space-y-6">
+            <div className="lg:col-span-4 bg-white border border-[#c3c6d4]/60 rounded-3xl p-4 sm:p-6 shadow-2xs flex flex-col justify-between text-center items-stretch space-y-6">
               
               {/* Pulsating red badge */}
               <div className="flex items-center justify-center">
@@ -873,7 +873,7 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
                 当前为离线示例反馈：AI 服务未能完成分析。本轮仍可用于练习流程，但建议稍后重新分析后再纳入正式能力评估。
               </div>
             )}
-            <div className="grid grid-cols-1 lg:grid-cols-10 gap-7 items-stretch flex-1">
+            <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 sm:gap-7 items-stretch flex-1">
             
             {/* Left segment (60%): Original Transcript comparison highlighting with legends */}
             <div className="lg:col-span-6 space-y-6">
@@ -890,7 +890,7 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
               </div>
 
               {/* Block 2: Your Recording Transcript */}
-              <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-6 shadow-2xs space-y-4">
+              <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-4 sm:p-6 shadow-2xs space-y-4">
                 <div className="flex justify-between items-center pb-2.5 border-b border-slate-100">
                   <span className="text-xs font-black text-slate-800 flex items-center gap-2">
                     <Activity className="h-4 w-4 text-[#003178]" />
@@ -932,7 +932,7 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
             <div className="lg:col-span-4 flex flex-col gap-6">
               
               {/* AI analysis scores sliders */}
-              <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-5.5 shadow-2xs space-y-4">
+              <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-4 sm:p-5.5 shadow-2xs space-y-4">
                 <div className="flex justify-between items-center pb-2 border-b border-slate-150/70">
                   <span className="text-sm font-black text-slate-800 flex items-center gap-1.5">
                     <BarChart3 className="h-4.5 w-4.5 text-[#003178]" />
@@ -972,7 +972,7 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
               </div>
 
               {/* Better Expression panel */}
-              <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-5.5 shadow-2xs space-y-3">
+              <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-4 sm:p-5.5 shadow-2xs space-y-3">
                 <div className="flex items-center gap-1.5 pb-2 border-b border-slate-100">
                   <Sparkles className="h-4.5 w-4.5 text-emerald-600" />
                   <span className="text-xs font-black text-slate-850">更自然版本 (Better Expression)</span>
@@ -1027,14 +1027,14 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
           <div className="space-y-6 flex-1 pr-1 pb-4">
             
             {/* Top Right Action - Added to revision database */}
-            <div className="flex justify-between items-center bg-slate-100/50 p-4 border border-slate-200 rounded-3xl">
+            <div className="flex flex-col gap-3 bg-slate-100/50 p-4 border border-slate-200 rounded-3xl sm:flex-row sm:justify-between sm:items-center">
               <span className="text-xs font-bold text-slate-500">
                 {reportPersisted ? '本轮口语证据已写入本地能力画像，复习队列会在今日任务中自动调度。' : '点击右侧按钮将此高频典型对比语料直接入库'}
               </span>
               <button
                 onClick={handleAddToReviewQueue}
                 disabled={addedToQueue || isPersistingReport}
-                className={`px-5 py-2.5 rounded-2xl text-xs font-black shadow-2xs hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer pointer-events-auto flex items-center gap-1.5 ${
+                className={`w-full justify-center sm:w-auto px-5 py-3 sm:py-2.5 rounded-2xl text-xs font-black shadow-2xs hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer pointer-events-auto flex items-center gap-1.5 ${
                   addedToQueue
                     ? 'bg-slate-300 text-slate-500 cursor-not-allowed border border-slate-300'
                     : 'bg-[#003178] hover:bg-[#072551] text-white border border-[#cfe6f2]'
@@ -1105,9 +1105,9 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
               
               {/* Left Side: Baseline response */}
-              <div className="bg-[#fff9f9] border border-red-200/50 rounded-3xl p-5.5 flex flex-col justify-between">
+              <div className="bg-[#fff9f9] border border-red-200/50 rounded-3xl p-4 sm:p-5.5 flex flex-col justify-between">
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center pb-2 border-b border-red-100">
+                  <div className="flex flex-col gap-2 pb-2 border-b border-red-100 sm:flex-row sm:justify-between sm:items-center">
                     <div className="flex items-center gap-1.5">
                       <span className="w-5.5 h-5.5 bg-red-100 text-red-700 text-[10px] rounded-full flex items-center justify-center font-black">
                         1
@@ -1126,21 +1126,21 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
               </div>
 
               {/* Right Side: Improved Response */}
-              <div className="bg-[#f2fcf4] border border-emerald-200/50 rounded-3xl p-5.5 flex flex-col justify-between relative overflow-hidden">
+              <div className="bg-[#f2fcf4] border border-emerald-200/50 rounded-3xl p-4 sm:p-5.5 flex flex-col justify-between relative overflow-hidden">
                 {/* Absolute status badge */}
                 <div className="absolute top-0 right-0 py-0.5 px-3 bg-emerald-500 text-white text-[9px] font-black rounded-bl-xl shadow-inner uppercase tracking-wider">
                   显著进步
                 </div>
 
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center pb-2 border-b border-emerald-100">
+                  <div className="flex flex-col gap-2 pb-2 border-b border-emerald-100 sm:flex-row sm:justify-between sm:items-center">
                     <div className="flex items-center gap-1.5">
                       <span className="w-5.5 h-5.5 bg-emerald-500 text-white text-[10px] rounded-full flex items-center justify-center font-black">
                         2
                       </span>
                       <span className="text-xs font-black text-emerald-800">重说作答 (Improved)</span>
                     </div>
-                    <span className="text-[10px] text-emerald-700/80 font-semibold font-mono mr-12">
+                    <span className="text-[10px] text-emerald-700/80 font-semibold font-mono sm:mr-12">
                       用时: 38s | 语速: 135 wpm
                     </span>
                   </div>
@@ -1154,7 +1154,7 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
             </div>
 
             {/* Natural expression adapter table row */}
-            <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-5.5 shadow-b-md space-y-4">
+            <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-4 sm:p-5.5 shadow-b-md space-y-4">
               <span className="text-sm font-black text-[#003178] flex items-center gap-2">
                 <span className="w-1.5 h-3.5 bg-[#003178] rounded-xs block" />
                 自然表达采纳情况

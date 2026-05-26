@@ -13,8 +13,8 @@ test('SaaS account trial can sync and restore local learning data', async ({ pag
   await page.getByTestId('saas-password-input').fill('secure-password-1');
   await page.getByTestId('saas-auth-submit').click();
 
-  await expect(page.getByText(email, { exact: true })).toBeVisible();
-  await expect(page.getByText('云端账号已创建，请在下方完成邮箱验证后使用团队功能。')).toBeVisible();
+  await expect(page.getByText(email, { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('云端账号已创建，可同步学习数据；团队邀请会生成可复制的邀请链接。')).toBeVisible();
   await expect(page.getByText('云同步 已开通')).toBeVisible();
 
   await page.getByRole('button', { name: '同步到云端' }).click();
@@ -25,16 +25,13 @@ test('SaaS account trial can sync and restore local learning data', async ({ pag
   await page.getByRole('button', { name: '我知道了' }).click();
 
   await expect(page.getByText('团队运营与合规控制台')).toBeVisible();
-  await page.getByRole('button', { name: '发送邮箱验证' }).click();
-  await expect(page.getByTestId('saas-verification-token')).not.toHaveValue('');
-  await page.getByRole('button', { name: '确认验证' }).click();
-  await expect(page.getByText('邮箱已验证，账号状态已刷新。')).toBeVisible();
 
   await page.getByTestId('saas-invite-email').fill(`member-${Date.now()}@example.com`);
   await page.getByRole('button', { name: '邀请' }).click();
-  const invitationTokenNotice = page.getByText(/本地调试邀请 token/);
-  await expect(invitationTokenNotice).toBeVisible();
-  const invitationToken = (await invitationTokenNotice.textContent())!.split('：')[1];
+  const invitationLinkNotice = page.getByText(/^邀请链接：/);
+  await expect(invitationLinkNotice).toBeVisible();
+  const invitationLink = (await invitationLinkNotice.textContent())!.split('：')[1].trim();
+  const invitationToken = new URL(invitationLink).searchParams.get('token') ?? invitationLink;
 
   await page.getByTestId('saas-content-title').fill('E2E 原创内容资产');
   await page.getByRole('button', { name: '登记内容资产' }).click();

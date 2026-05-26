@@ -9,7 +9,6 @@ import {
   OrganizationInvitationRecord,
   SaasAccountRecord,
   SaasApiError,
-  SaasOneTimeTokenRecord,
   SaasOrganizationRecord,
   SaasSessionRecord,
   SaasStore,
@@ -603,66 +602,6 @@ export function createPostgresSaasStore(databaseUrl: string): SaasStore {
         };
       });
     },
-    createOneTimeToken(input) {
-      return withClient(async (client) => {
-        const token = crypto.randomBytes(32).toString('base64url');
-        const now = new Date().toISOString();
-        const result = await client.query(
-          `INSERT INTO one_time_tokens (id, user_id, token_hash, purpose, expires_at, created_at)
-           VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-          [crypto.randomUUID(), input.userId, hashOneTimeToken(token), input.purpose, input.expiresAt, now],
-        );
-        const row = result.rows[0] as Record<string, unknown>;
-        return {
-          token,
-          record: {
-            id: String(row.id),
-            userId: String(row.user_id),
-            tokenHash: String(row.token_hash),
-            purpose: row.purpose as SaasOneTimeTokenRecord['purpose'],
-            expiresAt: toIso(row.expires_at as Date | string)!,
-            consumedAt: toIso(row.consumed_at as Date | string | null),
-            createdAt: toIso(row.created_at as Date | string)!,
-          },
-        };
-      });
-    },
-    consumeOneTimeToken(input) {
-      return withTransaction(async (client) => {
-        const result = await client.query(
-          `UPDATE one_time_tokens
-           SET consumed_at = $4
-           WHERE token_hash = $1 AND purpose = $2 AND consumed_at IS NULL AND expires_at > $3
-           RETURNING *`,
-          [hashOneTimeToken(input.token), input.purpose, input.now, input.now],
-        );
-        const row = result.rows[0] as Record<string, unknown> | undefined;
-        return row ? {
-          id: String(row.id),
-          userId: String(row.user_id),
-          tokenHash: String(row.token_hash),
-          purpose: row.purpose as SaasOneTimeTokenRecord['purpose'],
-          expiresAt: toIso(row.expires_at as Date | string)!,
-          consumedAt: toIso(row.consumed_at as Date | string | null),
-          createdAt: toIso(row.created_at as Date | string)!,
-        } : undefined;
-      });
-    },
-    markUserEmailVerified(userId, at) {
-      return withClient(async (client) => {
-        await client.query(
-          'UPDATE users SET email_verified_at = COALESCE(email_verified_at, $2), updated_at = $2 WHERE id = $1',
-          [userId, at],
-        );
-        return getAccountForUserId(client, userId);
-      });
-    },
-    updateUserPassword(userId, passwordHash, at) {
-      return withClient(async (client) => {
-        await client.query('UPDATE users SET password_hash = $2, updated_at = $3 WHERE id = $1', [userId, passwordHash, at]);
-        return getAccountForUserId(client, userId);
-      });
-    },
     applyBillingEvent(input: BillingEventInput) {
       return withTransaction(async (client) => {
         const existingEvent = await client.query(
@@ -754,8 +693,8 @@ export function createPostgresSaasStore(databaseUrl: string): SaasStore {
 
         try {
           const userResult = await client.query(
-            `INSERT INTO users (id, email, name, password_hash, organization_id, role, email_verified_at, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $7)
+            `INSERT INTO users (id, email, name, password_hash, organization_id, role, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
              RETURNING *`,
             [
               crypto.randomUUID(),

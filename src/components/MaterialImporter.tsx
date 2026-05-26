@@ -158,11 +158,11 @@ export default function MaterialImporter({ onLoadCustomPassage }: MaterialImport
   };
 
   return (
-    <div className="flex-1 h-screen overflow-y-auto bg-[radial-gradient(circle_at_top_left,#e2f4ff,transparent_34%),linear-gradient(180deg,#f7fbff_0%,#ffffff_55%)] p-8">
+    <div className="flex-1 min-h-[calc(100svh-9rem)] lg:h-screen overflow-y-auto overflow-x-hidden bg-[radial-gradient(circle_at_top_left,#e2f4ff,transparent_34%),linear-gradient(180deg,#f7fbff_0%,#ffffff_55%)] p-4 sm:p-6 lg:p-8">
       <header className="mb-6 flex flex-col gap-4 border-b border-[#cfe6f2] pb-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.25em] text-[#0d47a1]">Material Studio</p>
-          <h2 className="mt-2 flex items-center gap-2 text-2xl font-black tracking-tight text-[#003178]">
+          <h2 className="mt-2 flex items-center gap-2 text-xl font-black tracking-tight text-[#003178] sm:text-2xl">
             <DownloadCloud className="h-7 w-7" />
             材料导入与 AI 模拟卷生成
           </h2>
@@ -189,7 +189,7 @@ export default function MaterialImporter({ onLoadCustomPassage }: MaterialImport
       )}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[0.92fr_1.08fr]">
-        <section className="rounded-3xl border border-[#c3c6d4] bg-white p-6 shadow-xs">
+        <section className="rounded-3xl border border-[#c3c6d4] bg-white p-4 shadow-xs sm:p-6">
           <div className="flex items-center gap-2 text-sm font-black text-[#071e27]">
             <Sparkles className="h-5 w-5 text-[#003178]" />
             AI 模拟阅读生成
@@ -241,7 +241,7 @@ export default function MaterialImporter({ onLoadCustomPassage }: MaterialImport
           </div>
         </section>
 
-        <section className="rounded-3xl border border-[#c3c6d4] bg-white p-6 shadow-xs">
+        <section className="rounded-3xl border border-[#c3c6d4] bg-white p-4 shadow-xs sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="flex items-center gap-2 text-sm font-black text-[#071e27]">
@@ -263,7 +263,7 @@ export default function MaterialImporter({ onLoadCustomPassage }: MaterialImport
             value={jsonText}
             onChange={(event) => setJsonText(event.target.value)}
             spellCheck={false}
-            className="mt-5 min-h-[380px] w-full rounded-2xl border border-slate-200 bg-slate-950 p-4 font-mono text-xs leading-5 text-slate-100 outline-hidden transition focus:border-[#003178] focus:ring-2 focus:ring-[#cfe6f2]"
+            className="mt-5 min-h-[280px] sm:min-h-[380px] w-full rounded-2xl border border-slate-200 bg-slate-950 p-4 font-mono text-xs leading-5 text-slate-100 outline-hidden transition focus:border-[#003178] focus:ring-2 focus:ring-[#cfe6f2]"
           />
 
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

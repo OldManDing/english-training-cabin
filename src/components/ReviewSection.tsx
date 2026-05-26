@@ -152,9 +152,9 @@ export default function ReviewSection({
 
   if (view === 'practice' && activeReview && activeTask) {
     return (
-      <div className="flex-1 min-h-screen overflow-y-auto bg-[#f4f8fb] p-5 sm:p-8">
+      <div className="flex-1 min-h-[calc(100svh-9rem)] lg:min-h-screen overflow-y-auto overflow-x-hidden bg-[#f4f8fb] p-4 sm:p-8">
         {toastMessage && (
-          <div className="fixed top-6 left-1/2 z-50 -translate-x-1/2 rounded-2xl border border-[#cfe6f2] bg-[#003178] px-5 py-3 text-xs font-bold text-white shadow-xl">
+          <div className="fixed top-4 left-4 right-4 z-50 rounded-2xl border border-[#cfe6f2] bg-[#003178] px-4 py-3 text-xs font-bold text-white shadow-xl sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:px-5">
             {toastMessage}
           </div>
         )}
@@ -203,7 +203,7 @@ export default function ReviewSection({
             ))}
           </div>
 
-          <main className="rounded-[2rem] border border-[#cfe6f2] bg-white p-6 shadow-sm">
+          <main className="rounded-[2rem] border border-[#cfe6f2] bg-white p-4 shadow-sm sm:p-6">
             {step === 0 && (
               <section className="space-y-5">
                 <div className="flex items-start gap-3 rounded-2xl bg-[#f0f9ff] p-4">
@@ -227,7 +227,7 @@ export default function ReviewSection({
                 <button
                   disabled={recallAnswer.trim().length < 4}
                   onClick={() => setStep(1)}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-[#003178] px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#0d47a1] disabled:cursor-not-allowed disabled:bg-slate-300"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#003178] px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#0d47a1] disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
                 >
                   完成主动回忆，进入挖空
                   <ArrowRight className="h-4 w-4" />
@@ -257,7 +257,7 @@ export default function ReviewSection({
                 <button
                   disabled={clozeAnswer.trim().length < 2}
                   onClick={() => setStep(2)}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-amber-700 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-amber-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-amber-700 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-amber-800 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
                 >
                   完成挖空，进入输出
                   <ArrowRight className="h-4 w-4" />
@@ -294,7 +294,7 @@ export default function ReviewSection({
                 <button
                   disabled={productionAnswer.trim().length < 6 || isSaving}
                   onClick={completeReview}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
                 >
                   <CheckCircle2 className="h-4 w-4" />
                   完成复习并安排下次间隔
@@ -308,9 +308,9 @@ export default function ReviewSection({
   }
 
   return (
-    <div className="flex-1 min-h-screen overflow-y-auto bg-gradient-to-b from-[#f3faff] to-white p-5 sm:p-8">
+    <div className="flex-1 min-h-[calc(100svh-9rem)] lg:min-h-screen overflow-y-auto overflow-x-hidden bg-gradient-to-b from-[#f3faff] to-white p-4 sm:p-8">
       {toastMessage && (
-        <div className="fixed top-6 left-1/2 z-50 -translate-x-1/2 rounded-2xl border border-[#cfe6f2] bg-[#003178] px-5 py-3 text-xs font-bold text-white shadow-xl">
+        <div className="fixed top-4 left-4 right-4 z-50 rounded-2xl border border-[#cfe6f2] bg-[#003178] px-4 py-3 text-xs font-bold text-white shadow-xl sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:px-5">
           {toastMessage}
         </div>
       )}
@@ -318,7 +318,7 @@ export default function ReviewSection({
       <div className="mx-auto flex max-w-6xl flex-col gap-6">
         <header className="flex flex-col gap-4 border-b border-[#cfe6f2] pb-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-3xl font-black tracking-tight text-[#003178]">复习队列</h2>
+            <h2 className="text-2xl font-black tracking-tight text-[#003178] sm:text-3xl">复习队列</h2>
             <p className="mt-2 text-sm font-semibold text-slate-500">
               按“主动回忆、挖空补全、语境化输出、间隔重复”处理词汇和句式，不再只是看解析。
             </p>

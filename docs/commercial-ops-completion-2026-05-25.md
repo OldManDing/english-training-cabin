@@ -6,8 +6,8 @@
 
 | 序号 | 任务 | 完成状态 | 验收口径 |
 | --- | --- | --- | --- |
-| 1 | 真实邮件交付边界 | 已完成 | 生产环境通过 `EMAIL_DELIVERY_WEBHOOK_URL` 发送邮箱验证、密码重置、团队邀请；未配置时拒绝发送，避免虚假成功 |
-| 2 | 账号动作页 | 已完成 | `/auth/verify-email`、`/auth/reset-password`、`/workspace/accept-invitation` 可由前端接收 token 并完成动作 |
+| 1 | 团队邀请边界 | 已调整 | 当前版本不启用邮件交付；团队邀请生成可复制链接，由 owner 手动发给成员 |
+| 2 | 账号动作页 | 已调整 | `/workspace/accept-invitation` 可由前端接收 token 并完成动作；邮箱验证和邮件重置不纳入当前产品 |
 | 3 | 会话设备治理 | 已完成 | 用户可查看当前账号会话、设备信息、最近使用时间，并撤销非当前设备 |
 | 4 | 团队管理 UI | 已完成 | owner 可在设置页查看成员/邀请并创建成员邀请；member 不能访问 owner 管理能力 |
 | 5 | 内容授权治理 | 已完成 | owner 可登记内容资产、标记来源类型、更新授权状态、阻断风险内容 |
@@ -20,7 +20,6 @@
 
 ## 上线前必须确认
 
-- 部署环境配置真实 `SAAS_SESSION_SECRET`、`DATABASE_URL` 和 `EMAIL_DELIVERY_WEBHOOK_URL`。
-- 关闭 `ALLOW_DEVELOPMENT_EMAIL_TOKENS`。
+- 部署环境配置真实 `SAAS_SESSION_SECRET`、`DATABASE_URL` 和 AI 供应商密钥。
 - 运行 `npm.cmd run verify`。
-- 用真实邮箱完成一次验证、重置和邀请送达 smoke。
+- 完成注册、登录、云同步、团队邀请链接、AI 生成和合规/运营操作 smoke。

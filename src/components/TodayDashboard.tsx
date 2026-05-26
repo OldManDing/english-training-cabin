@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Flag, Clock, Play, BookOpen, Sparkles, ChevronRight, 
-  Headphones, Mic, BarChart2, TrendingDown,
+  Headphones, Mic, BarChart2, TrendingUp,
   BookMarked, Edit2, Sliders
 } from 'lucide-react';
 import { DailyPlan, SkillProfile } from '../types';
@@ -89,6 +89,13 @@ export default function TodayDashboard({
     ? Math.max(8, Math.min(100, Math.round((estimatedScore / Math.max(425, targetScore)) * 100)))
     : 8;
   const hasAbilityEvidence = skillProfiles.length > 0 || abilityEvidenceCount > 0;
+  const quickActionLabel = displayedTask?.type === 'diagnostic'
+    ? '下一步推荐'
+    : displayedTask?.type === 'review'
+    ? '到期复习'
+    : hasAbilityEvidence || readingProgress.completed
+    ? '继续训练'
+    : '下一步推荐';
   const latestSkillScore = (skillArea: SkillProfile['skillArea']) => {
     const profile = skillProfiles
       .filter((item) => item.skillArea === skillArea)
@@ -170,11 +177,11 @@ export default function TodayDashboard({
   };
 
   return (
-    <div className="flex-1 p-8 overflow-y-auto bg-gradient-to-b from-[#f3faff] to-white h-screen flex flex-col justify-between select-none relative">
+    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-[#f3faff] to-white min-h-[calc(100svh-9rem)] lg:h-screen flex flex-col justify-between select-none relative">
       
       {/* Toast notifications */}
       {showTimeEditToast && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 bg-[#003178] text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 z-50 text-xs font-bold border border-[#cfe6f2] animate-bounce">
+        <div className="fixed top-4 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 bg-[#003178] text-white px-4 sm:px-5 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 z-50 text-xs font-bold border border-[#cfe6f2] animate-bounce">
           <Sparkles className="h-4 w-4 text-emerald-300 fill-emerald-300" />
           <span>⏰ 提示：您日常练习时间额度可通过左下角「设置」中随时调整！</span>
         </div>
@@ -184,13 +191,13 @@ export default function TodayDashboard({
       <div className="space-y-6 flex-1 overflow-y-auto pr-1 pb-8">
         
         {/* Top Header Row matching the exact screenshot header style */}
-        <header className="flex justify-between items-center pb-4 border-b border-[#cfe6f2]">
+        <header className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center pb-4 border-b border-[#cfe6f2]">
           <div>
-            <h2 className="text-2xl font-black text-[#003178] tracking-tight">
+            <h2 className="text-xl sm:text-2xl font-black text-[#003178] tracking-tight">
               今日训练
             </h2>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {/* AI Custom Adaptive Diagnostic Trigger */}
             <button
               onClick={onStartOnboarding}
@@ -212,7 +219,7 @@ export default function TodayDashboard({
         </header>
 
         {/* Row 1: Triple cards top grid layout */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-5">
           
           {/* Card 1: 目标考试 */}
           <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-5 shadow-xs flex flex-col justify-between relative group hover:shadow-sm transition-all">
@@ -276,7 +283,7 @@ export default function TodayDashboard({
             <div className="flex justify-between items-center">
               <span className="text-xs font-black text-[#0d47a1] flex items-center gap-1.5">
                 <Play className="h-3 w-3 fill-current text-[#003178]" />
-                继续上次训练
+                {quickActionLabel}
               </span>
             </div>
             <div className="pt-3">
@@ -307,7 +314,7 @@ export default function TodayDashboard({
           <div className="lg:col-span-2 space-y-6">
             
             {/* Primary AI recommended task box */}
-            <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-6.5 shadow-xs relative overflow-hidden group hover:border-[#003178] transition-colors">
+            <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-4 sm:p-6.5 shadow-xs relative overflow-hidden group hover:border-[#003178] transition-colors">
               {/* Top background aesthetic circle */}
               <div className="absolute -top-6 -right-6 w-24 h-24 bg-[#f0f9ff] rounded-full group-hover:scale-105 transition-transform" />
               
@@ -330,7 +337,7 @@ export default function TodayDashboard({
 
               {/* Title of the prioritized task */}
               <div className="mt-3.5 relative z-10">
-                <h3 className="text-2xl font-black text-[#0d47a1] tracking-tight">
+                <h3 className="text-xl sm:text-2xl font-black text-[#0d47a1] tracking-tight">
                   {displayedTask?.title ?? '入门诊断：建立初始能力画像'}
                 </h3>
               </div>
@@ -347,13 +354,13 @@ export default function TodayDashboard({
               </div>
 
               {/* Bottom footer button bar */}
-              <div className="mt-5.5 pt-4.5 border-t border-gray-100 flex items-center justify-between relative z-10">
+              <div className="mt-5.5 pt-4.5 border-t border-gray-100 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between relative z-10">
                 <span className="text-xs font-bold text-gray-400">
                   {primaryTaskSummary}
                 </span>
                 <button
                   onClick={startPrimaryTask}
-                  className="px-6 py-3 bg-[#1b6d24] hover:bg-emerald-700 text-white text-xs font-black rounded-2xl flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all pointer-events-auto cursor-pointer shadow-xs"
+                  className="w-full sm:w-auto justify-center px-6 py-3 bg-[#1b6d24] hover:bg-emerald-700 text-white text-xs font-black rounded-2xl flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all pointer-events-auto cursor-pointer shadow-xs"
                 >
                   <Sparkles className="h-4 w-4 text-emerald-300 animate-pulse" />
                   <span>{primaryActionLabel}</span>
@@ -377,7 +384,7 @@ export default function TodayDashboard({
                     <div
                       key={task.id}
                       onClick={() => startTask(task)}
-                      className={`bg-white border border-[#c3c6d4]/60 border-l-[4px] ${visual.border} rounded-2xl p-4.5 flex items-center justify-between group hover:shadow-2xs hover:border-[#003178]/50 transition-all cursor-pointer pointer-events-auto`}
+                      className={`bg-white border border-[#c3c6d4]/60 border-l-[4px] ${visual.border} rounded-2xl p-4.5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between group hover:shadow-2xs hover:border-[#003178]/50 transition-all cursor-pointer pointer-events-auto`}
                     >
                       <div className="flex items-center gap-4 min-w-0">
                         <div className={`w-10 h-10 rounded-xl ${visual.bg} border border-slate-100 flex items-center justify-center shrink-0`}>
@@ -482,7 +489,7 @@ export default function TodayDashboard({
 
               {/* Wavelet Trend indicator icon floating */}
               <div className="w-11 h-11 rounded-2xl bg-emerald-50 border border-emerald-150 flex items-center justify-center shrink-0">
-                <TrendingDown className="h-5 w-5 text-emerald-600 stroke-[2.5]" />
+                <TrendingUp className="h-5 w-5 text-emerald-600 stroke-[2.5]" />
               </div>
             </div>
 

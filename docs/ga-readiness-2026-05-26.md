@@ -8,16 +8,26 @@
 
 - 本地质量门禁：`npm run verify` 通过。
 - 线上基础门禁：`SMOKE_BASE_URL=https://study.xmlga.top npm run smoke:production` 通过。
-- 线上 GA 门禁：`SMOKE_BASE_URL=https://study.xmlga.top SMOKE_EMAIL_DOMAIN=<可收件测试域名> npm run smoke:ga` 通过。
-- 生产健康检查返回 `aiConfigured=true`、`saas.store=postgres`、`emailDelivery.configured=true`。
-- 公开注册、登录、云端同步、AI 生成、邮箱验证、密码重置、团队邀请均可在真实部署环境完成。
+- 线上 GA 门禁：`SMOKE_BASE_URL=https://study.xmlga.top npm run smoke:ga` 通过。
+- 生产健康检查返回 `aiConfigured=true`、`saas.store=postgres`。
+- 公开注册、登录、云端同步、AI 生成、团队邀请链接均可在真实部署环境完成。
 
 ## 本轮已修复
 
 - 账号注册不再因为同名团队阻塞：团队展示名允许重复，服务端会生成带随机后缀的唯一 `slug`。
 - Postgres 唯一约束错误不再全部误报为 `email_exists`：只有真实邮箱唯一冲突才返回 `email_exists`。
 - 生产 smoke 改为使用 `crypto.randomUUID()` 生成邮箱、密码和团队名，避免重复执行时污染结论。
-- 新增 `smoke:ga`，强制检查真实 AI 并调用真实邮件交付适配器，避免把“可试用”误判成“可公开推广”。
+- `smoke:ga` 强制检查真实 AI；邮件交付不再作为产品能力和 GA 门禁。
+- 移动端顶部导航不再被全局 `min-width: 0` reset 压缩：导航项固定为可读触控宽度，并保持导航内部横向滚动。
+- 今日训练首屏的“继续上次训练”根据状态改为“下一步推荐 / 到期复习 / 继续训练”，避免首次使用时把入门诊断误表达为历史训练。
+- 商业化文档口径统一：邮箱只作为登录账号标识，当前版本不做邮件交付、邮箱验证、邮件找回密码。
+
+## 本轮本地验收
+
+- `npm.cmd run verify`：通过；覆盖 TypeScript、38 个 domain/API 测试、生产构建、16 个 Playwright 桌面/移动端 E2E。
+- `npm.cmd run smoke:ga`：通过；本地生产服务完成健康检查、账号注册、云同步和真实 AI 生成。
+- `npm.cmd run smoke:production`：通过；本地生产服务完成健康检查、考试配置、今日计划、账号注册和云端快照。
+- 浏览器 UI 巡检：桌面、320px 手机宽度和移动导航交互无页面级横向溢出；浏览器 console warning/error 为 0。
 
 ## 当前商业化状态
 
@@ -27,12 +37,12 @@
 | SaaS 账号 | 已具备试运行能力 | 注册、登录、会话治理、云同步、团队邀请、合规请求已有 API/E2E 覆盖 |
 | 数据库 | 已具备生产能力 | 线上健康检查需保持 `saas.store=postgres` |
 | AI | 已具备生产能力 | GA smoke 要求 `SMOKE_LIVE_AI=true` |
-| 邮件交付 | GA 阻塞项 | 必须配置 `EMAIL_DELIVERY_WEBHOOK_URL` 并通过 `smoke:ga` |
+| 邮件交付 | 不纳入当前产品 | 不启用邮箱验证、邮件找回密码或邀请邮件；团队邀请使用可复制链接 |
 | 法务文本 | 公开推广前需复核 | 产品内已有隐私/条款入口，但建议上线前替换为正式法务文本 |
 | 内容授权 | 公开推广前需运营复核 | 系统已有内容资产治理，公开素材需要保持原创/授权留痕 |
 
 ## 发布结论规则
 
 - `smoke:production` 通过但 `smoke:ga` 未通过：只能算线上试运行，不能公开推广。
-- `smoke:ga` 通过，且注册/邮箱/AI/云同步均有真实线上证据：可进入 GA。
+- `smoke:ga` 通过，且注册/AI/云同步/团队邀请链接均有真实线上证据：可进入 GA。
 - 任一生产 smoke 失败：不得对外发布新版本，应先回滚或修复。

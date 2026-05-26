@@ -97,17 +97,17 @@ export default function SubjectiveTraining({ mode, onBack, onComplete }: Subject
   const Icon = mode === 'translation' ? Languages : FileText;
 
   return (
-    <div className="flex-1 h-screen overflow-hidden bg-gradient-to-b from-[#f3faff] to-white flex flex-col">
-      <header className="h-16 px-6 border-b border-[#cfe6f2] bg-white flex items-center justify-between">
-        <div className="flex items-center gap-4">
+    <div className="flex-1 min-h-[100svh] lg:h-screen overflow-hidden bg-gradient-to-b from-[#f3faff] to-white flex flex-col">
+      <header className="min-h-16 px-4 sm:px-6 py-3 border-b border-[#cfe6f2] bg-white flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3 sm:gap-4">
           <button
             onClick={onBack}
             className="p-2 rounded-xl text-[#003178] hover:bg-[#dbf1fe] cursor-pointer"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <div>
-            <h2 className="text-lg font-black text-[#003178] flex items-center gap-2">
+          <div className="min-w-0">
+            <h2 className="text-base sm:text-lg font-black text-[#003178] flex items-center gap-2">
               <Icon className="h-5 w-5" />
               {task.title}
             </h2>
@@ -119,8 +119,8 @@ export default function SubjectiveTraining({ mode, onBack, onComplete }: Subject
         </span>
       </header>
 
-      <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-6 p-8 overflow-y-auto">
-        <section className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-6 shadow-xs flex flex-col gap-5">
+      <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+        <section className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-4 sm:p-6 shadow-xs flex flex-col gap-5">
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-[#dbf1fe] px-3 py-1 text-[10px] font-black text-[#003178]">
               <Sparkles className="h-3.5 w-3.5" />
@@ -159,14 +159,14 @@ export default function SubjectiveTraining({ mode, onBack, onComplete }: Subject
           </button>
         </section>
 
-        <section className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-6 shadow-xs flex flex-col gap-5">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+        <section className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-4 sm:p-6 shadow-xs flex flex-col gap-5">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <h3 className="text-sm font-black text-[#003178]">结构化反馈</h3>
             <span className="text-3xl font-black text-emerald-700">{analysis?.score ?? '--'}</span>
           </div>
 
           {!analysis ? (
-            <div className="flex-1 rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-6 text-sm font-bold leading-relaxed text-slate-400">
+            <div className="flex-1 rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-4 sm:p-6 text-sm font-bold leading-relaxed text-slate-400">
               提交作答后，这里会显示错因标签、具体修改建议和参考版本。完成训练会自动写入本地复习队列与能力地图。
             </div>
           ) : (

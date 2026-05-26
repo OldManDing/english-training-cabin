@@ -15,6 +15,8 @@ describe('server API', () => {
     });
     expect(response.body).toHaveProperty('aiProvider');
     expect(response.body).not.toHaveProperty('aiApiKey');
+    expect(response.body).not.toHaveProperty('emailDelivery');
+    expect(response.body.collaboration).toEqual({ invitationDelivery: 'manual-link' });
     expect(response.headers['x-content-type-options']).toBe('nosniff');
     expect(response.headers['referrer-policy']).toBe('same-origin');
     expect(response.headers['permissions-policy']).toContain('microphone=(self)');
@@ -256,7 +258,7 @@ describe('server API', () => {
     expect(secondCloud.body.snapshot).toBeNull();
   });
 
-  it('supports email verification and one-time password reset without leaking raw passwords', async () => {
+  it('does not expose email verification or password reset workflows', async () => {
     const saasApp = createApp({
       saasStore: createInMemorySaasStore(),
       saasSessionSecret: 'auth-hardening-secret',
@@ -272,48 +274,20 @@ describe('server API', () => {
       })
       .expect(201);
 
-    expect(registerResponse.body.account.user.emailVerified).toBe(false);
-
-    const verificationRequest = await request(saasApp)
-      .post('/api/auth/email-verification/request')
-      .set('Authorization', `Bearer ${registerResponse.body.token}`)
-      .expect(200);
-
-    expect(verificationRequest.body.token).toEqual(expect.any(String));
-
-    const verifiedResponse = await request(saasApp)
-      .post('/api/auth/email-verification/confirm')
-      .send({ token: verificationRequest.body.token })
-      .expect(200);
-
-    expect(verifiedResponse.body.account.user.emailVerified).toBe(true);
-
-    await request(saasApp)
-      .post('/api/auth/email-verification/confirm')
-      .send({ token: verificationRequest.body.token })
-      .expect(400);
-
-    const resetRequest = await request(saasApp)
-      .post('/api/auth/password-reset/request')
-      .send({ email: 'verify-reset@example.com' })
-      .expect(200);
-
-    expect(resetRequest.body.token).toEqual(expect.any(String));
-
-    await request(saasApp)
-      .post('/api/auth/password-reset/confirm')
-      .send({ token: resetRequest.body.token, password: 'new-secure-password-2' })
-      .expect(200);
-
     await request(saasApp)
       .post('/api/auth/login')
       .send({ email: 'verify-reset@example.com', password: 'secure-password-1' })
-      .expect(401);
+      .expect(200);
 
     await request(saasApp)
-      .post('/api/auth/login')
-      .send({ email: 'verify-reset@example.com', password: 'new-secure-password-2' })
-      .expect(200);
+      .post('/api/auth/email-verification/request')
+      .set('Authorization', `Bearer ${registerResponse.body.token}`)
+      .expect(404);
+
+    await request(saasApp)
+      .post('/api/auth/password-reset/request')
+      .send({ email: 'verify-reset@example.com' })
+      .expect(404);
   });
 
   it('applies signed billing webhooks and rejects unsigned subscription changes', async () => {
@@ -519,27 +493,6 @@ describe('server API', () => {
       })
       .expect(201);
 
-    const unverifiedInvitation = await request(saasApp)
-      .post('/api/workspace/invitations')
-      .set('Authorization', `Bearer ${owner.body.token}`)
-      .send({
-        email: 'workspace-member@example.com',
-        role: 'member',
-      })
-      .expect(403);
-
-    expect(unverifiedInvitation.body.error).toBe('email_verification_required');
-
-    const verification = await request(saasApp)
-      .post('/api/auth/email-verification/request')
-      .set('Authorization', `Bearer ${owner.body.token}`)
-      .expect(200);
-
-    await request(saasApp)
-      .post('/api/auth/email-verification/confirm')
-      .send({ token: verification.body.token })
-      .expect(200);
-
     const invitationResponse = await request(saasApp)
       .post('/api/workspace/invitations')
       .set('Authorization', `Bearer ${owner.body.token}`)
@@ -554,12 +507,15 @@ describe('server API', () => {
       role: 'member',
     });
     expect(invitationResponse.body.invitation).not.toHaveProperty('tokenHash');
-    expect(invitationResponse.body.token).toEqual(expect.any(String));
+    expect(invitationResponse.body.delivery).toBe('manual-link');
+    expect(invitationResponse.body.invitationUrl).toEqual(expect.any(String));
+    const invitationToken = new URL(invitationResponse.body.invitationUrl).searchParams.get('token');
+    expect(invitationToken).toEqual(expect.any(String));
 
     const accepted = await request(saasApp)
       .post('/api/workspace/invitations/accept')
       .send({
-        token: invitationResponse.body.token,
+        token: invitationToken,
         name: '团队成员',
         password: 'secure-password-2',
       })
@@ -568,13 +524,12 @@ describe('server API', () => {
     expect(accepted.body.account.user).toMatchObject({
       email: 'workspace-member@example.com',
       role: 'member',
-      emailVerified: true,
     });
 
     await request(saasApp)
       .post('/api/workspace/invitations/accept')
       .send({
-        token: invitationResponse.body.token,
+        token: invitationToken,
         name: '重复成员',
         password: 'secure-password-3',
       })
@@ -881,36 +836,12 @@ describe('server API', () => {
       })
       .expect(201);
 
-    const verification = await request(saasApp)
-      .post('/api/auth/email-verification/request')
-      .set('Authorization', `Bearer ${owner.body.token}`)
+    const ownerLogin = await request(saasApp)
+      .post('/api/auth/login')
+      .set('User-Agent', 'Playwright Chrome Owner Second Device')
+      .send({ email: 'commercial-owner@example.com', password: 'secure-password-1' })
       .expect(200);
-
-    expect(verification.body).toMatchObject({
-      delivery: 'development-token',
-      token: expect.any(String),
-    });
-
-    const verified = await request(saasApp)
-      .post('/api/auth/email-verification/confirm')
-      .send({ token: verification.body.token })
-      .expect(200);
-
-    expect(verified.body.account.user.emailVerified).toBe(true);
-
-    const reset = await request(saasApp)
-      .post('/api/auth/password-reset/request')
-      .send({ email: 'commercial-owner@example.com' })
-      .expect(200);
-
-    expect(reset.body.token).toEqual(expect.any(String));
-
-    const resetConfirmed = await request(saasApp)
-      .post('/api/auth/password-reset/confirm')
-      .send({ token: reset.body.token, password: 'new-secure-password-2' })
-      .expect(200);
-
-    const ownerToken = resetConfirmed.body.token as string;
+    const ownerToken = ownerLogin.body.token as string;
 
     const sessions = await request(saasApp)
       .get('/api/auth/sessions')
@@ -934,12 +865,13 @@ describe('server API', () => {
       .send({ email: 'commercial-member@example.com', role: 'member' })
       .expect(201);
 
-    expect(invitation.body.token).toEqual(expect.any(String));
+    const invitationToken = new URL(invitation.body.invitationUrl).searchParams.get('token');
+    expect(invitationToken).toEqual(expect.any(String));
 
     const member = await request(saasApp)
       .post('/api/workspace/invitations/accept')
       .send({
-        token: invitation.body.token,
+        token: invitationToken,
         name: '商业化成员',
         password: 'member-secure-password-1',
       })

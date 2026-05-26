@@ -83,11 +83,11 @@ export default function ProgressSection({ scoreChange, persistedSkillProfiles = 
   ];
 
   return (
-    <div className="flex-1 p-8 overflow-y-auto bg-gradient-to-b from-[#f3faff] to-white flex flex-col h-screen justify-between relative">
+    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-[#f3faff] to-white flex flex-col min-h-[calc(100svh-9rem)] lg:h-screen justify-between relative">
       
       {/* Sliding Toast mechanism */}
       {toastMessage && (
-        <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-[#003178] text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 z-50 text-xs font-bold border border-[#cfe6f2] animate-bounce">
+        <div className="absolute top-4 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 bg-[#003178] text-white px-4 sm:px-5 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 z-50 text-xs font-bold border border-[#cfe6f2] animate-bounce">
           <Sparkle className="h-4 w-4 text-emerald-300 fill-emerald-300 shrink-0" />
           <span>{toastMessage}</span>
         </div>
@@ -105,13 +105,13 @@ export default function ProgressSection({ scoreChange, persistedSkillProfiles = 
         </header>
       </div>
 
-      <div className="flex-1 overflow-y-auto space-y-8 pr-2">
+      <div className="flex-1 overflow-y-auto space-y-5 lg:space-y-8 lg:pr-2">
         
         {/* Radar & Knowledge Map Row (Exactly like top level Image 1) */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 lg:gap-8">
           
           {/* Card: 综合能力雷达 (Span 2) */}
-          <div className="lg:col-span-2 bg-white border border-[#c3c6d4] hover:border-[#003178] rounded-3xl p-6 shadow-2xs flex flex-col justify-between transition-colors">
+          <div className="lg:col-span-2 bg-white border border-[#c3c6d4] hover:border-[#003178] rounded-3xl p-4 sm:p-6 shadow-2xs flex flex-col justify-between transition-colors">
             <div>
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-sm font-bold text-[#071e27] uppercase tracking-wider">
@@ -164,7 +164,7 @@ export default function ProgressSection({ scoreChange, persistedSkillProfiles = 
             </div>
 
             {/* Total forecast outputs */}
-            <div className="flex gap-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
               <div className="flex-1 bg-gradient-to-tr from-[#f3faff] to-[#dbf1fe]/50 border-r p-4.5 rounded-2xl border flex flex-col justify-center">
                 <span className="text-[10px] text-gray-400 font-bold block">总分预估</span>
                 <span className="text-3xl font-black text-[#003178] mt-1 font-mono">{forecastScore ?? '--'}</span>
@@ -183,10 +183,10 @@ export default function ProgressSection({ scoreChange, persistedSkillProfiles = 
           </div>
 
           {/* Card: 知识点掌握图谱 (Span 3) exactly as Image 1 */}
-          <div className="lg:col-span-3 bg-white border border-[#c3c6d4] hover:border-[#003178] rounded-3xl p-6 shadow-2xs flex flex-col justify-between transition-colors">
+          <div className="lg:col-span-3 bg-white border border-[#c3c6d4] hover:border-[#003178] rounded-3xl p-4 sm:p-6 shadow-2xs flex flex-col justify-between transition-colors">
             
             {/* Header with tabs */}
-            <div className="flex justify-between items-center pb-3 border-b mb-4">
+            <div className="flex flex-col gap-3 pb-3 border-b mb-4 sm:flex-row sm:justify-between sm:items-center">
               <h3 className="text-sm font-bold text-[#071e27] uppercase tracking-wider">
                 知识点掌握图谱
               </h3>
@@ -241,8 +241,8 @@ export default function ProgressSection({ scoreChange, persistedSkillProfiles = 
                 }
 
                 return (
-                  <div key={i} className="flex items-center justify-between gap-4 p-2 bg-[#f8fafc]/70 hover:bg-[#f3faff] rounded-xl border border-transparent hover:border-[#cfe6f2] transition-colors">
-                    <div className="flex items-center gap-3 w-1/2">
+                  <div key={i} className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 p-2 bg-[#f8fafc]/70 hover:bg-[#f3faff] rounded-xl border border-transparent hover:border-[#cfe6f2] transition-colors">
+                    <div className="flex items-center gap-3 w-full sm:w-1/2">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${iconWrapper}`}>
                         <Icon className="h-4 w-4" />
                       </div>
@@ -250,7 +250,7 @@ export default function ProgressSection({ scoreChange, persistedSkillProfiles = 
                     </div>
 
                     {/* Progress slider visually exact */}
-                    <div className="flex-1 flex items-center space-x-3.5">
+                    <div className="w-full sm:flex-1 flex items-center space-x-3.5">
                       <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden border">
                         <div
                           className={`h-full rounded-full transition-all duration-700 ${barColor}`}
@@ -269,8 +269,8 @@ export default function ProgressSection({ scoreChange, persistedSkillProfiles = 
         </div>
 
         {/* Bottom card: 能力成长曲线 bar chart over 6 weeks (Exactly like image 1 bottom) */}
-        <div className="bg-white border border-[#c3c6d4] hover:border-[#003178] rounded-3xl p-6 shadow-2xs transition-colors">
-          <div className="flex justify-between items-center mb-6 pb-2 border-b">
+        <div className="bg-white border border-[#c3c6d4] hover:border-[#003178] rounded-3xl p-4 sm:p-6 shadow-2xs transition-colors">
+          <div className="flex flex-col gap-3 mb-6 pb-2 border-b sm:flex-row sm:justify-between sm:items-center">
             <h3 className="text-sm font-bold text-[#071e27] uppercase tracking-wider flex items-center gap-1">
               <Activity className="h-4 w-4 text-[#003178]" />
               能力成长曲线
@@ -283,7 +283,7 @@ export default function ProgressSection({ scoreChange, persistedSkillProfiles = 
           </div>
 
           {/* Interactive weekly column bars */}
-          <div className="grid grid-cols-6 gap-4 items-end h-44 px-4 pt-4">
+          <div className="grid grid-cols-6 gap-2 sm:gap-4 items-end h-44 px-1 sm:px-4 pt-4">
             {weeklyBars.map((wk) => {
               const isActive = selectedWeek === wk.label;
               return (

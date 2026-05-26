@@ -442,7 +442,7 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
         );
       case 'practice':
         return (
-          <div className="flex-1 p-8 overflow-y-auto bg-gradient-to-b from-[#f3faff] to-white h-screen flex flex-col justify-between">
+          <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-b from-[#f3faff] to-white min-h-[calc(100svh-9rem)] lg:h-screen flex flex-col justify-between">
             <div className="shrink-0 mb-6">
               <header className="pb-4 border-b border-[#cfe6f2]">
                 <h2 className="text-xl font-bold text-[#003178] flex items-center gap-1.5 animate-pulse">
@@ -460,7 +460,7 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
                 {practicePassages.map((p) => (
                   <div
                     key={p.id}
-                    className="bg-white border hover:border-[#003178] rounded-2.5xl p-6 transition-all duration-200 shadow-xs flex flex-col justify-between group h-44"
+                    className="bg-white border hover:border-[#003178] rounded-3xl p-4 sm:p-6 transition-all duration-200 shadow-xs flex flex-col justify-between group min-h-44"
                   >
                     <div>
                       <span className="text-[10px] font-bold text-[#003178] bg-[#dbf1fe] px-2.5 py-1 rounded-full border border-[#cfe6f2]">
@@ -475,10 +475,10 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
                       </div>
                     </div>
 
-                    <div className="pt-3 border-t border-gray-100 flex justify-end">
+                    <div className="pt-3 border-t border-gray-100 flex justify-stretch sm:justify-end">
                       <button
                         onClick={() => handleSelectPassage(p.data)}
-                        className="px-5 py-2 bg-[#003178] hover:bg-[#0d47a1] text-white font-bold text-xs rounded-xl flex items-center gap-1 hover:scale-[1.02] transition-all pointer-events-auto cursor-pointer"
+                        className="w-full sm:w-auto justify-center px-5 py-3 sm:py-2 bg-[#003178] hover:bg-[#0d47a1] text-white font-bold text-xs rounded-xl flex items-center gap-1 hover:scale-[1.02] transition-all pointer-events-auto cursor-pointer"
                       >
                         <BookOpen className="h-3.5 w-3.5" />
                         <span>开始仔细阅读训练</span>
@@ -488,8 +488,8 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white border hover:border-[#003178] rounded-2.5xl p-6 transition-all duration-200 shadow-xs flex flex-col justify-between group min-h-40">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                <div className="bg-white border hover:border-[#003178] rounded-3xl p-4 sm:p-6 transition-all duration-200 shadow-xs flex flex-col justify-between group min-h-40">
                   <div>
                     <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">
                       写作 · AI 结构化反馈
@@ -503,13 +503,13 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
                   </div>
                   <button
                     onClick={() => setSubjectivePracticeMode('writing')}
-                    className="mt-4 px-5 py-2 bg-[#003178] hover:bg-[#0d47a1] text-white font-bold text-xs rounded-xl self-end cursor-pointer"
+                    className="mt-4 w-full sm:w-auto px-5 py-3 sm:py-2 bg-[#003178] hover:bg-[#0d47a1] text-white font-bold text-xs rounded-xl self-end cursor-pointer"
                   >
                     开始写作训练
                   </button>
                 </div>
 
-                <div className="bg-white border hover:border-[#003178] rounded-2.5xl p-6 transition-all duration-200 shadow-xs flex flex-col justify-between group min-h-40">
+                <div className="bg-white border hover:border-[#003178] rounded-3xl p-4 sm:p-6 transition-all duration-200 shadow-xs flex flex-col justify-between group min-h-40">
                   <div>
                     <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-100">
                       翻译 · 中译英段落
@@ -523,9 +523,29 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
                   </div>
                   <button
                     onClick={() => setSubjectivePracticeMode('translation')}
-                    className="mt-4 px-5 py-2 bg-[#003178] hover:bg-[#0d47a1] text-white font-bold text-xs rounded-xl self-end cursor-pointer"
+                    className="mt-4 w-full sm:w-auto px-5 py-3 sm:py-2 bg-[#003178] hover:bg-[#0d47a1] text-white font-bold text-xs rounded-xl self-end cursor-pointer"
                   >
                     开始翻译训练
+                  </button>
+                </div>
+
+                <div className="bg-white border hover:border-[#003178] rounded-3xl p-4 sm:p-6 transition-all duration-200 shadow-xs flex flex-col justify-between group min-h-40">
+                  <div>
+                    <span className="text-[10px] font-bold text-sky-700 bg-sky-50 px-2.5 py-1 rounded-full border border-sky-100">
+                      听力 · 长对话精听
+                    </span>
+                    <h3 className="font-extrabold text-[#071e27] text-base group-hover:text-[#003178] transition-colors mt-3">
+                      Section A：科技与教育
+                    </h3>
+                    <p className="text-xs text-gray-400 font-semibold mt-1.5">
+                      15 分钟 · 原速、精听、错因定位
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setIsListeningPracticing(true)}
+                    className="mt-4 w-full sm:w-auto px-5 py-3 sm:py-2 bg-[#003178] hover:bg-[#0d47a1] text-white font-bold text-xs rounded-xl self-end cursor-pointer"
+                  >
+                    开始听力训练
                   </button>
                 </div>
               </div>
@@ -648,10 +668,10 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
             examCountdown={examCountdown}
             onTriggerModal={handleTriggerModal}
           />
-          <main className="flex-1 min-w-0 flex flex-col h-screen overflow-hidden relative">
+          <main className="flex-1 min-w-0 flex flex-col min-h-0 lg:h-screen lg:overflow-hidden relative">
             {/* Top Right Floating Coach Button exactly as screens - Hide on today page to avoid overlapping */}
             {activeTab !== 'today' && (
-              <div className="absolute top-6 right-8 z-30 pointer-events-auto flex items-center gap-4">
+              <div className="absolute top-6 right-8 z-30 pointer-events-auto hidden lg:flex items-center gap-4">
                 <span className="text-xs font-semibold text-[#1e333c] select-none bg-slate-100/80 px-3 py-1.5 rounded-full border border-slate-200/45">
                   距考试 {examCountdown} 天
                 </span>
@@ -672,7 +692,7 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
       {/* Premium Unified Custom Modal Component overlay */}
       {modalContent && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 select-none">
-          <div className="bg-white rounded-3xl p-6.5 max-w-md w-full shadow-2xl border border-slate-100 flex flex-col space-y-4 transition-all">
+          <div className="bg-white rounded-3xl p-4 sm:p-6.5 max-w-md w-full shadow-2xl border border-slate-100 flex flex-col space-y-4 transition-all">
             <div className="flex justify-between items-center pb-3 border-b border-gray-100">
               <h3 className="font-extrabold text-[#003178] text-sm flex items-center gap-1.5 font-sans">
                 <Sparkles className="h-5 w-5 text-amber-500 fill-amber-400 animate-pulse" />
@@ -680,7 +700,7 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
               </h3>
               <button
                 onClick={() => setModalContent(null)}
-                className="text-slate-400 hover:text-[#003178] p-1.5 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
+                className="text-slate-400 hover:text-[#003178] p-3 sm:p-1.5 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
               >
                 <X className="h-5 w-5" strokeWidth={2.5} />
               </button>
@@ -691,7 +711,7 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
             <div className="flex justify-end pt-2">
               <button
                 onClick={() => setModalContent(null)}
-                className="px-5 py-2.5 bg-[#003178] hover:bg-[#0d47a1] text-white font-extrabold text-xs rounded-xl shadow-xs cursor-pointer pointer-events-auto transition-transform active:scale-[0.98]"
+                className="w-full sm:w-auto px-5 py-3 sm:py-2.5 bg-[#003178] hover:bg-[#0d47a1] text-white font-extrabold text-xs rounded-xl shadow-xs cursor-pointer pointer-events-auto transition-transform active:scale-[0.98]"
               >
                 我知道了
               </button>

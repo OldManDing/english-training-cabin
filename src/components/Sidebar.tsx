@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpen, Sparkles, FolderSync, Mic, BarChart3, DownloadCloud, Settings, HelpCircle, Rocket } from 'lucide-react';
+import { BookOpen, Sparkles, FolderSync, Mic, BarChart3, DownloadCloud, Settings, HelpCircle } from 'lucide-react';
 import { ActiveTab } from '../types';
 
 interface SidebarProps {
@@ -39,7 +39,7 @@ export default function Sidebar({ activeTab, setActiveTab, examCountdown, onTrig
         </div>
 
         {/* Navigation Items */}
-        <nav className="px-3 pb-3 lg:p-3 flex lg:block gap-2 lg:space-y-1 overflow-x-auto">
+        <nav className="px-3 pb-3 lg:p-3 flex lg:block gap-2 lg:space-y-1 overflow-x-auto overscroll-x-contain">
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -47,7 +47,7 @@ export default function Sidebar({ activeTab, setActiveTab, examCountdown, onTrig
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`min-w-fit lg:w-full flex items-center space-x-2 lg:space-x-3 px-3 lg:px-4 py-2.5 lg:py-3 rounded-xl transition-all duration-150 relative group text-left ${
+                className={`shrink-0 min-w-[116px] min-h-11 lg:min-w-0 lg:w-full flex items-center space-x-2 lg:space-x-3 px-3 lg:px-4 py-2.5 lg:py-3 rounded-xl transition-all duration-150 relative group text-left ${
                   isActive
                     ? 'bg-[#dbf1fe]/80 text-[#003178] font-bold'
                     : 'text-[#434652] hover:bg-[#dbf1fe]/40 hover:text-[#003178]'
@@ -56,8 +56,8 @@ export default function Sidebar({ activeTab, setActiveTab, examCountdown, onTrig
                 {isActive && (
                   <div className="hidden lg:block absolute right-0 top-3 bottom-3 w-[3px] bg-[#0d47a1] rounded-l" />
                 )}
-                <Icon className={`h-4.5 w-4.5 ${isActive ? 'text-[#003178]' : 'text-[#434652] group-hover:text-[#003178]'}`} />
-                <span className="text-xs font-semibold">{item.label}</span>
+                <Icon className={`h-[18px] w-[18px] shrink-0 ${isActive ? 'text-[#003178]' : 'text-[#434652] group-hover:text-[#003178]'}`} />
+                <span className="text-xs font-semibold whitespace-nowrap">{item.label}</span>
               </button>
             );
           })}
@@ -66,17 +66,17 @@ export default function Sidebar({ activeTab, setActiveTab, examCountdown, onTrig
 
       {/* Footer Settings Area matching the screenshot */}
       <div className="px-3 pb-3 lg:p-3 lg:pb-6">
-        <div className="flex lg:block gap-2 lg:space-y-1 overflow-x-auto">
+        <div className="flex lg:block gap-2 lg:space-y-1 overflow-x-auto overscroll-x-contain">
           <button
             onClick={() => setActiveTab('settings')}
-            className={`min-w-fit lg:w-full flex items-center space-x-2 lg:space-x-3 px-3 lg:px-4 py-2.5 lg:py-3 text-xs rounded-xl transition-all relative text-left ${
+            className={`min-w-fit min-h-11 lg:w-full flex items-center space-x-2 lg:space-x-3 px-3 lg:px-4 py-2.5 lg:py-3 text-xs rounded-xl transition-all relative text-left ${
               activeTab === 'settings'
-                ? 'bg-[#dbf1fe]/80 text-[#003178] font-bold border-r-[3px] border-[#0d47a1] rounded-r-none'
+                ? 'bg-[#dbf1fe]/80 text-[#003178] font-bold lg:border-r-[3px] lg:border-[#0d47a1] lg:rounded-r-none'
                 : 'text-[#434652] hover:bg-[#dbf1fe]/40'
             }`}
           >
             <Settings className={`h-4.5 w-4.5 ${activeTab === 'settings' ? 'text-[#003178]' : 'text-[#434652]'}`} />
-            <span className="font-semibold">设置</span>
+            <span className="font-semibold whitespace-nowrap">设置</span>
           </button>
           
           <button
@@ -89,10 +89,10 @@ export default function Sidebar({ activeTab, setActiveTab, examCountdown, onTrig
                 );
               }
             }}
-            className="min-w-fit lg:w-full flex items-center space-x-2 lg:space-x-3 px-3 lg:px-4 py-2.5 lg:py-3 text-xs text-[#434652] hover:bg-[#dbf1fe]/40 rounded-xl transition-all text-left"
+            className="min-w-fit min-h-11 lg:w-full flex items-center space-x-2 lg:space-x-3 px-3 lg:px-4 py-2.5 lg:py-3 text-xs text-[#434652] hover:bg-[#dbf1fe]/40 rounded-xl transition-all text-left"
           >
             <HelpCircle className="h-4.5 w-4.5 text-[#434652]" />
-            <span className="font-semibold">帮助</span>
+            <span className="font-semibold whitespace-nowrap">帮助</span>
           </button>
         </div>
       </div>

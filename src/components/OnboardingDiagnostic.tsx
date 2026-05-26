@@ -196,11 +196,11 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit, onCom
   };
 
   return (
-    <div className="flex-1 p-8 overflow-y-auto bg-gradient-to-b from-[#f3faff] to-white h-screen flex flex-col justify-between relative">
+    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-[#f3faff] to-white min-h-[100svh] lg:h-screen flex flex-col justify-between relative">
       
       {/* STEP 1: Entrance Diagnosis Banner (Image 3) */}
       {step === 1 && (
-        <div className="max-w-2xl mx-auto my-auto w-full bg-white border-2 border-[#cfe6f2] p-8 rounded-3xl shadow-md space-y-6">
+        <div className="max-w-2xl mx-auto my-auto w-full bg-white border-2 border-[#cfe6f2] p-5 sm:p-8 rounded-3xl shadow-md space-y-6">
           <div className="flex flex-col items-center text-center space-y-3 pb-4 border-b border-gray-100">
             <div className="w-16 h-16 bg-[#003178]/10 text-[#003178] rounded-full flex items-center justify-center">
               <GraduationCap className="w-9 h-9 animate-pulse" />
@@ -276,11 +276,11 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit, onCom
 
       {/* STEP 2: Goal and current base setting widget (Image 4) */}
       {step === 2 && (
-        <div className="max-w-5xl mx-auto my-auto w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="max-w-5xl mx-auto my-auto w-full grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-8">
           
           {/* Left Columns (Target setting + Base levels) */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="p-8 bg-white border border-[#c3c6d4] rounded-3xl shadow-xs space-y-8">
+            <div className="p-5 sm:p-8 bg-white border border-[#c3c6d4] rounded-3xl shadow-xs space-y-6 sm:space-y-8">
               <div>
                 <h3 className="text-xl font-bold text-[#003178] flex items-center gap-1.5 border-b pb-3 border-gray-100">
                   <Target className="h-5 w-5" />
@@ -292,7 +292,7 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit, onCom
               {/* Goal Range and Score Selector exactly shown in Image 4 */}
               <div className="space-y-4">
                 <label className="text-xs font-bold text-[#071e27] block">🎯 目标分数</label>
-                <div className="flex items-center justify-between pb-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-3">
                   <span className="text-xs text-slate-400 font-semibold">CET-4 标准体系</span>
                   <div className="flex items-baseline space-x-1.5 text-[#003178]">
                     <span className="text-4xl font-extrabold tracking-tight bg-sky-50 px-4 py-1.5 rounded-2xl border border-sky-100">{targetScore}</span>
@@ -345,7 +345,7 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit, onCom
 
               <div className="space-y-2">
                 <label className="text-xs font-bold text-[#071e27] block">⏱ 每日可投入时间</label>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[30, 45, 60, 90].map((minutes) => (
                     <button
                       key={minutes}
@@ -372,14 +372,14 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit, onCom
 
                 <div className="space-y-3">
                   {/* Reading capability toggle */}
-                  <div className="flex justify-between items-center text-xs">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center text-xs">
                     <span className="text-slate-600 font-semibold">阅读能力水平</span>
-                    <div className="flex rounded-lg bg-neutral-100 p-0.5 border">
+                    <div className="grid grid-cols-3 rounded-lg bg-neutral-100 p-0.5 border">
                       {(['A', 'B', 'C'] as const).map((v) => (
                         <button
                           key={v}
                           onClick={() => setTestReading(v)}
-                          className={`px-3 py-1 text-[10px] font-bold rounded ${
+                          className={`px-3 py-2 sm:py-1 text-[10px] font-bold rounded ${
                             testReading === v ? 'bg-white text-[#003178] shadow-2xs' : 'text-gray-400'
                           }`}
                         >
@@ -390,14 +390,14 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit, onCom
                   </div>
 
                   {/* Listening level toggle */}
-                  <div className="flex justify-between items-center text-xs">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center text-xs">
                     <span className="text-slate-600 font-semibold">听力理解能力</span>
-                    <div className="flex rounded-lg bg-neutral-100 p-0.5 border">
+                    <div className="grid grid-cols-3 rounded-lg bg-neutral-100 p-0.5 border">
                       {(['A', 'B', 'C'] as const).map((v) => (
                         <button
                           key={v}
                           onClick={() => setTestListening(v)}
-                          className={`px-3 py-1 text-[10px] font-bold rounded ${
+                          className={`px-3 py-2 sm:py-1 text-[10px] font-bold rounded ${
                             testListening === v ? 'bg-white text-[#003178] shadow-2xs' : 'text-gray-400'
                           }`}
                         >
@@ -408,14 +408,14 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit, onCom
                   </div>
 
                   {/* Translation horizontal selection */}
-                  <div className="flex justify-between items-center text-xs">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center text-xs">
                     <span className="text-slate-600 font-semibold">翻译与语法结构</span>
-                    <div className="flex rounded-lg bg-neutral-100 p-0.5 border">
+                    <div className="grid grid-cols-3 rounded-lg bg-neutral-100 p-0.5 border">
                       {(['A', 'B', 'C'] as const).map((v) => (
                         <button
                           key={v}
                           onClick={() => setTestTranslation(v)}
-                          className={`px-3 py-1 text-[10px] font-bold rounded ${
+                          className={`px-3 py-2 sm:py-1 text-[10px] font-bold rounded ${
                             testTranslation === v ? 'bg-white text-[#003178] shadow-2xs' : 'text-gray-400'
                           }`}
                         >
@@ -426,14 +426,14 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit, onCom
                   </div>
 
                   {/* Writing selector */}
-                  <div className="flex justify-between items-center text-xs">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center text-xs">
                     <span className="text-slate-600 font-semibold">写作文字输出</span>
-                    <div className="flex rounded-lg bg-neutral-100 p-0.5 border">
+                    <div className="grid grid-cols-3 rounded-lg bg-neutral-100 p-0.5 border">
                       {(['A', 'B', 'C'] as const).map((v) => (
                         <button
                           key={v}
                           onClick={() => setTestWriting(v)}
-                          className={`px-3 py-1 text-[10px] font-bold rounded ${
+                          className={`px-3 py-2 sm:py-1 text-[10px] font-bold rounded ${
                             testWriting === v ? 'bg-white text-[#003178] shadow-2xs' : 'text-gray-400'
                           }`}
                         >
@@ -444,14 +444,14 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit, onCom
                   </div>
 
                   {/* Speaking base assessment */}
-                  <div className="flex justify-between items-center text-xs">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center text-xs">
                     <span className="text-slate-600 font-semibold">口语表达连贯性</span>
-                    <div className="flex rounded-lg bg-neutral-100 p-0.5 border">
+                    <div className="grid grid-cols-3 rounded-lg bg-neutral-100 p-0.5 border">
                       {(['A', 'B', 'C'] as const).map((v) => (
                         <button
                           key={v}
                           onClick={() => setTestOral(v)}
-                          className={`px-3 py-1 text-[10px] font-bold rounded ${
+                          className={`px-3 py-2 sm:py-1 text-[10px] font-bold rounded ${
                             testOral === v ? 'bg-white text-[#003178] shadow-2xs' : 'text-gray-400'
                           }`}
                         >
@@ -469,7 +469,7 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit, onCom
 
           {/* Right column: Study Load details ring layout (exactly matching style) */}
           <div className="space-y-6">
-            <div className="p-8 bg-gradient-to-b from-[#dbf1fe]/50 to-white border border-[#cfe6f2] rounded-3xl shadow-sm space-y-8 h-full flex flex-col justify-between">
+            <div className="p-5 sm:p-8 bg-gradient-to-b from-[#dbf1fe]/50 to-white border border-[#cfe6f2] rounded-3xl shadow-sm space-y-6 sm:space-y-8 h-full flex flex-col justify-between">
               
               <div className="space-y-4">
                 <h3 className="text-sm font-black text-[#071e27] pb-2 border-b border-gray-100 flex items-center gap-1">
@@ -557,7 +557,7 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit, onCom
 
       {/* STEP 3: Simulated scanner layout */}
       {step === 3 && (
-        <div className="max-w-md mx-auto my-auto w-full bg-white border border-[#c3c6d4] p-8 rounded-3xl text-center space-y-6 flex flex-col items-center justify-center shadow-lg animate-pulse">
+        <div className="max-w-md mx-auto my-auto w-full bg-white border border-[#c3c6d4] p-5 sm:p-8 rounded-3xl text-center space-y-6 flex flex-col items-center justify-center shadow-lg animate-pulse">
           <div className="w-16 h-16 rounded-full bg-[#dbf1fe] flex items-center justify-center text-[#003178]">
             <RefreshCw className="h-8 w-8 animate-spin" />
           </div>
@@ -570,14 +570,14 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit, onCom
 
       {/* STEP 4: Diagnosis Complete Portrait Report (Image 6) */}
       {step === 4 && (
-        <div className="max-w-4xl mx-auto my-auto w-full bg-white border-2 border-[#cfe6f2] rounded-3xl p-8 shadow-md space-y-8 animate-fade-in relative">
+        <div className="max-w-4xl mx-auto my-auto w-full bg-white border-2 border-[#cfe6f2] rounded-3xl p-5 sm:p-8 shadow-md space-y-6 sm:space-y-8 animate-fade-in relative">
           
           {/* Header Banner */}
           <div className="flex flex-col items-center text-center space-y-2 pb-5 border-b border-gray-100">
             <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center border border-emerald-200">
               <CheckCircle className="w-6 h-6" />
             </div>
-            <h2 className="text-2xl font-black text-[#003178] tracking-tight">
+            <h2 className="text-xl sm:text-2xl font-black text-[#003178] tracking-tight">
               诊断完成！您的能力画像已生成
             </h2>
             <p className="text-xs text-gray-500 font-medium">
@@ -677,7 +677,7 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit, onCom
           </div>
 
           {/* AI Strategy recommendation line */}
-          <div className="bg-[#f0f9ff] border border-[#bae6fd] p-4.5 rounded-2xl flex items-center justify-between text-xs">
+          <div className="bg-[#f0f9ff] border border-[#bae6fd] p-4.5 rounded-2xl flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-xs">
             <div className="flex items-center gap-2 text-[#0369a1]">
               <Sparkles className="h-5 w-5 animate-spin-slow shrink-0" />
               <div>
@@ -685,7 +685,7 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit, onCom
                 <p className="font-extrabold text-[#0369a1] text-xs">建议优先训练模块: {topPriorityText}</p>
               </div>
             </div>
-            <span className="text-[10px] font-bold text-[#0369a1] bg-[#e0f2fe] border border-[#bae6fd] px-2 py-1 rounded-full shrink-0">
+            <span className="text-[10px] font-bold text-[#0369a1] bg-[#e0f2fe] border border-[#bae6fd] px-2 py-1 rounded-full sm:shrink-0">
               依据：目标分数 · 每日 {dailyMinutes} 分钟 · 自评基线
             </span>
           </div>
@@ -693,7 +693,7 @@ export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit, onCom
           <div className="flex justify-center pt-2">
             <button
               onClick={onDismiss}
-              className="px-10 py-3.5 bg-[#1b6d24] hover:bg-emerald-700 text-white font-extrabold text-xs tracking-wider uppercase rounded-xl shadow-md flex items-center gap-1 hover:scale-[1.02] transition-all pointer-events-auto cursor-pointer"
+              className="w-full sm:w-auto justify-center px-10 py-3.5 bg-[#1b6d24] hover:bg-emerald-700 text-white font-extrabold text-xs tracking-wider uppercase rounded-xl shadow-md flex items-center gap-1 hover:scale-[1.02] transition-all pointer-events-auto cursor-pointer"
             >
               🚀 开启今日训练
             </button>

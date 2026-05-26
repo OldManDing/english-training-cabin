@@ -276,27 +276,27 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
   const activeQ = questions[currentQuestionIndex];
 
   return (
-    <div className="flex-1 flex flex-col h-screen bg-slate-50 relative overflow-hidden">
+    <div className="flex-1 flex flex-col min-h-[100svh] lg:h-screen bg-slate-50 relative overflow-hidden">
       
       {/* Toast banner */}
       {toastMessage && (
-        <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-[#003178] text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 z-50 text-xs font-bold border border-[#cfe6f2] animate-bounce">
+        <div className="absolute top-4 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 bg-[#003178] text-white px-4 sm:px-5 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 z-50 text-xs font-bold border border-[#cfe6f2] animate-bounce">
           <Sparkle className="h-4 w-4 text-emerald-300 fill-emerald-300 shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
 
       {/* Header Panel */}
-      <header className="px-8 py-4 bg-white border-b border-[#cfe6f2] flex items-center justify-between shrink-0">
-        <div className="flex items-center space-x-4">
+      <header className="px-4 sm:px-6 lg:px-8 py-4 bg-white border-b border-[#cfe6f2] flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between shrink-0">
+        <div className="flex items-center space-x-3 sm:space-x-4 min-w-0">
           <button
             onClick={onBack}
             className="p-2 text-[#434652] hover:text-[#003178] hover:bg-[#e6f6ff] rounded-xl transition-all cursor-pointer"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <div>
-            <h1 className="text-lg font-bold text-[#003178] flex items-center gap-2">
+          <div className="min-w-0">
+            <h1 className="text-base sm:text-lg font-bold text-[#003178] flex items-center gap-2">
               <Headphones className="h-5 w-5 animate-bounce" />
               听力训练 - Section A
             </h1>
@@ -307,7 +307,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
         </div>
 
         {/* Tab switcher shown in screenshot */}
-        <div className="bg-neutral-100 p-1 rounded-xl flex items-center space-x-1 border border-neutral-200 text-xs">
+        <div className="w-full lg:w-auto overflow-x-auto bg-neutral-100 p-1 rounded-xl flex items-center space-x-1 border border-neutral-200 text-xs">
           <button
             onClick={() => setActiveTab('ref')}
             className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${
@@ -352,13 +352,13 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
       </header>
 
       {/* Main Container */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
         
         {/* Left column: Vinyl player & transcript */}
-        <div className="w-1/2 p-8 overflow-y-auto flex flex-col space-y-6 border-r border-[#cfe6f2] bg-white">
+        <div className="w-full lg:w-1/2 p-4 sm:p-6 lg:p-8 overflow-y-auto flex flex-col space-y-6 border-b lg:border-b-0 lg:border-r border-[#cfe6f2] bg-white">
           
           {/* Audio vinyl controller */}
-          <div className="bg-[#f3faff] border border-[#cfe6f2] rounded-3xl p-6 flex flex-col items-center justify-center relative shadow-xs">
+          <div className="bg-[#f3faff] border border-[#cfe6f2] rounded-3xl p-4 sm:p-6 flex flex-col items-center justify-center relative shadow-xs">
             
             {/* Vinyl record design */}
             <div className="relative w-28 h-28 bg-[#0a1e36] rounded-full flex items-center justify-center border-4 border-[#cfe6f2] shadow-md group">
@@ -403,7 +403,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
               </div>
 
               {/* Player control buttons */}
-              <div className="flex justify-between items-center px-4 pt-2">
+              <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center px-0 sm:px-4 pt-2">
                 {/* Speed dropdown control */}
                 <div className="flex items-center space-x-1.5 bg-white border border-gray-200 px-2.5 py-1 rounded-lg text-[11px] font-bold text-[#434652] shadow-2xs">
                   <span>速度:</span>
@@ -513,10 +513,10 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
         </div>
 
         {/* Right column: Question card & AI diagnosis details */}
-        <div className="w-1/2 p-8 overflow-y-auto flex flex-col space-y-6">
+        <div className="w-full lg:w-1/2 p-4 sm:p-6 lg:p-8 overflow-y-auto flex flex-col space-y-6">
           
           {/* Progress Section */}
-          <div className="flex justify-between items-center text-xs">
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center text-xs">
             <span className="text-gray-400 font-bold uppercase tracking-wider bg-rose-50 border border-rose-100 px-2.5 py-1 rounded-lg">
               Long Conversations
             </span>
@@ -533,7 +533,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
           </div>
 
           {/* Question detail box */}
-          <div className="bg-white border-2 border-[#cfe6f2] hover:border-[#003178] transition-colors rounded-3xl p-6 shadow-sm">
+          <div className="bg-white border-2 border-[#cfe6f2] hover:border-[#003178] transition-colors rounded-3xl p-4 sm:p-6 shadow-sm">
             <div className="text-[10px] font-bold text-[#003178] bg-[#dbf1fe] px-2.5 py-1 rounded-full border border-[#cfe6f2] inline-block mb-3">
               Question {activeQ.id}
             </div>
@@ -581,31 +581,31 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
                     <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 text-[9px] font-extrabold ${circleStyles}`}>
                       {isSubmitted && isCorrect ? "✓" : isSubmitted && isSelected ? "✗" : key}
                     </div>
-                    <span className="text-xs leading-relaxed">{optText}</span>
-
-                    {/* Show badge comments exactly as screenshot */}
-                    {isSubmitted && isCorrect && (
-                      <span className="absolute bottom-1 right-3 text-[9px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-1.5 py-0.2 rounded">
-                        正确答案 - 对应录音 {activeQ.transcriptionPoint}
-                      </span>
-                    )}
-                    {isSubmitted && isSelected && !isCorrect && (
-                      <span className="absolute bottom-1 right-3 text-[9px] font-bold text-rose-700 bg-rose-100 border border-rose-200 px-1.5 py-0.2 rounded">
-                        错误 - {activeQ.trapType}
-                      </span>
-                    )}
+                    <span className="min-w-0 flex-1 text-xs leading-relaxed">
+                      {optText}
+                      {isSubmitted && isCorrect && (
+                        <span className="mt-2 block w-fit text-[9px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-1.5 py-1 rounded">
+                          正确答案 - 对应录音 {activeQ.transcriptionPoint}
+                        </span>
+                      )}
+                      {isSubmitted && isSelected && !isCorrect && (
+                        <span className="mt-2 block w-fit text-[9px] font-bold text-rose-700 bg-rose-100 border border-rose-200 px-1.5 py-1 rounded">
+                          错误 - {activeQ.trapType}
+                        </span>
+                      )}
+                    </span>
                   </button>
                 );
               })}
             </div>
 
             {/* Confidence Levels selection */}
-            <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between">
+            <div className="mt-6 pt-4 border-t border-gray-100 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
               <span className="text-xs text-[#434652] font-semibold flex items-center gap-1">
                 把握度 (Confidence Level)
               </span>
 
-              <div className="flex bg-slate-100 p-1 border rounded-xl gap-1">
+              <div className="grid w-full grid-cols-3 bg-slate-100 p-1 border rounded-xl gap-1 sm:w-auto">
                 {(['Low', 'Medium', 'High'] as const).map((lvl) => {
                   const isChosen = activeQ.confidence === lvl;
                   return (
@@ -632,7 +632,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
                 <button
                   onClick={handleSubmitAnswer}
                   disabled={!activeQ.selectedAnswer || !activeQ.confidence}
-                  className={`px-6 py-2.5 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all ${
+                  className={`w-full justify-center sm:w-auto px-6 py-3 sm:py-2.5 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all ${
                     activeQ.selectedAnswer && activeQ.confidence
                       ? 'bg-[#1b6d24] hover:bg-emerald-700 hover:shadow cursor-pointer'
                       : 'bg-slate-300 cursor-not-allowed'
@@ -647,7 +647,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
 
           {/* AI Audio Diagnostics & Analyze feedback after submission */}
           {activeQ.isSubmitted && (
-            <div className="bg-[#f0f9ff] border border-[#bae6fd] rounded-3xl p-6 space-y-5 animate-fade-in">
+            <div className="bg-[#f0f9ff] border border-[#bae6fd] rounded-3xl p-4 sm:p-6 space-y-5 animate-fade-in">
               <div className="flex items-center space-x-2 pb-3 border-b border-[#bae6fd]">
                 <div className="p-1.5 bg-[#e0f2fe] text-[#0284c7] rounded-lg">
                   <Sparkles className="h-4 w-4" />

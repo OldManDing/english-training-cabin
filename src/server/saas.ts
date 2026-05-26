@@ -212,18 +212,6 @@ export interface SaasStore {
     snapshotsDeleted: number;
     entitiesDeleted: number;
   }>;
-  createOneTimeToken(input: {
-    userId: string;
-    purpose: SaasOneTimeTokenRecord['purpose'];
-    expiresAt: string;
-  }): Promise<{ token: string; record: SaasOneTimeTokenRecord }>;
-  consumeOneTimeToken(input: {
-    token: string;
-    purpose: SaasOneTimeTokenRecord['purpose'];
-    now: string;
-  }): Promise<SaasOneTimeTokenRecord | undefined>;
-  markUserEmailVerified(userId: string, at: string): Promise<SaasAccountRecord | undefined>;
-  updateUserPassword(userId: string, passwordHash: string, at: string): Promise<SaasAccountRecord | undefined>;
   applyBillingEvent(input: BillingEventInput): Promise<SaasSubscriptionRecord>;
   hasBillingEvent(provider: string, eventId: string): Promise<boolean>;
   createOrganizationInvitation(input: {
@@ -291,7 +279,6 @@ export interface PublicSaasAccountContext {
     email: string;
     name: string;
     role: OrganizationRole;
-    emailVerified: boolean;
   };
   organization: {
     id: string;
@@ -728,60 +715,6 @@ function createStoreFromDatabase(options: {
         };
       });
     },
-    createOneTimeToken(input) {
-      return mutate((db) => {
-        const token = crypto.randomBytes(32).toString('base64url');
-        const now = new Date().toISOString();
-        const record: SaasOneTimeTokenRecord = {
-          id: crypto.randomUUID(),
-          userId: input.userId,
-          tokenHash: hashOneTimeToken(token),
-          purpose: input.purpose,
-          expiresAt: input.expiresAt,
-          createdAt: now,
-        };
-        db.oneTimeTokens.push(record);
-        return { token, record };
-      });
-    },
-    consumeOneTimeToken(input) {
-      return mutate((db) => {
-        const tokenHash = hashOneTimeToken(input.token);
-        const record = db.oneTimeTokens.find((item) =>
-          item.tokenHash === tokenHash &&
-          item.purpose === input.purpose &&
-          !item.consumedAt &&
-          item.expiresAt > input.now,
-        );
-        if (!record) return undefined;
-        record.consumedAt = input.now;
-        return record;
-      });
-    },
-    markUserEmailVerified(userId, at) {
-      return mutate((db) => {
-        const user = db.users.find((item) => item.id === userId);
-        if (!user) return undefined;
-        user.emailVerifiedAt = user.emailVerifiedAt ?? at;
-        user.updatedAt = at;
-        const organization = db.organizations.find((item) => item.id === user.organizationId);
-        const subscription = db.subscriptions.find((item) => item.organizationId === user.organizationId);
-        if (!organization || !subscription) return undefined;
-        return { user, organization, subscription };
-      });
-    },
-    updateUserPassword(userId, passwordHash, at) {
-      return mutate((db) => {
-        const user = db.users.find((item) => item.id === userId);
-        if (!user) return undefined;
-        user.passwordHash = passwordHash;
-        user.updatedAt = at;
-        const organization = db.organizations.find((item) => item.id === user.organizationId);
-        const subscription = db.subscriptions.find((item) => item.organizationId === user.organizationId);
-        if (!organization || !subscription) return undefined;
-        return { user, organization, subscription };
-      });
-    },
     applyBillingEvent(input) {
       return mutate((db) => {
         if (db.billingWebhookEvents.some((event) => event.id === input.eventId && event.provider === input.provider)) {
@@ -872,7 +805,6 @@ function createStoreFromDatabase(options: {
           passwordHash: input.passwordHash,
           organizationId: invitation.organizationId,
           role: invitation.role,
-          emailVerifiedAt: input.now,
           createdAt: input.now,
           updatedAt: input.now,
         };
@@ -1165,81 +1097,6 @@ export async function loginSaasAccount(store: SaasStore, value: unknown): Promis
   return account;
 }
 
-export async function requestEmailVerification(store: SaasStore, userId: string): Promise<{ token: string; expiresAt: string }> {
-  const expiresAt = addDays(new Date(), 1);
-  const result = await store.createOneTimeToken({
-    userId,
-    purpose: 'email_verification',
-    expiresAt,
-  });
-  return {
-    token: result.token,
-    expiresAt,
-  };
-}
-
-export async function confirmEmailVerification(store: SaasStore, token: unknown): Promise<SaasAccountRecord> {
-  if (typeof token !== 'string' || token.length < 24 || token.length > 256) {
-    throw new SaasApiError(400, 'invalid_token', '验证链接无效。');
-  }
-  const now = new Date().toISOString();
-  const record = await store.consumeOneTimeToken({
-    token,
-    purpose: 'email_verification',
-    now,
-  });
-  if (!record) {
-    throw new SaasApiError(400, 'invalid_token', '验证链接无效或已过期。');
-  }
-  const account = await store.markUserEmailVerified(record.userId, now);
-  if (!account) {
-    throw new SaasApiError(404, 'account_not_found', '账号不存在。');
-  }
-  return account;
-}
-
-export async function requestPasswordReset(store: SaasStore, value: unknown): Promise<{ token?: string; expiresAt?: string }> {
-  const input = value && typeof value === 'object' ? value as Record<string, unknown> : {};
-  const email = normalizeEmail(input.email);
-  const user = await store.findUserByEmail(email);
-  if (!user) return {};
-
-  const expiresAt = addDays(new Date(), 1);
-  const result = await store.createOneTimeToken({
-    userId: user.id,
-    purpose: 'password_reset',
-    expiresAt,
-  });
-  return {
-    token: result.token,
-    expiresAt,
-  };
-}
-
-export async function confirmPasswordReset(store: SaasStore, value: unknown): Promise<SaasAccountRecord> {
-  const input = value && typeof value === 'object' ? value as Record<string, unknown> : {};
-  const token = typeof input.token === 'string' ? input.token : '';
-  const password = assertPassword(input.password);
-  if (token.length < 24 || token.length > 256) {
-    throw new SaasApiError(400, 'invalid_token', '重置链接无效。');
-  }
-
-  const now = new Date().toISOString();
-  const record = await store.consumeOneTimeToken({
-    token,
-    purpose: 'password_reset',
-    now,
-  });
-  if (!record) {
-    throw new SaasApiError(400, 'invalid_token', '重置链接无效或已过期。');
-  }
-  const account = await store.updateUserPassword(record.userId, hashPassword(password), now);
-  if (!account) {
-    throw new SaasApiError(404, 'account_not_found', '账号不存在。');
-  }
-  return account;
-}
-
 export async function createWorkspaceInvitation(store: SaasStore, actor: SaasAccountRecord, value: unknown): Promise<{
   token: string;
   invitation: OrganizationInvitationRecord;
@@ -1283,7 +1140,6 @@ export function toPublicMembers(users: SaasUserRecord[]) {
     email: user.email,
     name: user.name,
     role: user.role,
-    emailVerified: Boolean(user.emailVerifiedAt),
     createdAt: user.createdAt,
     lastLoginAt: user.lastLoginAt,
   }));
@@ -1348,7 +1204,6 @@ export function toPublicAccountContext(account: SaasAccountRecord): PublicSaasAc
       email: account.user.email,
       name: account.user.name,
       role: account.user.role,
-      emailVerified: Boolean(account.user.emailVerifiedAt),
     },
     organization: {
       id: account.organization.id,

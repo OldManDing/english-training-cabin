@@ -4,7 +4,6 @@ import {
   CheckCircle2,
   FileCheck2,
   KeyRound,
-  MailCheck,
   RefreshCw,
   ShieldAlert,
   ShieldCheck,
@@ -17,7 +16,6 @@ import type { PublicSaasAccountContext } from './SaasAccountPanel';
 interface SaasOperationsPanelProps {
   token: string;
   account: PublicSaasAccountContext;
-  onTokenChanged: (token: string, account: PublicSaasAccountContext) => void;
   onStatus: (message: string) => void;
 }
 
@@ -38,7 +36,6 @@ interface WorkspaceMember {
   email: string;
   name: string;
   role: 'owner' | 'member';
-  emailVerified: boolean;
   createdAt: string;
   lastLoginAt?: string;
 }
@@ -153,7 +150,7 @@ function compactDeviceLabel(userAgent?: string) {
   return userAgent.slice(0, 42);
 }
 
-export default function SaasOperationsPanel({ token, account, onTokenChanged, onStatus }: SaasOperationsPanelProps) {
+export default function SaasOperationsPanel({ token, account, onStatus }: SaasOperationsPanelProps) {
   const [sessions, setSessions] = useState<PublicSession[]>([]);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([]);
@@ -163,10 +160,7 @@ export default function SaasOperationsPanel({ token, account, onTokenChanged, on
   const [dataRequests, setDataRequests] = useState<DataRequest[]>([]);
   const [isBusy, setIsBusy] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteToken, setInviteToken] = useState<string | null>(null);
-  const [verificationToken, setVerificationToken] = useState('');
-  const [resetToken, setResetToken] = useState('');
-  const [newPassword, setNewPassword] = useState('new-secure-password-2');
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [contentTitle, setContentTitle] = useState('CET-4 原创阅读模拟题');
   const [contentAssetType, setContentAssetType] = useState<ContentAsset['assetType']>('reading');
   const [contentSourceType, setContentSourceType] = useState<ContentAsset['sourceType']>('original');
@@ -216,42 +210,13 @@ export default function SaasOperationsPanel({ token, account, onTokenChanged, on
     }
   };
 
-  const requestEmailVerification = () => runAction('邮箱验证邮件已发送；如当前环境返回一次性 token，会自动填入下方。', async () => {
-    const response = await apiRequest<{ token?: string }>('/api/auth/email-verification/request', { method: 'POST' }, token);
-    if (response.token) setVerificationToken(response.token);
-  });
-
-  const confirmEmailVerification = () => runAction('邮箱已验证，账号状态已刷新。', async () => {
-    const response = await apiRequest<{ token: string; account: PublicSaasAccountContext }>(
-      '/api/auth/email-verification/confirm',
-      { method: 'POST', body: JSON.stringify({ token: verificationToken }) },
-    );
-    onTokenChanged(response.token, response.account);
-  });
-
-  const requestPasswordReset = () => runAction('密码重置邮件已发送；如当前环境返回一次性 token，会自动填入下方。', async () => {
-    const response = await apiRequest<{ token?: string }>(
-      '/api/auth/password-reset/request',
-      { method: 'POST', body: JSON.stringify({ email: account.user.email }) },
-    );
-    if (response.token) setResetToken(response.token);
-  });
-
-  const confirmPasswordReset = () => runAction('密码已重置，当前会话已换发新 token。', async () => {
-    const response = await apiRequest<{ token: string; account: PublicSaasAccountContext }>(
-      '/api/auth/password-reset/confirm',
-      { method: 'POST', body: JSON.stringify({ token: resetToken, password: newPassword }) },
-    );
-    onTokenChanged(response.token, response.account);
-  });
-
-  const inviteMember = () => runAction('团队邀请已创建；如当前环境返回邀请 token，会显示在成员列表上方。', async () => {
-    const response = await apiRequest<{ token?: string }>(
+  const inviteMember = () => runAction('团队邀请已创建，请复制邀请链接给成员。', async () => {
+    const response = await apiRequest<{ invitationUrl: string }>(
       '/api/workspace/invitations',
       { method: 'POST', body: JSON.stringify({ email: inviteEmail, role: 'member' }) },
       token,
     );
-    if (response.token) setInviteToken(response.token);
+    setInviteLink(response.invitationUrl);
     setInviteEmail('');
   });
 
@@ -308,8 +273,8 @@ export default function SaasOperationsPanel({ token, account, onTokenChanged, on
   });
 
   return (
-    <div className="rounded-3xl border border-[#cfe6f2] bg-[#f7fbff] p-4 space-y-4">
-      <div className="flex items-center justify-between gap-3">
+    <div className="rounded-3xl border border-[#cfe6f2] bg-[#f7fbff] p-3 sm:p-4 space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h4 className="text-xs font-black text-[#003178] flex items-center gap-2">
             <ShieldCheck className="h-4 w-4" />
@@ -323,7 +288,7 @@ export default function SaasOperationsPanel({ token, account, onTokenChanged, on
           type="button"
           onClick={() => runAction('团队控制台已刷新。', async () => undefined)}
           disabled={isBusy}
-          className="rounded-xl border border-[#cfe6f2] bg-white px-3 py-2 text-[10px] font-black text-[#003178] disabled:text-gray-400"
+          className="w-full sm:w-auto rounded-xl border border-[#cfe6f2] bg-white px-3 py-3 sm:py-2 text-[10px] font-black text-[#003178] disabled:text-gray-400"
         >
           刷新
         </button>
@@ -349,41 +314,7 @@ export default function SaasOperationsPanel({ token, account, onTokenChanged, on
         </div>
       )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-        <section className="rounded-2xl bg-white border border-[#dbeafe] p-4 space-y-3">
-          <h5 className="text-[11px] font-black text-[#003178] flex items-center gap-2">
-            <MailCheck className="h-4 w-4" />
-            邮箱与密码流程
-          </h5>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={requestEmailVerification} disabled={isBusy} className="rounded-xl bg-[#003178] px-3 py-2 text-[10px] font-black text-white disabled:bg-gray-400">
-              发送邮箱验证
-            </button>
-            <button type="button" onClick={confirmEmailVerification} disabled={isBusy || !verificationToken} className="rounded-xl border border-[#cfe6f2] px-3 py-2 text-[10px] font-black text-[#003178] disabled:text-gray-400">
-              确认验证
-            </button>
-          </div>
-          <input value={verificationToken} onChange={(event) => setVerificationToken(event.target.value)} data-testid="saas-verification-token" className="w-full rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-3 py-2 text-[10px] font-bold text-[#003178]" placeholder="邮件链接中的一次性验证 token" />
-          <form
-            className="space-y-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!isBusy && resetToken && newPassword.length >= 8) void confirmPasswordReset();
-            }}
-          >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <button type="button" onClick={requestPasswordReset} disabled={isBusy} className="rounded-xl border border-[#cfe6f2] px-3 py-2 text-[10px] font-black text-[#003178] disabled:text-gray-400">
-              发送重置邮件
-            </button>
-            <button type="submit" disabled={isBusy || !resetToken || newPassword.length < 8} className="rounded-xl bg-[#003178] px-3 py-2 text-[10px] font-black text-white disabled:bg-gray-400">
-              确认重置
-            </button>
-          </div>
-          <input value={resetToken} onChange={(event) => setResetToken(event.target.value)} data-testid="saas-reset-token" className="w-full rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-3 py-2 text-[10px] font-bold text-[#003178]" placeholder="邮件链接中的一次性重置 token" />
-          <input value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="w-full rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-3 py-2 text-[10px] font-bold text-[#003178]" placeholder="新密码至少 8 位" autoComplete="new-password" type="password" />
-          </form>
-        </section>
-
+      <div className="grid grid-cols-1 gap-3">
         <section className="rounded-2xl bg-white border border-[#dbeafe] p-4 space-y-3">
           <h5 className="text-[11px] font-black text-[#003178] flex items-center gap-2">
             <KeyRound className="h-4 w-4" />
@@ -391,12 +322,12 @@ export default function SaasOperationsPanel({ token, account, onTokenChanged, on
           </h5>
           <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
             {sessions.map((session) => (
-              <div key={session.id} className="rounded-xl border border-[#eef2ff] bg-[#fbfdff] p-3 flex items-center justify-between gap-3">
+              <div key={session.id} className="rounded-xl border border-[#eef2ff] bg-[#fbfdff] p-3 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-[10px] font-black text-[#003178]">{compactDeviceLabel(session.userAgent)} {session.current ? '· 当前设备' : ''}</p>
                   <p className="text-[9.5px] font-bold text-[#434652]">最近使用 {formatDate(session.lastUsedAt ?? session.createdAt)} · {session.active ? '有效' : '已失效'}</p>
                 </div>
-                <button type="button" onClick={() => revokeSession(session.id)} disabled={isBusy || session.current || !session.active} className="rounded-lg px-2 py-1 text-[9px] font-black text-rose-700 disabled:text-gray-300">
+                <button type="button" onClick={() => revokeSession(session.id)} disabled={isBusy || session.current || !session.active} className="rounded-lg px-3 py-2 text-[9px] font-black text-rose-700 disabled:text-gray-300">
                   撤销
                 </button>
               </div>
@@ -418,12 +349,12 @@ export default function SaasOperationsPanel({ token, account, onTokenChanged, on
               邀请
             </button>
           </div>
-          {inviteToken && <p className="rounded-xl bg-amber-50 border border-amber-100 px-3 py-2 text-[10px] font-bold text-amber-800 break-all">本地调试邀请 token：{inviteToken}</p>}
+          {inviteLink && <p className="rounded-xl bg-amber-50 border border-amber-100 px-3 py-2 text-[10px] font-bold text-amber-800 break-all">邀请链接：{inviteLink}</p>}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {members.map((member) => (
               <div key={member.id} className="rounded-xl bg-[#f8fafc] border border-[#eef2ff] p-3">
                 <p className="text-[10px] font-black text-[#003178]">{member.name} · {member.role === 'owner' ? '所有者' : '成员'}</p>
-                <p className="text-[9.5px] font-bold text-[#434652]">{member.email} · {member.emailVerified ? '邮箱已验证' : '邮箱未验证'}</p>
+                <p className="text-[9.5px] font-bold text-[#434652]">{member.email}</p>
               </div>
             ))}
             {invitations.filter((item) => !item.acceptedAt).map((invitation) => (

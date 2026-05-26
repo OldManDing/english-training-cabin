@@ -2,6 +2,8 @@
 
 日期：2026-05-25
 
+> 2026-05-26 产品边界调整：数据库保留历史邮箱验证/一次性 token 字段以兼容已迁移数据，但当前公开 API 和 UI 不提供邮件交付、邮箱验证或邮件找回密码流程。
+
 ## 迁移范围
 
 迁移文件：`migrations/0001_saas_core.sql`、`migrations/0002_workspace_sessions.sql`、`migrations/0003_commercial_ops.sql`
@@ -29,7 +31,7 @@
 - 未配置 `DATABASE_URL` 时，继续使用 `SAAS_DATA_FILE` 文件存储，适合本地开发和演示。
 - 生产环境必须配置 `SAAS_SESSION_SECRET`。
 - 使用订阅 webhook 时必须配置 `BILLING_WEBHOOK_SECRET`。
-- 生产环境要发送邮箱验证、密码重置和团队邀请邮件时，必须配置 `EMAIL_DELIVERY_WEBHOOK_URL`；未配置会返回 `email_delivery_not_configured`，不会假装邮件已发送。
+- 当前产品不启用邮件交付、邮箱验证或邮件找回密码；邮箱只作为账号标识，团队邀请通过可复制链接完成。
 
 ## 回滚策略
 
@@ -47,11 +49,11 @@
 
 - `npm.cmd run lint`：通过。
 - `npm.cmd run test`：4 个测试文件，34 个用例通过。
-- API 测试覆盖：账号注册登录、邮箱验证、密码重置、订阅 webhook 签名、订阅幂等、增量学习实体同步、跨租户隔离、会话刷新撤销、团队邀请、成员列表、owner-only 管理概览、设备会话、内容授权治理、数据权利请求和运营概览。
+- API 测试覆盖：账号注册登录、订阅 webhook 签名、订阅幂等、增量学习实体同步、跨租户隔离、会话刷新撤销、团队邀请、成员列表、owner-only 管理概览、设备会话、内容授权治理、数据权利请求和运营概览；历史邮箱验证/密码重置能力不纳入当前发布口径。
 
 ## 下一步
 
 - 在真实 Postgres 实例上执行一次冷启动 smoke。
-- 在真实部署环境配置邮件 webhook，验证邮箱验证、密码重置和团队邀请邮件真实送达。
+- 在真实部署环境验证团队邀请链接、Postgres 冷启动和数据备份策略。
 - 接入真实支付供应商 webhook，并将 provider event payload 映射到当前标准事件。
 - 将设置页轻量操作台升级为独立 admin 路由，并补班级报表、内容版本和运营告警。

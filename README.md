@@ -53,10 +53,10 @@ docker run --rm -p 3000:3000 --env-file .env.local english-training-cabin
 cp deploy/.env.production.example .env.production
 docker compose -p english-training-cabin --env-file .env.production -f docker-compose.production.yml up -d --build
 SMOKE_BASE_URL=https://study.xmlga.top npm run smoke:production
-SMOKE_BASE_URL=https://study.xmlga.top SMOKE_EMAIL_DOMAIN=qa.example.com npm run smoke:ga
+SMOKE_BASE_URL=https://study.xmlga.top npm run smoke:ga
 ```
 
-`smoke:production` 验证线上健康、账号注册、云同步和 AI；`smoke:ga` 会额外强制调用真实邮件交付适配器，`SMOKE_EMAIL_DOMAIN` 应设置为可接收测试邮件的域名。公开生产环境必须提供 `SAAS_SESSION_SECRET`、`POSTGRES_PASSWORD`、`AI_API_KEY` 和真实邮件交付配置；不要开启 `ALLOW_DEVELOPMENT_EMAIL_TOKENS`。
+`smoke:production` 验证线上健康、账号注册、云同步和 AI；`smoke:ga` 会强制检查真实 AI 能力。公开生产环境必须提供 `SAAS_SESSION_SECRET`、`POSTGRES_PASSWORD` 和 `AI_API_KEY`。
 Nginx 配置模板见 `deploy/nginx-study.xmlga.top.conf`，证书建议用 certbot 签发到 `/etc/letsencrypt/live/study.xmlga.top/`。
 
 ## 质量门禁
@@ -66,7 +66,7 @@ npm run lint
 npm run test
 npm run test:e2e
 npm run verify
-SMOKE_BASE_URL=https://study.xmlga.top SMOKE_EMAIL_DOMAIN=qa.example.com npm run smoke:ga
+SMOKE_BASE_URL=https://study.xmlga.top npm run smoke:ga
 ```
 
 第一次运行 E2E 前需要安装浏览器：
@@ -112,14 +112,12 @@ BILLING_WEBHOOK_SECRET=change-me-to-a-long-random-billing-webhook-secret
 POSTGRES_DB=english_training
 POSTGRES_USER=english_training
 POSTGRES_PASSWORD=change-me-to-a-long-random-postgres-password
-EMAIL_DELIVERY_WEBHOOK_URL=
-EMAIL_DELIVERY_WEBHOOK_SECRET=
 APP_URL=http://localhost:3000
 ```
 
 推荐环境变量值不加引号，以便直接用于 Docker `--env-file`；服务端也兼容已有的带引号配置。AI 接口按 OpenAI-compatible `/v1/chat/completions` 调用。应用侧 API 使用 `/api/ai/generate-passage` 和 `/api/ai/analyze-speech`；旧版 `/api/gemini/*` 路径仅作为兼容别名保留。没有可用供应商配置时，AI 阅读生成和口语分析接口会返回离线模拟结果，保证核心训练闭环可用。
 
-`SAAS_SESSION_SECRET` 用于签发登录会话，生产环境必须设置为高强度随机字符串；`DATABASE_URL` 存在时服务端会使用 Postgres SaaS 存储并自动执行 `0001_saas_core`、`0002_workspace_sessions` 和 `0003_commercial_ops` 扩展迁移，否则使用 `SAAS_DATA_FILE` 文件存储作为本地兜底。`BILLING_WEBHOOK_SECRET` 用于校验订阅 webhook 的 HMAC 签名。`EMAIL_DELIVERY_WEBHOOK_URL` 用于生产环境发送邮箱验证、密码重置和团队邀请邮件；未配置时生产环境会拒绝发送，避免假装已发邮件。`ALLOW_DEVELOPMENT_EMAIL_TOKENS=true` 仅用于本地/E2E，让生产构建也能返回一次性 token 进行自动化验证，公开生产环境不要开启。
+`SAAS_SESSION_SECRET` 用于签发登录会话，生产环境必须设置为高强度随机字符串；`DATABASE_URL` 存在时服务端会使用 Postgres SaaS 存储并自动执行 `0001_saas_core`、`0002_workspace_sessions` 和 `0003_commercial_ops` 扩展迁移，否则使用 `SAAS_DATA_FILE` 文件存储作为本地兜底。`BILLING_WEBHOOK_SECRET` 用于校验订阅 webhook 的 HMAC 签名。当前产品不启用邮件交付、邮箱验证或邮件找回密码，团队邀请通过可复制邀请链接完成。
 
 ## 云端账号与团队协作 API
 
@@ -132,8 +130,6 @@ APP_URL=http://localhost:3000
 - `POST /api/auth/logout`：撤销当前服务端会话。
 - `GET /api/auth/sessions`：查看当前账号的登录设备与服务端会话。
 - `DELETE /api/auth/sessions/:sessionId`：撤销指定非当前设备会话。
-- `POST /api/auth/email-verification/request` / `confirm`：邮箱验证 token。
-- `POST /api/auth/password-reset/request` / `confirm`：密码重置 token。
 - `GET /api/auth/me`：读取当前账号、租户和订阅权益。
 - `GET /api/workspace/members`：读取当前团队成员和邀请记录。
 - `POST /api/workspace/invitations`：团队 owner 邀请成员。
@@ -151,4 +147,4 @@ APP_URL=http://localhost:3000
 - `PUT /api/cloud/learning-entities`：按实体增量同步目标、练习、作答、复习和能力画像。
 - `GET /api/cloud/learning-entities`：按用户和租户读取增量学习实体。
 
-当前已具备 Postgres schema、整包快照、增量实体同步、服务端会话撤销、团队邀请、owner-only 管理概览、邮箱验证/密码重置/邀请邮件交付适配、团队管理 UI、内容授权治理、数据权利请求和运营观测。付费功能不是当前重点；后续如不做付费，可继续强化学校/班级报表、真实内容授权流程和生产告警。
+当前已具备 Postgres schema、整包快照、增量实体同步、服务端会话撤销、团队邀请链接、owner-only 管理概览、团队管理 UI、内容授权治理、数据权利请求和运营观测。付费功能和邮件功能不是当前重点；后续可继续强化学校/班级报表、真实内容授权流程和生产告警。

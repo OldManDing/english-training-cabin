@@ -182,11 +182,11 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
   }
 
   return (
-    <div className="flex-1 p-8 overflow-y-auto bg-gradient-to-b from-[#f3faff] to-white h-screen flex flex-col justify-between relative select-none">
+    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-[#f3faff] to-white min-h-[calc(100svh-9rem)] lg:h-screen flex flex-col justify-between relative select-none">
       
       {/* Sliding Toast mechanism at top center */}
       {toastMessage && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 bg-[#003178] text-white px-6 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 z-50 text-xs font-bold border border-[#cfe6f2] animate-bounce">
+        <div className="fixed top-4 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 bg-[#003178] text-white px-4 sm:px-6 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 z-50 text-xs font-bold border border-[#cfe6f2] animate-bounce">
           <Sparkle className="h-4.5 w-4.5 text-emerald-300 fill-emerald-300 shrink-0" />
           <span>{toastMessage}</span>
         </div>
@@ -194,7 +194,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
 
       {/* Primary Header Group */}
       <div className="shrink-0 mb-6">
-        <header className="pb-4 border-b border-[#cfe6f2] flex items-center justify-between">
+        <header className="pb-4 border-b border-[#cfe6f2] flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-2xl font-black text-[#003178] tracking-tight">
               目标与计划设置
@@ -205,7 +205,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
           </div>
           <button
             onClick={handleSaveSettings}
-            className="px-5 py-2.5 bg-[#003178] hover:bg-[#0d47a1] text-white text-xs font-black rounded-2xl flex items-center gap-1.5 transition-all shadow-sm hover:scale-[1.02] cursor-pointer"
+            className="w-full sm:w-auto justify-center px-5 py-2.5 bg-[#003178] hover:bg-[#0d47a1] text-white text-xs font-black rounded-2xl flex items-center gap-1.5 transition-all shadow-sm hover:scale-[1.02] cursor-pointer"
           >
             <Save className="h-4 w-4 text-emerald-300" />
             <span>保存设置</span>
@@ -214,14 +214,14 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
       </div>
 
       {/* Main Responsive Grid Layout closely mirroring the uploaded UI design */}
-      <div className="flex-1 overflow-y-auto space-y-8 pr-2 pb-12">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+      <div className="flex-1 overflow-y-auto space-y-6 lg:space-y-8 lg:pr-2 pb-12">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-8 items-start">
           
           {/* LEFT 2 COLS: Standard forms and sub-section blocks */}
           <div className="lg:col-span-2 space-y-6">
             
             {/* Card 1: 考试目标 */}
-            <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-6.5 shadow-sm space-y-5">
+            <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-4 sm:p-6.5 shadow-sm space-y-5">
               <h3 className="text-sm font-black text-[#003178] flex items-center gap-2">
                 <Flag className="h-4 w-4 text-[#003178]" />
                 考试目标
@@ -279,7 +279,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
             </div>
 
             {/* Sub-block Container: "当前基础" Header on Left column, "目标分数" on Right column under same row */}
-            <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-6.5 shadow-sm">
+            <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-4 sm:p-6.5 shadow-sm">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 
                 {/* Sub-item Left: 当前基础 */}
@@ -297,14 +297,14 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                       { key: 'writing', label: '写作能力', level: writingLevel, setLevel: setWritingLevel },
                       { key: 'speaking', label: '口语表达', level: speakingLevel, setLevel: setSpeakingLevel },
                     ].map((item) => (
-                      <div key={item.key} className="flex items-center justify-between text-xs">
+                      <div key={item.key} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-xs">
                         <span className="font-bold text-[#434652]">{item.label}</span>
-                        <div className="flex bg-[#f0f7fc] p-0.5 rounded-lg border border-[#cfe6f2] scale-95 origin-right">
+                        <div className="grid grid-cols-3 sm:flex bg-[#f0f7fc] p-0.5 rounded-lg border border-[#cfe6f2] sm:scale-95 sm:origin-right">
                           {levelLabels.map((lbl, idx) => (
                             <button
                               key={lbl}
                               onClick={() => item.setLevel(idx)}
-                              className={`text-[10px] font-bold px-3 py-1 rounded-md transition-all ${
+                              className={`text-[10px] font-bold px-3 py-2 sm:py-1 rounded-md transition-all ${
                                 item.level === idx
                                   ? 'bg-[#003178] text-white shadow-2xs'
                                   : 'text-[#434652] hover:bg-[#e1f1fc]'
@@ -362,7 +362,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
             </div>
 
             {/* Card 3: 学习参数 */}
-            <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-6.5 shadow-sm space-y-5">
+            <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-4 sm:p-6.5 shadow-sm space-y-5">
               <h3 className="text-sm font-black text-[#003178] flex items-center gap-2">
                 <Sliders className="h-4 w-4 text-[#003178]" />
                 学习参数
@@ -386,14 +386,14 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                   </div>
                 </div>
 
-                <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+                <div className="pt-3 border-t border-gray-100 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex flex-col">
                     <span className="text-xs font-bold text-[#003178]">口语录音质量提醒</span>
                     <span className="text-[10px] text-gray-400 mt-0.5">开启后会在口语训练中提示尽量使用安静环境和清晰麦克风。</span>
                   </div>
                   <button
                     onClick={() => setWhisperNoiseReduction(!whisperNoiseReduction)}
-                    className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
+                    className={`w-11 h-6 shrink-0 rounded-full transition-colors relative cursor-pointer ${
                       whisperNoiseReduction ? 'bg-[#1b6d24]' : 'bg-gray-300'
                     }`}
                   >
