@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { ChevronDown, Cloud, DownloadCloud, LogIn, LogOut, RefreshCw, ShieldCheck, UploadCloud, UserPlus } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { ChevronDown, Cloud, Copy, DownloadCloud, KeyRound, LogIn, LogOut, RefreshCw, ShieldCheck, UploadCloud, UserPlus } from 'lucide-react';
 import { exportLearningData, importLearningData } from '../lib/storage/db';
+import { apiRequest, clearStoredAuthToken, getStoredAuthToken, setStoredAuthToken } from '../lib/api';
 import SaasOperationsPanel from './SaasOperationsPanel';
 
 export interface PublicSaasAccountContext {
@@ -33,40 +34,22 @@ export interface PublicSaasAccountContext {
 interface SaasAccountPanelProps {
   onTriggerModal?: (title: string, body: string) => void;
   onDataRestored?: () => Promise<void>;
+  onAuthenticated?: () => void;
+  onLogout?: () => void;
 }
 
-const SAAS_TOKEN_KEY = 'english-training-cabin:saas-token';
 const INITIAL_CLOUD_STATUS = '登录后可把当前浏览器的学习记录同步到服务端，形成可恢复的云端学习档案。';
-type AuthMode = 'login' | 'register' | 'invitation';
+type AuthMode = 'login' | 'register' | 'invitation' | 'reset';
 
 function getInitialAuthAction(): { mode?: AuthMode; token?: string } {
   const token = new URLSearchParams(window.location.search).get('token') ?? undefined;
-  if (!token) return {};
   if (window.location.pathname.includes('/workspace/accept-invitation')) return { mode: 'invitation', token };
+  if (window.location.pathname.includes('/auth/reset-password')) return { mode: 'reset', token };
   return {};
 }
 
 function getApiMessage(error: unknown): string {
   return error instanceof Error ? error.message : '请求失败，请稍后重试。';
-}
-
-export async function apiRequest<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
-  const response = await fetch(path, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
-  });
-
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({})) as { message?: string };
-    throw new Error(payload.message || `请求失败：${response.status}`);
-  }
-
-  if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
 }
 
 function formatAccountState(account: PublicSaasAccountContext) {
@@ -80,15 +63,25 @@ function formatAccountState(account: PublicSaasAccountContext) {
   return `${syncState} · ${statusMap[account.subscription.status]}`;
 }
 
-export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: SaasAccountPanelProps) {
+type AuthPayload = {
+  token: string;
+  account: PublicSaasAccountContext;
+  recoveryCode?: string;
+  recoveryCodeExpiresAt?: string;
+};
+
+export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAuthenticated, onLogout }: SaasAccountPanelProps) {
   const [initialAction] = useState(getInitialAuthAction);
   const [mode, setMode] = useState<AuthMode>(initialAction.mode ?? 'register');
   const [name, setName] = useState('学习者');
   const [organizationName, setOrganizationName] = useState('英语训练团队');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [recoveryCode, setRecoveryCode] = useState(initialAction.mode === 'reset' ? initialAction.token ?? '' : '');
+  const [oneTimeRecoveryCode, setOneTimeRecoveryCode] = useState<string | null>(null);
   const [actionToken, setActionToken] = useState(initialAction.token ?? '');
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem(SAAS_TOKEN_KEY));
+  const [token, setToken] = useState<string | null>(() => getStoredAuthToken());
+  const latestTokenRef = useRef<string | null>(getStoredAuthToken());
   const [account, setAccount] = useState<PublicSaasAccountContext | null>(null);
   const [statusText, setStatusText] = useState(INITIAL_CLOUD_STATUS);
   const [isBusy, setIsBusy] = useState(false);
@@ -96,13 +89,15 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
 
   useEffect(() => {
     if (!token) return;
+    if (oneTimeRecoveryCode) return;
     let mounted = true;
 
     apiRequest<{ authenticated: boolean; account: PublicSaasAccountContext | null }>('/api/auth/session', {}, token)
       .then((payload) => {
         if (!mounted) return;
         if (!payload.authenticated || !payload.account) {
-          localStorage.removeItem(SAAS_TOKEN_KEY);
+          clearStoredAuthToken();
+          latestTokenRef.current = null;
           setToken(null);
           setAccount(null);
           setStatusText('登录状态已失效，请重新登录。');
@@ -117,7 +112,8 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
       })
       .catch(() => {
         if (!mounted) return;
-        localStorage.removeItem(SAAS_TOKEN_KEY);
+        clearStoredAuthToken();
+        latestTokenRef.current = null;
         setToken(null);
         setAccount(null);
         setStatusText('登录状态已失效，请重新登录。');
@@ -126,7 +122,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
     return () => {
       mounted = false;
     };
-  }, [token]);
+  }, [token, oneTimeRecoveryCode]);
 
   const handleAuthSubmit = async () => {
     setIsBusy(true);
@@ -135,32 +131,40 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
         ? '/api/auth/register'
         : mode === 'login'
           ? '/api/auth/login'
-          : '/api/workspace/invitations/accept';
+          : mode === 'reset'
+            ? '/api/auth/password-reset'
+            : '/api/workspace/invitations/accept';
       const body = mode === 'register'
         ? { email, password, name, organizationName }
         : mode === 'login'
           ? { email, password }
-          : { token: actionToken, name, password };
-      const payload = await apiRequest<{ token: string; account: PublicSaasAccountContext }>(
+          : mode === 'reset'
+            ? { email, recoveryCode, password }
+            : { token: actionToken, name, password };
+      const payload = await apiRequest<AuthPayload>(
         endpoint,
         {
           method: 'POST',
           body: JSON.stringify(body),
         },
       );
-      localStorage.setItem(SAAS_TOKEN_KEY, payload.token);
+      setStoredAuthToken(payload.token, !payload.recoveryCode);
+      latestTokenRef.current = payload.token;
       setToken(payload.token);
       setAccount(payload.account);
-      if (mode === 'register') {
-        setStatusText('云端账号已创建，可同步学习数据；团队邀请会生成可复制的邀请链接。');
-        return;
-      }
       const statusByMode: Record<AuthMode, string> = {
-        register: '云端账号已创建，学习档案同步能力已开通。',
+        register: '云端账号已创建，学习档案同步能力已开通。请立即保存账号恢复码。',
         login: '已登录云端账号。',
         invitation: '邀请已接受，您已加入团队。',
+        reset: '密码已重置并重新登录。请保存新的账号恢复码。',
       };
       setStatusText(statusByMode[mode]);
+      if (payload.recoveryCode) {
+        setOneTimeRecoveryCode(payload.recoveryCode);
+      }
+      if (!payload.recoveryCode) {
+        onAuthenticated?.();
+      }
     } catch (error) {
       setStatusText(getApiMessage(error));
     } finally {
@@ -174,10 +178,31 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
       if (token) {
         await apiRequest('/api/auth/logout', { method: 'POST' }, token).catch(() => undefined);
       }
-      localStorage.removeItem(SAAS_TOKEN_KEY);
+      clearStoredAuthToken();
+      latestTokenRef.current = null;
       setToken(null);
       setAccount(null);
+      setOneTimeRecoveryCode(null);
       setStatusText('已退出云端账号，本机学习记录仍保存在当前浏览器。');
+      onLogout?.();
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const handleGenerateRecoveryCode = async () => {
+    if (!token) return;
+    setIsBusy(true);
+    try {
+      const response = await apiRequest<{ recoveryCode: string; recoveryCodeExpiresAt: string }>(
+        '/api/auth/recovery-code',
+        { method: 'POST' },
+        token,
+      );
+      setOneTimeRecoveryCode(response.recoveryCode);
+      setStatusText('新的账号恢复码已生成，旧恢复码已失效。请立即保存。');
+    } catch (error) {
+      setStatusText(getApiMessage(error));
     } finally {
       setIsBusy(false);
     }
@@ -261,7 +286,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
             void handleAuthSubmit();
           }}
         >
-          {(mode === 'register' || mode === 'login') ? <div className="flex rounded-2xl bg-[#f0f7fc] p-1 border border-[#cfe6f2]">
+          {(mode === 'register' || mode === 'login' || mode === 'reset') ? <div className="flex rounded-2xl bg-[#f0f7fc] p-1 border border-[#cfe6f2]">
             <button
               type="button"
               onClick={() => setMode('register')}
@@ -275,6 +300,13 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
               className={`flex-1 rounded-xl px-3 py-2 text-xs font-black transition ${mode === 'login' ? 'bg-[#003178] text-white' : 'text-[#003178]'}`}
             >
               登录
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('reset')}
+              className={`flex-1 rounded-xl px-3 py-2 text-xs font-black transition ${mode === 'reset' ? 'bg-[#003178] text-white' : 'text-[#003178]'}`}
+            >
+              找回
             </button>
           </div> : (
             <div className="rounded-2xl bg-[#eef7fc] border border-[#d2e2ec] p-3 flex items-center justify-between gap-3">
@@ -306,7 +338,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
             </div>
           )}
 
-          {(mode === 'register' || mode === 'login') && <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {(mode === 'register' || mode === 'login' || mode === 'reset') && <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input
               data-testid="saas-email-input"
               value={email}
@@ -321,11 +353,27 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               className="rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-4 py-3 text-xs font-bold text-[#003178] outline-none focus:ring-1 focus:ring-[#003178]"
-              placeholder="密码至少 8 位"
+              placeholder={mode === 'reset' ? '设置新密码（至少 8 位）' : '密码至少 8 位'}
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
               type="password"
             />
           </div>}
+
+          {mode === 'reset' && (
+            <div className="space-y-2">
+              <input
+                data-testid="saas-recovery-code-input"
+                value={recoveryCode}
+                onChange={(event) => setRecoveryCode(event.target.value)}
+                className="w-full rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-4 py-3 text-xs font-bold text-[#003178] outline-none focus:ring-1 focus:ring-[#003178]"
+                autoComplete="one-time-code"
+                placeholder="输入注册或上次重置时保存的账号恢复码"
+              />
+              <p className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10.5px] font-bold leading-5 text-amber-800">
+                本产品不依赖邮箱找回密码。恢复码只显示一次，服务端只保存哈希，重置成功后旧恢复码会立即失效。
+              </p>
+            </div>
+          )}
 
           {mode === 'invitation' && (
             <input
@@ -355,13 +403,13 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
             disabled={isBusy}
             className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#003178] px-4 py-3 text-xs font-black text-white transition hover:bg-[#07244f] disabled:bg-gray-400"
           >
-            {isBusy ? <RefreshCw className="h-4 w-4 animate-spin" /> : mode === 'register' || mode === 'invitation' ? <UserPlus className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
-            {mode === 'register' ? '创建云端账号' : mode === 'login' ? '登录云端账号' : '接受邀请并加入团队'}
+            {isBusy ? <RefreshCw className="h-4 w-4 animate-spin" /> : mode === 'register' || mode === 'invitation' ? <UserPlus className="h-4 w-4" /> : mode === 'reset' ? <KeyRound className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
+            {mode === 'register' ? '创建云端账号' : mode === 'login' ? '登录云端账号' : mode === 'reset' ? '用恢复码重置密码' : '接受邀请并加入团队'}
           </button>
 
           {mode === 'login' && (
             <p className="text-center text-[10.5px] font-bold text-[#5d6472]">
-              当前版本不提供找回密码，请妥善保存密码。
+              忘记密码时，请使用注册或上次重置时保存的恢复码。
             </p>
           )}
         </form>
@@ -387,6 +435,15 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
               <span className="rounded-full bg-white px-3 py-1 text-[#1b6d24] border border-emerald-100">云同步 {account.entitlements.cloudSync ? '已开通' : '未开通'}</span>
               <span className="rounded-full bg-white px-3 py-1 text-[#003178] border border-[#dbeafe]">团队席位 {account.entitlements.teamSeats} 人</span>
             </div>
+            <button
+              type="button"
+              onClick={handleGenerateRecoveryCode}
+              disabled={isBusy}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#cfe6f2] bg-white px-3 py-2 text-[10px] font-black text-[#003178] hover:bg-[#eef7fc] disabled:text-gray-400"
+            >
+              <KeyRound className="h-3.5 w-3.5" />
+              生成新的账号恢复码
+            </button>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -436,6 +493,44 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
               </div>
             )}
           </section>
+        </div>
+      )}
+
+      {oneTimeRecoveryCode && (
+        <div data-testid="saas-recovery-code" className="rounded-2xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[11px] font-black text-amber-900">账号恢复码仅显示一次</p>
+              <p className="mt-1 text-[10px] font-bold leading-5 text-amber-800">
+                请保存在密码管理器中。忘记密码时需要它；生成新码后旧码会失效。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigator.clipboard?.writeText(oneTimeRecoveryCode)}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-amber-900 px-3 py-2 text-[10px] font-black text-white"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              复制
+            </button>
+          </div>
+          <code className="block select-all rounded-xl bg-white px-3 py-2 text-[11px] font-black text-[#003178] break-all border border-amber-100">
+            {oneTimeRecoveryCode}
+          </code>
+          {account && onAuthenticated && (
+            <button
+              data-testid="saas-enter-app"
+              type="button"
+              onClick={() => {
+                const currentToken = latestTokenRef.current ?? token ?? getStoredAuthToken();
+                if (currentToken) setStoredAuthToken(currentToken, true);
+                onAuthenticated();
+              }}
+              className="w-full rounded-xl bg-[#003178] px-4 py-3 text-xs font-black text-white hover:bg-[#07244f]"
+            >
+              我已保存恢复码，进入学习舱
+            </button>
+          )}
         </div>
       )}
 

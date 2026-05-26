@@ -28,8 +28,22 @@ export const CET4_EXAM_PROFILE: ExamProfile = {
       scoreWeight: 0.35,
       questionTypes: [
         {
+          id: 'short-news',
+          name: '短篇新闻',
+          answerMode: 'single-choice',
+          defaultTimeLimitSeconds: 45,
+          supportedReviewReasons: ['关键词漏听', '数字时间混淆', '选项判断失误'],
+        },
+        {
           id: 'long-conversation',
           name: '长对话',
+          answerMode: 'single-choice',
+          defaultTimeLimitSeconds: 60,
+          supportedReviewReasons: ['关键词漏听', '转折信息漏听', '数字时间混淆', '选项判断失误'],
+        },
+        {
+          id: 'listening-passage',
+          name: '听力篇章',
           answerMode: 'single-choice',
           defaultTimeLimitSeconds: 60,
           supportedReviewReasons: ['关键词漏听', '转折信息漏听', '数字时间混淆', '选项判断失误'],
@@ -43,6 +57,20 @@ export const CET4_EXAM_PROFILE: ExamProfile = {
       durationMinutes: 40,
       scoreWeight: 0.35,
       questionTypes: [
+        {
+          id: 'word-bank',
+          name: '选词填空',
+          answerMode: 'single-choice',
+          defaultTimeLimitSeconds: 60,
+          supportedReviewReasons: ['搭配错误', '低信心', '盲猜'],
+        },
+        {
+          id: 'long-matching',
+          name: '长篇匹配',
+          answerMode: 'single-choice',
+          defaultTimeLimitSeconds: 90,
+          supportedReviewReasons: ['定位失准', '同义替换未识别', '细节偷换', '低信心', '盲猜'],
+        },
         {
           id: 'careful-reading',
           name: '仔细阅读',

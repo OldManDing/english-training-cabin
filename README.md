@@ -115,9 +115,9 @@ POSTGRES_PASSWORD=change-me-to-a-long-random-postgres-password
 APP_URL=http://localhost:3000
 ```
 
-推荐环境变量值不加引号，以便直接用于 Docker `--env-file`；服务端也兼容已有的带引号配置。AI 接口按 OpenAI-compatible `/v1/chat/completions` 调用。应用侧 API 使用 `/api/ai/generate-passage` 和 `/api/ai/analyze-speech`；旧版 `/api/gemini/*` 路径仅作为兼容别名保留。没有可用供应商配置时，AI 阅读生成和口语分析接口会返回离线模拟结果，保证核心训练闭环可用。
+推荐环境变量值不加引号，以便直接用于 Docker `--env-file`；服务端也兼容已有的带引号配置。AI 接口按 OpenAI-compatible `/v1/chat/completions` 调用。应用侧 API 使用 `/api/ai/generate-passage`、`/api/ai/analyze-speech` 和 `/api/ai/evaluate-subjective`；旧版 `/api/gemini/*` 路径仅作为兼容别名保留。AI 生成、口语分析、主观题评阅、学习计划、材料校验、练习报告和观测摘要接口都要求 Bearer 登录会话，避免匿名使用和接口滥用；没有可用供应商配置时，AI 接口会返回离线模拟结果，保证核心训练闭环可用。
 
-`SAAS_SESSION_SECRET` 用于签发登录会话，生产环境必须设置为高强度随机字符串；`DATABASE_URL` 存在时服务端会使用 Postgres SaaS 存储并自动执行 `0001_saas_core`、`0002_workspace_sessions` 和 `0003_commercial_ops` 扩展迁移，否则使用 `SAAS_DATA_FILE` 文件存储作为本地兜底。`BILLING_WEBHOOK_SECRET` 用于校验订阅 webhook 的 HMAC 签名。当前产品不启用邮件交付、邮箱验证或邮件找回密码，团队邀请通过可复制邀请链接完成。
+`SAAS_SESSION_SECRET` 用于签发登录会话，生产环境必须设置为高强度随机字符串；`DATABASE_URL` 存在时服务端会使用 Postgres SaaS 存储并自动执行 `0001_saas_core`、`0002_workspace_sessions` 和 `0003_commercial_ops` 扩展迁移，否则使用 `SAAS_DATA_FILE` 文件存储作为本地兜底。`BILLING_WEBHOOK_SECRET` 用于校验订阅 webhook 的 HMAC 签名。当前产品不启用邮件交付或邮箱验证；忘记密码通过注册/重置时一次性显示的账号恢复码完成，服务端只保存恢复码哈希，成功使用后旧码失效。团队邀请通过可复制邀请链接完成。
 
 ## 云端账号与团队协作 API
 
@@ -125,6 +125,9 @@ APP_URL=http://localhost:3000
 
 - `POST /api/auth/register`：注册账号并创建默认团队空间和云端学习档案能力。
 - `POST /api/auth/login`：登录并返回 Bearer token。
+- `POST /api/auth/password-reset`：使用账号邮箱、恢复码和新密码重置密码，成功后撤销旧会话并返回新恢复码。
+- `POST /api/auth/password`：登录状态下用当前密码修改密码，成功后撤销旧会话并返回新恢复码。
+- `POST /api/auth/recovery-code`：登录状态下生成新的账号恢复码，旧恢复码立即失效。
 - `GET /api/auth/session`：静默检查当前登录状态；无效 token 返回匿名状态，不制造浏览器控制台 401 噪声。
 - `POST /api/auth/refresh`：轮换当前登录会话，旧 token 立即失效。
 - `POST /api/auth/logout`：撤销当前服务端会话。
@@ -146,5 +149,9 @@ APP_URL=http://localhost:3000
 - `GET /api/cloud/learning-data`：从服务端读取当前用户自己的学习数据快照。
 - `PUT /api/cloud/learning-entities`：按实体增量同步目标、练习、作答、复习和能力画像。
 - `GET /api/cloud/learning-entities`：按用户和租户读取增量学习实体。
+- `POST /api/study/daily-plan`：登录后根据目标、复习项和能力画像生成日计划。
+- `POST /api/materials/validate-passage`：登录后校验用户导入或 AI 生成的阅读材料结构。
+- `POST /api/practice/*-report`：登录后生成选择题、口语、主观题和标准模考练习报告。
+- `GET /api/observability/summary`：登录后读取服务端聚合观测，不再匿名暴露。
 
-当前已具备 Postgres schema、整包快照、增量实体同步、服务端会话撤销、团队邀请链接、owner-only 管理概览、团队管理 UI、内容授权治理、数据权利请求和运营观测。付费功能和邮件功能不是当前重点；后续可继续强化学校/班级报表、真实内容授权流程和生产告警。
+当前已具备 Postgres schema、整包快照、增量实体同步、服务端会话撤销、团队邀请链接、owner-only 管理概览、团队管理 UI、内容授权治理、数据权利请求、受保护业务 API 和运营观测。付费功能和邮件功能不是当前重点；后续可继续强化学校/班级报表、真实内容授权流程和生产告警。

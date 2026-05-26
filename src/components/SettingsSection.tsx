@@ -28,7 +28,7 @@ interface SettingsSectionProps {
 export default function SettingsSection({ onSave, targetScoreLimit = 550, initialExamDate, initialDailyMinutes, onSetScoreLimit, onTriggerModal, onDataRestored }: SettingsSectionProps) {
   // Local Settings States matching the screenshot
   const [examType, setExamType] = useState<string>("CET-4");
-  const [examDate, setExamDate] = useState<string>(initialExamDate ?? "2026-06-15");
+  const [examDate, setExamDate] = useState<string>(initialExamDate ?? "2026-06-13");
   const [prepareSpeaking, setPrepareSpeaking] = useState<boolean>(true);
   
   // Base skill levels: 0 = 入门, 1 = 中级, 2 = 高级

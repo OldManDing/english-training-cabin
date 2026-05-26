@@ -16,8 +16,11 @@ import OnboardingDiagnostic from './components/OnboardingDiagnostic';
 import ListeningTraining from './components/ListeningTraining';
 import SettingsSection from './components/SettingsSection';
 import VocabularyTraining from './components/VocabularyTraining';
+import AuthGate from './components/AuthGate';
+import MockExam from './components/MockExam';
 import { ActiveTab, DailyPlan, Passage, PracticeCompletionReport, ReviewItem, SkillProfile, StudyGoal } from './types';
 import { CET4_VOCABULARY_BANK, INITIAL_PASSAGE } from './data';
+import { CET4_QUESTION_BANK_COVERAGE, CET4_READING_BANK } from './questionBank';
 import { Sparkles, BookOpen, ChevronRight, GraduationCap, X, Volume2, LibraryBig } from 'lucide-react';
 import {
   completeReviewItem,
@@ -104,7 +107,7 @@ function buildSettingsSkillProfiles(settings: {
   }));
 }
 
-export default function App() {
+function StudyApp() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('today');
   const [activeGoal, setActiveGoal] = useState<StudyGoal | null>(null);
   const [reviewItemCount, setReviewItemCount] = useState(0);
@@ -306,79 +309,14 @@ export default function App() {
     }
   };
 
-  // Available passages list for the 'practice' tab
-  const practicePassages = [
-    {
-      id: 'cet-ai-edu',
-      title: 'Artificial Intelligence in Education',
-      category: '科技与现代人文 (仔细阅读)',
-      words: 312,
-      duration: '18 分钟',
-      data: INITIAL_PASSAGE
-    },
-    {
-      id: 'cet-green-tech',
-      title: 'Green Tech and Environmental Protection',
-      category: '社会生态与环保 (仔细阅读)',
-      words: 285,
-      duration: '15 分钟',
-      data: {
-        id: 'cet-green-tech',
-        examId: 'cet4',
-        moduleId: 'reading',
-        title: 'Green Tech and Environmental Protection',
-        content: `The development of modern engineering is rapidly transforming our ecosystem. Supporters state that clean technology provides alternative energy solutions, bringing green resources to remote towns. This transition can significantly secure regional wellness and reduce the reliance on fossil fuels.
-
-However, critics voice key worries about electronic waste and environmental pollution during the battery manufacturing process. One major assessment indicated that although solar energy is highly efficient, critics argue that the production of photovoltaic cells requires non-biodegradable raw items. Furthermore, over-dependence on specialized components might cause new resource crises.
-
-In conclusion, although integrating sustainable tech helps reduce footprints, it needs careful legislation. Consequently, the government can design proper disposal standards to guide battery recycling. As we advance in this digital century, the priority remains on natural safety rather than pure commercial margins.`,
-        questions: [
-          {
-            id: 1,
-            examId: 'cet4',
-            moduleId: 'reading',
-            questionTypeId: 'careful-reading',
-            question: "According to the passage, what can dirty manufacturing processes lead to?",
-            options: {
-              A: "An extreme reduction in global grid capacity.",
-              B: "Environmental pollution and battery-related electronic waste.",
-              C: "An immediate collapse of standard public transport.",
-              D: "Slower development in clean technology integration."
-            },
-            correctAnswer: 'B',
-            explanation: "定位到第二段首句：'critics voice key worries about electronic waste and environmental pollution during the battery manufacturing process'。选项 B 高度契合该表述。",
-            type: "细节理解",
-            tags: ['环境主题', '细节定位'],
-            difficulty: 3,
-            sourceType: 'original',
-            correctSentence: "However, critics voice key worries about electronic waste and environmental pollution during the battery manufacturing process.",
-            distractorSentence: "Supporters state that clean technology provides alternative energy solutions, bringing green resources to remote towns."
-          },
-          {
-            id: 2,
-            examId: 'cet4',
-            moduleId: 'reading',
-            questionTypeId: 'careful-reading',
-            question: "What is mentioned as a benefit of clean technology in the first paragraph?",
-            options: {
-              A: "It fully stops critical climate changes.",
-              B: "It is cheaper than any traditional resource.",
-              C: "It secures regional wellness and brings green resources.",
-              D: "It creates a massive number of manufacturing jobs."
-            },
-            correctAnswer: 'C',
-            explanation: "定位到第一段后半部分：'clean technology provides alternative energy solutions, bringing green resources to remote towns. This transition can significantly secure regional wellness.' 完美匹配选项 C 的核心表达物。",
-            type: "细节推导",
-            tags: ['环境主题', '因果推导'],
-            difficulty: 3,
-            sourceType: 'original',
-            correctSentence: "clean technology provides alternative energy solutions, bringing green resources to remote towns. This transition can significantly secure regional wellness.",
-            distractorSentence: "Furthermore, over-dependence on specialized components might cause new resource crises."
-          }
-        ]
-      } as Passage
-    }
-  ];
+  const practicePassages = CET4_READING_BANK.map((passage) => ({
+    id: passage.id,
+    title: passage.title,
+    category: '原创模拟 · 仔细阅读',
+    words: passage.content.split(/\s+/).filter(Boolean).length,
+    duration: `${Math.max(12, passage.questions.length * 3)} 分钟`,
+    data: passage,
+  }));
 
   const handleSelectPassage = (passageData: Passage) => {
     setCustomPassage(passageData);
@@ -437,6 +375,22 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
     });
   };
 
+  const handleCompleteMockExam = (score: number, report: PracticeCompletionReport) => {
+    setActiveTab('progress');
+    trackTelemetry('practice_completed', {
+      mode: report.session.modeId,
+      moduleId: report.session.moduleId,
+      score,
+      attempts: report.attempts.length,
+      reviewItems: report.reviewItems.length,
+    });
+    persistCompletionReport(report).catch((error) => {
+      console.error('Failed to persist mock exam:', error);
+      trackTelemetry('client_error', { area: 'mock_exam_persist' });
+      handleTriggerModal('阶段模考保存失败', '本次模考报告已生成，但错因和能力画像没有成功写入本地数据库。');
+    });
+  };
+
   const handleCompleteSpeakingPractice = async (report: PracticeCompletionReport) => {
     trackTelemetry('practice_completed', {
       mode: report.session.modeId,
@@ -459,6 +413,7 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
             onStartWriting={() => setSubjectivePracticeMode('writing')}
             onStartTranslation={() => setSubjectivePracticeMode('translation')}
             onStartVocabulary={() => setIsVocabularyPracticing(true)}
+            onStartMockExam={() => setActiveTab('mock')}
             onStartOnboarding={() => setShowOnboarding(true)}
             onViewReview={() => setActiveTab('review')}
             onStartSpeaking={() => setActiveTab('speaking')}
@@ -491,7 +446,7 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
                     </h2>
                     <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
                       当前内置原创 CET-4 模拟材料：阅读 {practicePassages.length} 组、核心词汇 {CET4_VOCABULARY_BANK.length} 个、
-                      听力 1 组、写作/翻译各 1 组。所有练习都会写入本地能力画像和复习队列。
+                      题型覆盖 {CET4_QUESTION_BANK_COVERAGE.length} 类，并提供阶段模考闭环。所有练习都会写入本地能力画像和复习队列。
                     </p>
                   </div>
                   <button
@@ -505,7 +460,7 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
                 </div>
               </header>
 
-              <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <div className="rounded-[2rem] border border-emerald-100 bg-white p-5 shadow-sm sm:p-6">
                   <span className="inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">
                     <Volume2 className="h-3.5 w-3.5" />
@@ -549,6 +504,23 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
                     </div>
                   </div>
                 </div>
+
+                <div className="rounded-[2rem] border border-amber-100 bg-white p-5 shadow-sm sm:p-6">
+                  <span className="inline-flex rounded-full border border-amber-100 bg-amber-50 px-2.5 py-1 text-[10px] font-black text-amber-700">
+                    阶段模考
+                  </span>
+                  <h3 className="mt-3 text-lg font-black text-[#071e27]">补齐应试闭环</h3>
+                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
+                    一次完成写作、听力、阅读、翻译四个模块，自动生成分项分数、错因复习和能力画像，不再只做零散专项。
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('mock')}
+                    className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-amber-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-amber-700 sm:w-auto"
+                  >
+                    开始阶段模考
+                  </button>
+                </div>
               </section>
 
               <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -582,6 +554,39 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
                     </div>
                   </div>
                 ))}
+              </section>
+
+              <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <span className="inline-flex rounded-full border border-[#cfe6f2] bg-[#eef7fc] px-2.5 py-1 text-[10px] font-black text-[#003178]">
+                      题库覆盖
+                    </span>
+                    <h3 className="mt-3 text-lg font-black text-[#071e27]">CET-4 主要题型覆盖清单</h3>
+                  </div>
+                  <p className="text-xs font-bold leading-5 text-slate-500">
+                    内置内容均为原创模拟题；授权真题可通过材料导入扩展。
+                  </p>
+                </div>
+                <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+                  {CET4_QUESTION_BANK_COVERAGE.map((item) => (
+                    <div key={`${item.moduleId}-${item.questionTypeId}`} className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-black text-[#003178]">{item.name}</div>
+                          <div className="mt-1 text-[10px] font-bold text-slate-500">{item.trainingRoute}</div>
+                        </div>
+                        <span className="rounded-full bg-white px-2 py-1 text-[10px] font-black text-slate-600">
+                          {item.builtInCount}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex justify-between text-[10px] font-bold text-slate-500">
+                        <span>官方结构 {item.officialCount}</span>
+                        <span>{item.durationMinutes}m</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </section>
 
               <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -648,6 +653,13 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
             </div>
           </div>
         );
+      case 'mock':
+        return (
+          <MockExam
+            onBack={() => setActiveTab('today')}
+            onComplete={handleCompleteMockExam}
+          />
+        );
       case 'review':
         return (
           <ReviewSection
@@ -695,6 +707,7 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
             onStartWriting={() => setSubjectivePracticeMode('writing')}
             onStartTranslation={() => setSubjectivePracticeMode('translation')}
             onStartVocabulary={() => setIsVocabularyPracticing(true)}
+            onStartMockExam={() => setActiveTab('mock')}
             onStartOnboarding={() => setShowOnboarding(true)}
             onViewReview={() => setActiveTab('review')}
             onStartSpeaking={() => setActiveTab('speaking')}
@@ -808,5 +821,13 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
         </div>
       )}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthGate>
+      <StudyApp />
+    </AuthGate>
   );
 }

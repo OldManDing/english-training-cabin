@@ -1,4 +1,4 @@
-export type ActiveTab = 'today' | 'practice' | 'review' | 'speaking' | 'progress' | 'import' | 'settings';
+export type ActiveTab = 'today' | 'practice' | 'mock' | 'review' | 'speaking' | 'progress' | 'import' | 'settings';
 
 export type SkillArea = 'reading' | 'listening' | 'writing' | 'translation' | 'speaking' | 'vocabulary' | 'grammar';
 

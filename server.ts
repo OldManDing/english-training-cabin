@@ -4,8 +4,10 @@ import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import { CET4_EXAM_PROFILE } from './src/exams/cet4';
+import { CET4_QUESTION_BANK_COVERAGE, CET4_MOCK_EXAM } from './src/questionBank';
 import { buildDailyPlan } from './src/domain/planner/dailyPlan';
 import { normalizePassage } from './src/domain/materials/passage';
+import { buildMockExamReport, MockExamAnswers } from './src/domain/practice/mockExam';
 import {
   buildChoicePracticeReport,
   buildSpeakingPracticeReport,
@@ -19,6 +21,7 @@ import {
 import { MistakeReason, ReviewItem, SkillArea, SkillProfile, StudyGoal } from './src/types';
 import {
   acceptWorkspaceInvitation,
+  changeSaasPassword,
   createFileSaasStore,
   createInMemorySaasStore,
   createWorkspaceInvitation,
@@ -26,8 +29,10 @@ import {
   getSaasSessionSecret,
   getSessionExpiresAt,
   issueSessionToken,
+  issuePasswordRecoveryCode,
   loginSaasAccount,
   registerSaasAccount,
+  resetSaasPassword,
   SaasAccountRecord,
   SaasApiError,
   SaasSessionPayload,
@@ -339,6 +344,34 @@ function validateChoicePracticePayload(value: unknown) {
     startedAt: typeof input.startedAt === 'string' ? input.startedAt : new Date().toISOString(),
     questions: normalizedQuestions,
     answers: normalizedAnswers,
+  };
+}
+
+function validateMockExamPayload(value: unknown): { answers: MockExamAnswers; startedAt: string } {
+  const input = typeof value === 'object' && value ? value as Record<string, unknown> : {};
+  const rawAnswers = typeof input.answers === 'object' && input.answers ? input.answers as Record<string, unknown> : input;
+  const rawChoices = typeof rawAnswers.choices === 'object' && rawAnswers.choices ? rawAnswers.choices as Record<string, unknown> : {};
+  const choices: MockExamAnswers['choices'] = {};
+
+  for (const [questionId, selected] of Object.entries(rawChoices)) {
+    if (!/^[A-Za-z0-9_-]{1,120}$/.test(questionId)) {
+      throw new Error('choices contains an invalid question id');
+    }
+    if (selected !== undefined && selected !== null) {
+      if (!['A', 'B', 'C', 'D'].includes(String(selected))) {
+        throw new Error(`choices.${questionId} must be A, B, C, or D`);
+      }
+      choices[questionId] = selected as 'A' | 'B' | 'C' | 'D';
+    }
+  }
+
+  return {
+    answers: {
+      choices,
+      writingAnswer: sanitizeText(rawAnswers.writingAnswer, 'writingAnswer', 5000),
+      translationAnswer: sanitizeText(rawAnswers.translationAnswer, 'translationAnswer', 3000),
+    },
+    startedAt: typeof input.startedAt === 'string' ? input.startedAt : new Date().toISOString(),
   };
 }
 
@@ -734,8 +767,10 @@ function asyncRoute(handler: (req: Request, res: Response, next: NextFunction) =
 
 export function createApp(options: CreateAppOptions = {}) {
   const app = express();
-  const aiLimiter = createRateLimiter(20, 60_000);
-  const authLimiter = createRateLimiter(15, 60_000);
+  const testLimiter = (_req: Request, _res: Response, next: NextFunction) => next();
+  const disableRateLimits = process.env.NODE_ENV === 'test' || readEnvironmentValue('DISABLE_RATE_LIMITS') === 'true';
+  const aiLimiter = disableRateLimits ? testLimiter : createRateLimiter(20, 60_000);
+  const authLimiter = disableRateLimits ? testLimiter : createRateLimiter(15, 60_000);
   const saasStore = options.saasStore ?? createDefaultSaasStore();
   const saasSessionSecret = options.saasSessionSecret ?? getSaasSessionSecret();
   const billingWebhookSecret = options.billingWebhookSecret ?? readEnvironmentValue('BILLING_WEBHOOK_SECRET');
@@ -820,10 +855,21 @@ export function createApp(options: CreateAppOptions = {}) {
   });
 
   app.get('/api/exams', (_req, res) => {
-    res.json({ exams: [CET4_EXAM_PROFILE] });
+    res.json({
+      exams: [CET4_EXAM_PROFILE],
+      questionBankCoverage: CET4_QUESTION_BANK_COVERAGE,
+      mockExam: {
+        id: CET4_MOCK_EXAM.id,
+        title: CET4_MOCK_EXAM.title,
+        plannedMinutes: CET4_MOCK_EXAM.plannedMinutes,
+        sourceNotice: CET4_MOCK_EXAM.sourceNotice,
+        listeningQuestionCount: CET4_MOCK_EXAM.listening.questions.length,
+        readingQuestionCount: CET4_MOCK_EXAM.reading.questions.length,
+      },
+    });
   });
 
-  app.get('/api/observability/summary', (_req, res) => {
+  app.get('/api/observability/summary', requireSaasAuth, (_req, res) => {
     res.json(getObservabilitySummary());
   });
 
@@ -840,11 +886,13 @@ export function createApp(options: CreateAppOptions = {}) {
 
   app.post('/api/auth/register', authLimiter, asyncRoute(async (req, res) => {
     const account = await registerSaasAccount(saasStore, req.body);
+    const recovery = await issuePasswordRecoveryCode(saasStore, account.user.id);
     const token = await issueAccountSession(account, req);
 
     res.status(201).json({
       token,
       account: toPublicAccountContext(account),
+      ...recovery,
     });
   }));
 
@@ -855,6 +903,18 @@ export function createApp(options: CreateAppOptions = {}) {
     res.json({
       token,
       account: toPublicAccountContext(account),
+    });
+  }));
+
+  app.post('/api/auth/password-reset', authLimiter, asyncRoute(async (req, res) => {
+    const result = await resetSaasPassword(saasStore, req.body);
+    const token = await issueAccountSession(result.account, req);
+
+    res.json({
+      token,
+      account: toPublicAccountContext(result.account),
+      recoveryCode: result.recoveryCode,
+      recoveryCodeExpiresAt: result.recoveryCodeExpiresAt,
     });
   }));
 
@@ -886,6 +946,24 @@ export function createApp(options: CreateAppOptions = {}) {
       token,
       account: toPublicAccountContext(account),
     });
+  }));
+
+  app.post('/api/auth/password', requireSaasAuth, authLimiter, asyncRoute(async (req, res) => {
+    const { account } = getSaasContext(res);
+    const result = await changeSaasPassword(saasStore, account, req.body);
+    const token = await issueAccountSession(result.account, req);
+    res.json({
+      token,
+      account: toPublicAccountContext(result.account),
+      recoveryCode: result.recoveryCode,
+      recoveryCodeExpiresAt: result.recoveryCodeExpiresAt,
+    });
+  }));
+
+  app.post('/api/auth/recovery-code', requireSaasAuth, authLimiter, asyncRoute(async (_req, res) => {
+    const { account } = getSaasContext(res);
+    const recovery = await issuePasswordRecoveryCode(saasStore, account.user.id);
+    res.json(recovery);
   }));
 
   app.post('/api/auth/logout', requireSaasAuth, asyncRoute(async (_req, res) => {
@@ -940,10 +1018,12 @@ export function createApp(options: CreateAppOptions = {}) {
 
   app.post('/api/workspace/invitations/accept', authLimiter, asyncRoute(async (req, res) => {
     const account = await acceptWorkspaceInvitation(saasStore, req.body);
+    const recovery = await issuePasswordRecoveryCode(saasStore, account.user.id);
     const token = await issueAccountSession(account, req);
     res.status(201).json({
       token,
       account: toPublicAccountContext(account),
+      ...recovery,
     });
   }));
 
@@ -1162,7 +1242,7 @@ export function createApp(options: CreateAppOptions = {}) {
     res.json({ entities: saved });
   }));
 
-  app.post('/api/study/daily-plan', (req, res) => {
+  app.post('/api/study/daily-plan', requireSaasAuth, (req, res) => {
     const goal = validateGoal(req.body?.goal);
     const reviewItems = Array.isArray(req.body?.reviewItems) ? req.body.reviewItems as ReviewItem[] : [];
     const skillProfiles = Array.isArray(req.body?.skillProfiles) ? req.body.skillProfiles as SkillProfile[] : [];
@@ -1178,7 +1258,7 @@ export function createApp(options: CreateAppOptions = {}) {
     });
   });
 
-  app.post('/api/materials/validate-passage', (req, res) => {
+  app.post('/api/materials/validate-passage', requireSaasAuth, (req, res) => {
     const aiStartedAt = Date.now();
     try {
       const passage = normalizePassage(req.body?.passage ?? req.body, {
@@ -1190,7 +1270,7 @@ export function createApp(options: CreateAppOptions = {}) {
     }
   });
 
-  app.post('/api/practice/choice-report', (req, res) => {
+  app.post('/api/practice/choice-report', requireSaasAuth, (req, res) => {
     try {
       const payload = validateChoicePracticePayload(req.body);
       res.json({ report: buildChoicePracticeReport(payload) });
@@ -1199,7 +1279,7 @@ export function createApp(options: CreateAppOptions = {}) {
     }
   });
 
-  app.post('/api/practice/speaking-report', (req, res) => {
+  app.post('/api/practice/speaking-report', requireSaasAuth, (req, res) => {
     try {
       const payload = validateSpeakingPracticePayload(req.body);
       res.json({ report: buildSpeakingPracticeReport(payload) });
@@ -1208,12 +1288,21 @@ export function createApp(options: CreateAppOptions = {}) {
     }
   });
 
-  app.post('/api/practice/subjective-report', (req, res) => {
+  app.post('/api/practice/subjective-report', requireSaasAuth, (req, res) => {
     try {
       const payload = validateSubjectivePracticePayload(req.body);
       res.json({ report: buildSubjectivePracticeReport(payload) });
     } catch (error) {
       res.status(400).json({ error: 'invalid_subjective_report', message: (error as Error).message });
+    }
+  });
+
+  app.post('/api/practice/mock-exam-report', requireSaasAuth, (req, res) => {
+    try {
+      const payload = validateMockExamPayload(req.body);
+      res.json(buildMockExamReport(payload));
+    } catch (error) {
+      res.status(400).json({ error: 'invalid_mock_exam_report', message: (error as Error).message });
     }
   });
 
@@ -1379,12 +1468,12 @@ Use Chinese for comments and nextActions.`;
     }
   };
 
-  app.post('/api/ai/generate-passage', aiLimiter, handleGeneratePassage);
-  app.post('/api/ai/analyze-speech', aiLimiter, handleAnalyzeSpeech);
-  app.post('/api/ai/evaluate-subjective', aiLimiter, handleEvaluateSubjective);
+  app.post('/api/ai/generate-passage', aiLimiter, requireSaasAuth, handleGeneratePassage);
+  app.post('/api/ai/analyze-speech', aiLimiter, requireSaasAuth, handleAnalyzeSpeech);
+  app.post('/api/ai/evaluate-subjective', aiLimiter, requireSaasAuth, handleEvaluateSubjective);
   // Backward-compatible aliases for older builds and saved clients.
-  app.post('/api/gemini/generate-passage', aiLimiter, handleGeneratePassage);
-  app.post('/api/gemini/analyze-speech', aiLimiter, handleAnalyzeSpeech);
+  app.post('/api/gemini/generate-passage', aiLimiter, requireSaasAuth, handleGeneratePassage);
+  app.post('/api/gemini/analyze-speech', aiLimiter, requireSaasAuth, handleAnalyzeSpeech);
 
   app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
     if ('type' in error && error.type === 'entity.parse.failed') {

@@ -22,6 +22,7 @@ import {
 import { PracticeCompletionReport } from '../types';
 import { buildSpeakingPracticeReport } from '../domain/practice/reports';
 import { trackTelemetry } from '../lib/telemetry';
+import { apiRequest } from '../lib/api';
 
 interface SpeakingTrainingProps {
   onUpdateProgress: (scoreChange: { from: number; to: number }) => void;
@@ -234,13 +235,10 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
     setIsAnalyzingSpeech(true);
     const startedAt = performance.now();
     try {
-      const response = await fetch('/api/ai/analyze-speech', {
+      const result = await apiRequest<SpeechAnalysis>('/api/ai/analyze-speech', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ originalSpeech: speechDraft }),
       });
-      if (!response.ok) throw new Error('Speech analysis request failed');
-      const result = await response.json();
       setSpeechAnalysis(result);
       setAnalysisMode('live');
       trackTelemetry('speaking_analyzed', {

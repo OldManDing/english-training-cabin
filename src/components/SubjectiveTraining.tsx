@@ -3,6 +3,7 @@ import { ArrowLeft, CheckCircle2, FileText, Languages, Loader2, Sparkles } from 
 import { PracticeCompletionReport } from '../types';
 import { buildSubjectivePracticeReport, SubjectivePracticeAnalysis } from '../domain/practice/reports';
 import { trackTelemetry } from '../lib/telemetry';
+import { apiRequest } from '../lib/api';
 
 type SubjectiveMode = 'writing' | 'translation';
 
@@ -52,17 +53,14 @@ export default function SubjectiveTraining({ mode, onBack, onComplete }: Subject
     const started = performance.now();
 
     try {
-      const response = await fetch('/api/ai/evaluate-subjective', {
+      const result = await apiRequest<SubjectivePracticeAnalysis>('/api/ai/evaluate-subjective', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           moduleId: mode,
           prompt: task.prompt,
           answer,
         }),
       });
-      if (!response.ok) throw new Error('Subjective evaluation request failed');
-      const result = await response.json() as SubjectivePracticeAnalysis;
       setAnalysis(result);
       trackTelemetry('subjective_evaluated', {
         mode,

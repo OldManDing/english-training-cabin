@@ -46,10 +46,27 @@ checks.push(`health ok (${health.aiProvider}/${health.aiModel}, store=${health.s
 
 const exams = await requestJson('/api/exams');
 assert(Array.isArray(exams.exams) && exams.exams.length > 0, 'exam registry is empty');
+assert(exams.mockExam?.plannedMinutes === 125, 'standard mock exam metadata is not published');
+assert(exams.mockExam?.listeningQuestionCount === 25, 'listening mock count is not standard');
+assert(exams.mockExam?.readingQuestionCount === 30, 'reading mock count is not standard');
 checks.push('exam registry ok');
+
+const registerEmail = `smoke-${smokeRunId}@${smokeAccountDomain}`;
+const register = await requestJson('/api/auth/register', {
+  method: 'POST',
+  body: JSON.stringify({
+    email: registerEmail,
+    password: `smoke-password-${smokeRunId}`,
+    name: '上线冒烟账号',
+    organizationName: `英语训练舱冒烟组织-${smokeRunId.slice(0, 8)}`,
+  }),
+});
+assert(register.token && register.account?.user?.email === registerEmail, 'account registration failed');
+checks.push('account registration ok');
 
 const plan = await requestJson('/api/study/daily-plan', {
   method: 'POST',
+  headers: { Authorization: `Bearer ${register.token}` },
   body: JSON.stringify({
     goal: {
       examId: 'cet4',
@@ -64,19 +81,6 @@ const plan = await requestJson('/api/study/daily-plan', {
 });
 assert(Array.isArray(plan.plan?.tasks) && plan.plan.tasks.length > 0, 'daily plan returned no tasks');
 checks.push('daily plan ok');
-
-const registerEmail = `smoke-${smokeRunId}@${smokeAccountDomain}`;
-const register = await requestJson('/api/auth/register', {
-  method: 'POST',
-  body: JSON.stringify({
-    email: registerEmail,
-    password: `smoke-password-${smokeRunId}`,
-    name: '上线冒烟账号',
-    organizationName: `英语训练舱冒烟组织-${smokeRunId.slice(0, 8)}`,
-  }),
-});
-assert(register.token && register.account?.user?.email === registerEmail, 'account registration failed');
-checks.push('account registration ok');
 
 const cloud = await requestJson('/api/cloud/learning-data', {
   method: 'PUT',
@@ -102,6 +106,7 @@ checks.push('cloud snapshot ok');
 if (process.env.SMOKE_LIVE_AI === 'true') {
   const passage = await requestJson('/api/ai/generate-passage', {
     method: 'POST',
+    headers: { Authorization: `Bearer ${register.token}` },
     body: JSON.stringify({
       topic: 'campus study planning',
       difficulty: 'medium',

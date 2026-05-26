@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { registerAndEnterApp } from './helpers/auth';
 
 async function expectNoHorizontalOverflow(page: Page) {
   const overflow = await page.evaluate(() => ({
@@ -40,7 +41,7 @@ async function answerMobileDiagnostic(page: Page) {
 
 test('mobile viewport can reach the learning cockpit and launch disclosure', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 740 });
-  await page.goto('/');
+  await registerAndEnterApp(page, 'mobile-launch');
 
   await expect(page).toHaveTitle(/英语训练舱/);
   await expect(page.getByRole('heading', { name: '今日训练' })).toBeVisible();
@@ -59,7 +60,7 @@ test('mobile viewport can reach the learning cockpit and launch disclosure', asy
 
 test('narrow phone reaches every primary workspace without horizontal clipping', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 740 });
-  await page.goto('/');
+  await registerAndEnterApp(page, 'mobile-workspaces');
 
   await page.getByRole('button', { name: '专项练习' }).click();
   await expect(page.getByRole('heading', { name: /专项练习/ })).toBeVisible();
@@ -89,7 +90,7 @@ test('narrow phone reaches every primary workspace without horizontal clipping',
 
 test('narrow phone completes the responsive diagnostic layouts', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 740 });
-  await page.goto('/');
+  await registerAndEnterApp(page, 'mobile-diagnostic');
 
   await page.getByRole('button', { name: '入门能力诊断' }).click();
   await expect(page.getByRole('heading', { name: /入门诊断/ })).toBeVisible();
@@ -112,7 +113,7 @@ test('narrow phone completes the responsive diagnostic layouts', async ({ page }
 
 test('narrow phone uses listening feedback and translation workstations', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 740 });
-  await page.goto('/');
+  await registerAndEnterApp(page, 'mobile-listening');
 
   await page.getByRole('button', { name: '专项练习' }).click();
   await page.getByRole('button', { name: '开始听力训练' }).click();
@@ -150,7 +151,7 @@ test('narrow phone keeps the full speaking feedback flow usable', async ({ page 
   });
 
   await page.setViewportSize({ width: 320, height: 740 });
-  await page.goto('/');
+  await registerAndEnterApp(page, 'mobile-speaking');
   await page.getByRole('button', { name: '口语重说' }).click();
   await expectNoHorizontalOverflow(page);
   await page.getByRole('button', { name: '开始录音' }).click();
@@ -169,7 +170,7 @@ test('narrow phone keeps the full speaking feedback flow usable', async ({ page 
 
 test('tablet layout keeps dashboard, settings, and reading training within viewport', async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 1024 });
-  await page.goto('/');
+  await registerAndEnterApp(page, 'tablet-layout');
   await expect(page.getByRole('heading', { name: '今日训练' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 

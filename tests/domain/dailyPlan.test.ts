@@ -120,6 +120,40 @@ describe('buildDailyPlan', () => {
     });
   });
 
+  it('adds staged mock exam when exam is near and ability evidence exists', () => {
+    const plan = buildDailyPlan({
+      goal,
+      date: '2026-05-24',
+      skillProfiles: [
+        {
+          id: 'cet4-reading-careful-reading',
+          skillArea: 'reading',
+          subSkillId: 'careful-reading',
+          score: 72,
+          confidence: 3,
+          evidenceCount: 5,
+          lastUpdatedAt: '2026-05-24T00:00:00.000Z',
+        },
+        {
+          id: 'cet4-listening-long-conversation',
+          skillArea: 'listening',
+          subSkillId: 'long-conversation',
+          score: 68,
+          confidence: 3,
+          evidenceCount: 3,
+          lastUpdatedAt: '2026-05-24T00:00:00.000Z',
+        },
+      ],
+    });
+
+    expect(plan.tasks).toContainEqual(expect.objectContaining({
+      type: 'mock',
+      title: '阶段模考：写作/听力/阅读/翻译综合校准',
+      priority: 'high',
+    }));
+    expect(plan.tasks.reduce((sum, task) => sum + task.estimatedMinutes, 0)).toBeLessThanOrEqual(plan.plannedMinutes);
+  });
+
   it('adds vocabulary listening practice when vocabulary evidence is missing', () => {
     const plan = buildDailyPlan({
       goal,

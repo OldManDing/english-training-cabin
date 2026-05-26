@@ -13,6 +13,13 @@ function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function daysUntilExam(examDate: string, date: string): number {
+  const target = new Date(`${examDate}T00:00:00`).getTime();
+  const current = new Date(`${date}T00:00:00`).getTime();
+  if (!Number.isFinite(target) || !Number.isFinite(current)) return 999;
+  return Math.ceil((target - current) / 86400000);
+}
+
 function minutesByMode(minutes: number, mode: BuildDailyPlanInput['energyMode']): number {
   if (mode === 'low') return Math.max(20, Math.round(minutes * 0.6));
   if (mode === 'sprint') return Math.round(minutes * 1.25);
@@ -91,6 +98,7 @@ export function buildDailyPlan(input: BuildDailyPlanInput): DailyPlan {
     .sort((a, b) => (b.priorityScore ?? 0) - (a.priorityScore ?? 0));
   const sortedProfiles = [...(input.skillProfiles ?? [])].sort((a, b) => a.score - b.score);
   const hasAbilityEvidence = sortedProfiles.some((profile) => profile.evidenceCount > 0);
+  const examDaysLeft = daysUntilExam(input.goal.examDate, date);
   const weakestSkill = sortedProfiles[0];
   const weakestPracticeSkill = sortedProfiles.find((profile) => isPracticeSkill(profile.skillArea))?.skillArea;
   const configuredPracticeSkill = input.goal.prioritySkills.find((skill) => skill !== 'speaking');
@@ -108,6 +116,10 @@ export function buildDailyPlan(input: BuildDailyPlanInput): DailyPlan {
     hasSpeaking: speakingEnabled,
     reviewStrategy,
   });
+  const shouldScheduleMock = hasAbilityEvidence && plannedMinutes >= 45 && examDaysLeft <= 45;
+  const mockMinutes = shouldScheduleMock
+    ? Math.min(clampMinutes(Math.round(plannedMinutes * 0.42), 20, 35), Math.max(0, taskMinutes.practiceMinutes - 8))
+    : 0;
 
   const tasks: DailyPlan['tasks'] = [];
 
@@ -137,12 +149,26 @@ export function buildDailyPlan(input: BuildDailyPlanInput): DailyPlan {
     });
   }
 
-  const vocabularyMinutes = needsVocabularyTask && primaryPracticeSkill !== 'vocabulary' && taskMinutes.practiceMinutes >= 20
-    ? clampMinutes(Math.round(taskMinutes.practiceMinutes * 0.35), 8, 12)
+  if (mockMinutes > 0) {
+    tasks.push({
+      id: `task-mock-${date}`,
+      type: 'mock',
+      title: '阶段模考：写作/听力/阅读/翻译综合校准',
+      skillArea: 'reading',
+      estimatedMinutes: mockMinutes,
+      priority: 'high',
+      reason: `距离考试约 ${examDaysLeft} 天，必须用阶段模考校准分项能力，而不是只做零散专项。`,
+      payload: { examId: input.goal.examId, mode: 'cet4-stage-mock' },
+    });
+  }
+
+  const remainingPracticeMinutes = Math.max(0, taskMinutes.practiceMinutes - mockMinutes);
+  const vocabularyMinutes = needsVocabularyTask && primaryPracticeSkill !== 'vocabulary' && remainingPracticeMinutes >= 20
+    ? clampMinutes(Math.round(remainingPracticeMinutes * 0.35), 8, 12)
     : 0;
   const primaryPracticeMinutes = primaryPracticeSkill === 'vocabulary'
-    ? taskMinutes.practiceMinutes
-    : Math.max(8, taskMinutes.practiceMinutes - vocabularyMinutes);
+    ? remainingPracticeMinutes
+    : Math.max(8, remainingPracticeMinutes - vocabularyMinutes);
 
   tasks.push({
     id: `task-practice-${primaryPracticeSkill}-${date}`,
@@ -198,6 +224,7 @@ export function buildDailyPlan(input: BuildDailyPlanInput): DailyPlan {
         ? `最低能力点是 ${weakestSkill.skillArea}/${weakestSkill.subSkillId}，因此安排对应专项。`
         : '能力画像证据不足，先从阅读/听力核心模块开始。',
       needsVocabularyTask ? '词汇证据不足或分数偏低，今日任务加入核心词汇听音练习。' : '词汇证据已达到当前稳定线，今天不强制安排词汇。',
+      mockMinutes > 0 ? '临近考试且已有能力证据，加入阶段模考来校准写作、听力、阅读和翻译分项。' : '今天以诊断、专项或复习为主，阶段模考可在左侧“阶段模考”中手动启动。',
       reviewStrategy ? '当前使用巩固策略，会优先处理高优先级复习项。' : '当前使用高效策略，优先分配新题训练与到期复习。',
       speakingEnabled ? '保留口语重说短回合，形成表达改进闭环。' : '当前目标未开启口语并行训练。',
     ],

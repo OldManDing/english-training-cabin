@@ -13,6 +13,7 @@ interface TodayDashboardProps {
   onStartWriting: () => void;
   onStartTranslation: () => void;
   onStartVocabulary: () => void;
+  onStartMockExam: () => void;
   onStartOnboarding: () => void;
   onViewReview: () => void;
   onStartSpeaking: () => void;
@@ -35,6 +36,7 @@ export default function TodayDashboard({
   onStartWriting,
   onStartTranslation,
   onStartVocabulary,
+  onStartMockExam,
   onStartOnboarding, 
   onViewReview, 
   onStartSpeaking,
@@ -60,6 +62,8 @@ export default function TodayDashboard({
     ? '入门诊断'
     : displayedTask?.type === 'review'
     ? '错因复习'
+    : displayedTask?.type === 'mock'
+    ? '阶段模考'
     : displayedTask?.skillArea === 'listening'
     ? '听力理解'
     : displayedTask?.skillArea === 'writing'
@@ -75,6 +79,8 @@ export default function TodayDashboard({
     ? '先建立能力画像，再进入个性化练习'
     : displayedTask?.type === 'review'
     ? '先消化到期错因，再进入新题训练'
+    : displayedTask?.type === 'mock'
+    ? '覆盖写作、听力、阅读、翻译，生成分项分数和复习清单'
     : displayedTask?.skillArea === 'listening'
     ? '包含 3 道长对话精听题'
     : displayedTask?.skillArea === 'writing'
@@ -90,6 +96,8 @@ export default function TodayDashboard({
     ? '开始诊断'
     : displayedTask?.type === 'review'
     ? '开始复习'
+    : displayedTask?.type === 'mock'
+    ? '开始模考'
     : '开始训练';
   const scoreProgress = estimatedScore
     ? Math.max(8, Math.min(100, Math.round((estimatedScore / Math.max(425, targetScore)) * 100)))
@@ -99,6 +107,8 @@ export default function TodayDashboard({
     ? '下一步推荐'
     : displayedTask?.type === 'review'
     ? '到期复习'
+    : displayedTask?.type === 'mock'
+    ? '阶段模考'
     : hasAbilityEvidence || readingProgress.completed
     ? '继续训练'
     : '下一步推荐';
@@ -130,6 +140,10 @@ export default function TodayDashboard({
     }
     if (task.type === 'review') {
       onViewReview();
+      return;
+    }
+    if (task.type === 'mock') {
+      onStartMockExam();
       return;
     }
     if (task.type === 'speaking' || task.skillArea === 'speaking') {
@@ -172,6 +186,7 @@ export default function TodayDashboard({
 
   const getTaskVisual = (task: DailyPlan['tasks'][number]) => {
     if (task.type === 'diagnostic') return { Icon: Sparkles, border: 'border-l-[#003178]', bg: 'bg-[#eef7fc]', icon: 'text-[#003178]' };
+    if (task.type === 'mock') return { Icon: BarChart2, border: 'border-l-amber-500', bg: 'bg-amber-50', icon: 'text-amber-700' };
     if (task.type === 'review') return { Icon: BookMarked, border: 'border-l-rose-500', bg: 'bg-rose-50', icon: 'text-rose-600' };
     if (task.skillArea === 'listening') return { Icon: Headphones, border: 'border-l-emerald-500', bg: 'bg-emerald-50', icon: 'text-emerald-600' };
     if (task.skillArea === 'vocabulary') return { Icon: Volume2, border: 'border-l-emerald-500', bg: 'bg-emerald-50', icon: 'text-emerald-600' };

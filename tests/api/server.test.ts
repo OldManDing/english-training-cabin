@@ -1,10 +1,29 @@
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import { buildContentSecurityPolicy, createApp } from '../../server';
+import { CET4_MOCK_EXAM } from '../../src/questionBank';
 import { createInMemorySaasStore, signBillingWebhookPayload } from '../../src/server/saas';
 
 describe('server API', () => {
   const app = createApp();
+  const registerApiUser = async (targetApp: ReturnType<typeof createApp>, label: string) => {
+    const email = `${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
+    const response = await request(targetApp)
+      .post('/api/auth/register')
+      .send({
+        email,
+        password: 'secure-password-1',
+        name: '接口测试学习者',
+        organizationName: '接口测试团队',
+      })
+      .expect(201);
+
+    return {
+      email,
+      token: response.body.token as string,
+      recoveryCode: response.body.recoveryCode as string,
+    };
+  };
 
   it('returns health status', async () => {
     const response = await request(app).get('/api/health').expect(200);
@@ -25,6 +44,8 @@ describe('server API', () => {
   });
 
   it('accepts allowed product telemetry events and exposes observability summary', async () => {
+    const { token } = await registerApiUser(app, 'observability');
+
     await request(app)
       .post('/api/telemetry/event')
       .send({
@@ -36,7 +57,10 @@ describe('server API', () => {
       })
       .expect(204);
 
-    const response = await request(app).get('/api/observability/summary').expect(200);
+    const response = await request(app)
+      .get('/api/observability/summary')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
 
     expect(response.body.api.requestsTotal).toBeGreaterThan(0);
     expect(response.body.productEvents.practice_completed).toBeGreaterThanOrEqual(1);
@@ -81,6 +105,7 @@ describe('server API', () => {
       .expect(201);
 
     expect(registerResponse.body.token).toEqual(expect.any(String));
+    expect(registerResponse.body.recoveryCode).toEqual(expect.stringMatching(/^etc-/));
     expect(registerResponse.body.account).toMatchObject({
       user: {
         email,
@@ -258,7 +283,7 @@ describe('server API', () => {
     expect(secondCloud.body.snapshot).toBeNull();
   });
 
-  it('does not expose email verification or password reset workflows', async () => {
+  it('supports non-email password recovery with one-time recovery codes', async () => {
     const saasApp = createApp({
       saasStore: createInMemorySaasStore(),
       saasSessionSecret: 'auth-hardening-secret',
@@ -274,20 +299,60 @@ describe('server API', () => {
       })
       .expect(201);
 
+    expect(registerResponse.body.recoveryCode).toEqual(expect.stringMatching(/^etc-/));
+
     await request(saasApp)
       .post('/api/auth/login')
       .send({ email: 'verify-reset@example.com', password: 'secure-password-1' })
       .expect(200);
 
     await request(saasApp)
-      .post('/api/auth/email-verification/request')
-      .set('Authorization', `Bearer ${registerResponse.body.token}`)
-      .expect(404);
+      .post('/api/auth/password-reset')
+      .send({
+        email: 'verify-reset@example.com',
+        recoveryCode: 'etc-wrong-recovery-code-for-test',
+        password: 'new-secure-password-1',
+      })
+      .expect(400);
+
+    const resetResponse = await request(saasApp)
+      .post('/api/auth/password-reset')
+      .send({
+        email: 'verify-reset@example.com',
+        recoveryCode: registerResponse.body.recoveryCode,
+        password: 'new-secure-password-1',
+      })
+      .expect(200);
+
+    expect(resetResponse.body.token).toEqual(expect.any(String));
+    expect(resetResponse.body.recoveryCode).toEqual(expect.stringMatching(/^etc-/));
+    expect(resetResponse.body.recoveryCode).not.toBe(registerResponse.body.recoveryCode);
 
     await request(saasApp)
-      .post('/api/auth/password-reset/request')
-      .send({ email: 'verify-reset@example.com' })
-      .expect(404);
+      .post('/api/auth/login')
+      .send({ email: 'verify-reset@example.com', password: 'secure-password-1' })
+      .expect(401);
+
+    await request(saasApp)
+      .post('/api/auth/login')
+      .send({ email: 'verify-reset@example.com', password: 'new-secure-password-1' })
+      .expect(200);
+
+    await request(saasApp)
+      .post('/api/auth/password-reset')
+      .send({
+        email: 'verify-reset@example.com',
+        recoveryCode: registerResponse.body.recoveryCode,
+        password: 'another-secure-password-1',
+      })
+      .expect(400);
+
+    const regenerated = await request(saasApp)
+      .post('/api/auth/recovery-code')
+      .set('Authorization', `Bearer ${resetResponse.body.token}`)
+      .expect(200);
+
+    expect(regenerated.body.recoveryCode).toEqual(expect.stringMatching(/^etc-/));
   });
 
   it('applies signed billing webhooks and rejects unsigned subscription changes', async () => {
@@ -579,16 +644,38 @@ describe('server API', () => {
       id: 'cet4',
       name: '大学英语四级',
     });
+    expect(response.body.questionBankCoverage.length).toBeGreaterThanOrEqual(8);
+    expect(response.body.mockExam).toMatchObject({
+      id: 'cet4-standard-mock-001',
+      plannedMinutes: 125,
+    });
+    expect(response.body.mockExam.listeningQuestionCount).toBe(25);
+    expect(response.body.mockExam.readingQuestionCount).toBe(30);
+  });
+
+  it('denies unauthenticated access to learning business APIs', async () => {
+    await request(app)
+      .post('/api/study/daily-plan')
+      .send({ goal: { examId: 'cet4', dailyMinutes: 45 } })
+      .expect(401);
+
+    await request(app)
+      .post('/api/practice/mock-exam-report')
+      .send({ answers: { choices: {} } })
+      .expect(401);
   });
 
   it('generates a daily plan from goal and evidence', async () => {
+    const { token } = await registerApiUser(app, 'daily-plan');
+
     const response = await request(app)
       .post('/api/study/daily-plan')
+      .set('Authorization', `Bearer ${token}`)
       .send({
         goal: {
           id: 'goal-cet4-primary',
           examId: 'cet4',
-          examDate: '2026-06-15',
+          examDate: '2026-06-13',
           dailyMinutes: 45,
           prioritySkills: ['reading', 'speaking'],
         },
@@ -600,8 +687,11 @@ describe('server API', () => {
   });
 
   it('validates and normalizes imported passage material', async () => {
+    const { token } = await registerApiUser(app, 'material-valid');
+
     const response = await request(app)
       .post('/api/materials/validate-passage')
+      .set('Authorization', `Bearer ${token}`)
       .send({
         passage: {
           title: 'Urban Green Spaces',
@@ -630,8 +720,11 @@ describe('server API', () => {
   });
 
   it('rejects malformed imported passage material', async () => {
+    const { token } = await registerApiUser(app, 'material-invalid');
+
     const response = await request(app)
       .post('/api/materials/validate-passage')
+      .set('Authorization', `Bearer ${token}`)
       .send({ passage: { title: 'Broken', content: 'No questions.' } })
       .expect(400);
 
@@ -639,8 +732,11 @@ describe('server API', () => {
   });
 
   it('builds a practice completion report through API', async () => {
+    const { token } = await registerApiUser(app, 'choice-report');
+
     const response = await request(app)
       .post('/api/practice/choice-report')
+      .set('Authorization', `Bearer ${token}`)
       .send({
         examId: 'cet4',
         moduleId: 'reading',
@@ -683,8 +779,11 @@ describe('server API', () => {
   });
 
   it('builds a speaking completion report through API', async () => {
+    const { token } = await registerApiUser(app, 'speaking-report');
+
     const response = await request(app)
       .post('/api/practice/speaking-report')
+      .set('Authorization', `Bearer ${token}`)
       .send({
         examId: 'cet4',
         modeId: 'cet-set4-retell',
@@ -716,8 +815,11 @@ describe('server API', () => {
   });
 
   it('rejects malformed speaking completion report payloads', async () => {
+    const { token } = await registerApiUser(app, 'speaking-invalid');
+
     const response = await request(app)
       .post('/api/practice/speaking-report')
+      .set('Authorization', `Bearer ${token}`)
       .send({
         originalSpeech: '',
         analysis: {},
@@ -728,8 +830,10 @@ describe('server API', () => {
   });
 
   it('falls back to structured subjective writing and translation evaluation without API key', async () => {
+    const { token } = await registerApiUser(app, 'subjective-ai');
     const response = await request(app)
       .post('/api/ai/evaluate-subjective')
+      .set('Authorization', `Bearer ${token}`)
       .send({
         moduleId: 'translation',
         prompt: 'Translate a paragraph about renewable energy.',
@@ -743,8 +847,11 @@ describe('server API', () => {
   });
 
   it('builds a subjective completion report through API', async () => {
+    const { token } = await registerApiUser(app, 'subjective-report');
+
     const response = await request(app)
       .post('/api/practice/subjective-report')
+      .set('Authorization', `Bearer ${token}`)
       .send({
         examId: 'cet4',
         moduleId: 'writing',
@@ -776,16 +883,64 @@ describe('server API', () => {
     });
   });
 
-  it('validates passage generation input', async () => {
+  it('builds a standard-structure mock exam report through API', async () => {
+    const { token } = await registerApiUser(app, 'mock-report');
+
+    const response = await request(app)
+      .post('/api/practice/mock-exam-report')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        startedAt: new Date(Date.now() - 120_000).toISOString(),
+        answers: {
+          choices: Object.fromEntries(
+            [...CET4_MOCK_EXAM.listening.questions, ...CET4_MOCK_EXAM.reading.questions].map((question) => [
+              question.id,
+              question.correctAnswer,
+            ]),
+          ),
+          writingAnswer:
+            'Consistent practice helps students improve English because they can receive feedback and correct mistakes. For example, I write one short paragraph every day and review useful expressions after class.',
+          translationAnswer:
+            'More and more college students use digital tools to learn English. Effective tools should not only give answers, but also help students find mistakes, actively recall knowledge and review at the right time.',
+        },
+      })
+      .expect(200);
+
+    expect(response.body.report.session).toMatchObject({
+      moduleId: 'mock',
+      modeId: 'cet4-standard-mock',
+    });
+    expect(response.body.report.attempts).toHaveLength(57);
+    expect(response.body.sectionScores).toHaveLength(4);
+    expect(response.body.report.skillProfiles.map((profile: { skillArea: string }) => profile.skillArea)).toEqual([
+      'writing',
+      'listening',
+      'reading',
+      'translation',
+    ]);
+  });
+
+  it('requires authentication before using AI endpoints', async () => {
     await request(app)
       .post('/api/ai/generate-passage')
+      .send({ topic: 'study habits' })
+      .expect(401);
+  });
+
+  it('validates passage generation input', async () => {
+    const { token } = await registerApiUser(app, 'passage-validation');
+    await request(app)
+      .post('/api/ai/generate-passage')
+      .set('Authorization', `Bearer ${token}`)
       .send({ topic: '' })
       .expect(400);
   });
 
   it('falls back to original simulated passage generation without API key', async () => {
+    const { token } = await registerApiUser(app, 'passage-fallback');
     const response = await request(app)
       .post('/api/ai/generate-passage')
+      .set('Authorization', `Bearer ${token}`)
       .send({ topic: 'study habits' })
       .expect(200);
 
@@ -794,15 +949,19 @@ describe('server API', () => {
   });
 
   it('validates speech analysis input', async () => {
+    const { token } = await registerApiUser(app, 'speech-validation');
     await request(app)
       .post('/api/ai/analyze-speech')
+      .set('Authorization', `Bearer ${token}`)
       .send({})
       .expect(400);
   });
 
   it('falls back to structured speech analysis without API key', async () => {
+    const { token } = await registerApiUser(app, 'speech-fallback');
     const response = await request(app)
       .post('/api/ai/analyze-speech')
+      .set('Authorization', `Bearer ${token}`)
       .send({ originalSpeech: 'um I think technology is good because it helps me study' })
       .expect(200);
 
@@ -811,8 +970,10 @@ describe('server API', () => {
   });
 
   it('keeps legacy Gemini-named AI routes as compatibility aliases', async () => {
+    const { token } = await registerApiUser(app, 'gemini-alias');
     const response = await request(app)
       .post('/api/gemini/analyze-speech')
+      .set('Authorization', `Bearer ${token}`)
       .send({ originalSpeech: 'well I want to improve my spoken English' })
       .expect(200);
 

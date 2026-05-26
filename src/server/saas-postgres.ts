@@ -476,6 +476,11 @@ export function createPostgresSaasStore(databaseUrl: string): SaasStore {
         await client.query('UPDATE users SET last_login_at = $2, updated_at = $2 WHERE id = $1', [userId, at]);
       });
     },
+    updateUserPassword(userId, passwordHash, at) {
+      return withClient(async (client) => {
+        await client.query('UPDATE users SET password_hash = $2, updated_at = $3 WHERE id = $1', [userId, passwordHash, at]);
+      });
+    },
     getAccountForUser(userId) {
       return withClient((client) => getAccountForUserId(client, userId));
     },
@@ -513,10 +518,64 @@ export function createPostgresSaasStore(databaseUrl: string): SaasStore {
         return Boolean(result.rowCount);
       });
     },
+    revokeUserSessions(userId, at) {
+      return withClient(async (client) => {
+        const result = await client.query(
+          'UPDATE sessions SET revoked_at = $2 WHERE user_id = $1 AND revoked_at IS NULL',
+          [userId, at],
+        );
+        return result.rowCount ?? 0;
+      });
+    },
     listUserSessions(userId) {
       return withClient(async (client) => {
         const result = await client.query('SELECT * FROM sessions WHERE user_id = $1 ORDER BY created_at DESC', [userId]);
         return result.rows.map((row) => mapSession(row));
+      });
+    },
+    createOneTimeToken(input) {
+      return withTransaction(async (client) => {
+        if (input.invalidateExisting) {
+          await client.query(
+            `UPDATE one_time_tokens
+             SET consumed_at = $3
+             WHERE user_id = $1 AND purpose = $2 AND consumed_at IS NULL`,
+            [input.userId, input.purpose, input.createdAt],
+          );
+        }
+
+        const result = await client.query(
+          `INSERT INTO one_time_tokens (id, user_id, token_hash, purpose, expires_at, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           RETURNING *`,
+          [crypto.randomUUID(), input.userId, input.tokenHash, input.purpose, input.expiresAt, input.createdAt],
+        );
+        const row = result.rows[0] as Record<string, unknown>;
+        return {
+          id: String(row.id),
+          userId: String(row.user_id),
+          tokenHash: String(row.token_hash),
+          purpose: row.purpose as 'email_verification' | 'password_reset',
+          expiresAt: toIso(row.expires_at as Date | string)!,
+          consumedAt: toIso(row.consumed_at as Date | string | null),
+          createdAt: toIso(row.created_at as Date | string)!,
+        };
+      });
+    },
+    consumeOneTimeToken(input) {
+      return withClient(async (client) => {
+        const result = await client.query(
+          `UPDATE one_time_tokens
+           SET consumed_at = $4
+           WHERE user_id = $1
+             AND token_hash = $2
+             AND purpose = $3
+             AND consumed_at IS NULL
+             AND expires_at > $4
+           RETURNING id`,
+          [input.userId, input.tokenHash, input.purpose, input.now],
+        );
+        return Boolean(result.rowCount);
       });
     },
     saveLearningSnapshot(input) {

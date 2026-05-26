@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpen, Sparkles, FolderSync, Mic, BarChart3, DownloadCloud, Settings, HelpCircle } from 'lucide-react';
+import { BookOpen, Sparkles, FolderSync, Mic, BarChart3, DownloadCloud, Settings, HelpCircle, ClipboardCheck } from 'lucide-react';
 import { ActiveTab } from '../types';
 
 interface SidebarProps {
@@ -13,6 +13,7 @@ export default function Sidebar({ activeTab, setActiveTab, examCountdown, onTrig
   const menuItems = [
     { id: 'today', label: '今日训练', icon: BookOpen },
     { id: 'practice', label: '专项练习', icon: Sparkles },
+    { id: 'mock', label: '阶段模考', icon: ClipboardCheck },
     { id: 'review', label: '复习队列', icon: FolderSync },
     { id: 'speaking', label: '口语重说', icon: Mic },
     { id: 'progress', label: '能力进展', icon: BarChart3 },

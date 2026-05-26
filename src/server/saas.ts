@@ -180,6 +180,7 @@ export interface SaasStore {
     organizationName?: string;
   }): Promise<SaasAccountRecord>;
   updateUserLogin(userId: string, at: string): Promise<void>;
+  updateUserPassword(userId: string, passwordHash: string, at: string): Promise<void>;
   getAccountForUser(userId: string): Promise<SaasAccountRecord | undefined>;
   createSession(input: {
     userId: string;
@@ -191,7 +192,22 @@ export interface SaasStore {
   getActiveSession(sessionId: string, userId: string, now: string): Promise<SaasSessionRecord | undefined>;
   touchSession(sessionId: string, at: string): Promise<void>;
   revokeSession(sessionId: string, userId: string, at: string): Promise<boolean>;
+  revokeUserSessions(userId: string, at: string): Promise<number>;
   listUserSessions(userId: string): Promise<SaasSessionRecord[]>;
+  createOneTimeToken(input: {
+    userId: string;
+    tokenHash: string;
+    purpose: SaasOneTimeTokenRecord['purpose'];
+    expiresAt: string;
+    createdAt: string;
+    invalidateExisting?: boolean;
+  }): Promise<SaasOneTimeTokenRecord>;
+  consumeOneTimeToken(input: {
+    userId: string;
+    tokenHash: string;
+    purpose: SaasOneTimeTokenRecord['purpose'];
+    now: string;
+  }): Promise<boolean>;
   saveLearningSnapshot(input: {
     organizationId: string;
     userId: string;
@@ -325,6 +341,7 @@ export class SaasApiError extends Error {
 
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 const PASSWORD_MIN_LENGTH = 8;
+const PASSWORD_RECOVERY_CODE_TTL_SECONDS = 60 * 60 * 24 * 365;
 const MAX_BACKUP_BYTES = 2 * 1024 * 1024;
 
 export interface BillingEventInput {
@@ -454,7 +471,18 @@ function assertPassword(value: unknown): string {
   if (typeof value !== 'string' || value.length < PASSWORD_MIN_LENGTH || value.length > 128) {
     throw new SaasApiError(400, 'weak_password', `密码至少 ${PASSWORD_MIN_LENGTH} 位。`);
   }
+  if (/[\u0000-\u001F\u007F]/.test(value) || !/[A-Za-z]/.test(value) || !/\d/.test(value)) {
+    throw new SaasApiError(400, 'weak_password', '密码必须包含字母和数字，且不能包含控制字符。');
+  }
   return value;
+}
+
+function normalizeRecoveryCode(value: unknown): string {
+  const code = typeof value === 'string' ? value.trim() : '';
+  if (code.length < 24 || code.length > 160) {
+    throw new SaasApiError(400, 'invalid_recovery_code', '账号或恢复码不正确，或恢复码已过期。');
+  }
+  return code;
 }
 
 function hashOneTimeToken(token: string): string {
@@ -591,6 +619,15 @@ function createStoreFromDatabase(options: {
         }
       });
     },
+    updateUserPassword(userId, passwordHash, at) {
+      return mutate((db) => {
+        const user = db.users.find((item) => item.id === userId);
+        if (user) {
+          user.passwordHash = passwordHash;
+          user.updatedAt = at;
+        }
+      });
+    },
     getAccountForUser(userId) {
       return read((db) => {
         const user = db.users.find((item) => item.id === userId);
@@ -641,10 +678,58 @@ function createStoreFromDatabase(options: {
         return true;
       });
     },
+    revokeUserSessions(userId, at) {
+      return mutate((db) => {
+        let revoked = 0;
+        db.sessions.forEach((session) => {
+          if (session.userId === userId && !session.revokedAt) {
+            session.revokedAt = at;
+            revoked += 1;
+          }
+        });
+        return revoked;
+      });
+    },
     listUserSessions(userId) {
       return read((db) => db.sessions
         .filter((session) => session.userId === userId)
         .sort((left, right) => right.createdAt.localeCompare(left.createdAt)));
+    },
+    createOneTimeToken(input) {
+      return mutate((db) => {
+        if (input.invalidateExisting) {
+          db.oneTimeTokens.forEach((token) => {
+            if (token.userId === input.userId && token.purpose === input.purpose && !token.consumedAt) {
+              token.consumedAt = input.createdAt;
+            }
+          });
+        }
+
+        const record: SaasOneTimeTokenRecord = {
+          id: crypto.randomUUID(),
+          userId: input.userId,
+          tokenHash: input.tokenHash,
+          purpose: input.purpose,
+          expiresAt: input.expiresAt,
+          createdAt: input.createdAt,
+        };
+        db.oneTimeTokens.push(record);
+        return record;
+      });
+    },
+    consumeOneTimeToken(input) {
+      return mutate((db) => {
+        const token = db.oneTimeTokens.find((item) =>
+          item.userId === input.userId &&
+          item.tokenHash === input.tokenHash &&
+          item.purpose === input.purpose &&
+          !item.consumedAt &&
+          item.expiresAt > input.now,
+        );
+        if (!token) return false;
+        token.consumedAt = input.now;
+        return true;
+      });
     },
     saveLearningSnapshot(input) {
       return mutate((db) => {
@@ -1095,6 +1180,88 @@ export async function loginSaasAccount(store: SaasStore, value: unknown): Promis
     throw new SaasApiError(500, 'account_incomplete', '账号租户信息不完整。');
   }
   return account;
+}
+
+function getRecoveryCodeExpiresAt(now = new Date()): string {
+  return new Date(now.getTime() + PASSWORD_RECOVERY_CODE_TTL_SECONDS * 1000).toISOString();
+}
+
+export async function issuePasswordRecoveryCode(store: SaasStore, userId: string): Promise<{
+  recoveryCode: string;
+  recoveryCodeExpiresAt: string;
+}> {
+  const now = new Date();
+  const createdAt = now.toISOString();
+  const recoveryCode = `etc-${crypto.randomBytes(24).toString('base64url')}`;
+  const recoveryCodeExpiresAt = getRecoveryCodeExpiresAt(now);
+  await store.createOneTimeToken({
+    userId,
+    tokenHash: hashOneTimeToken(recoveryCode),
+    purpose: 'password_reset',
+    expiresAt: recoveryCodeExpiresAt,
+    createdAt,
+    invalidateExisting: true,
+  });
+  return { recoveryCode, recoveryCodeExpiresAt };
+}
+
+export async function resetSaasPassword(store: SaasStore, value: unknown): Promise<{
+  account: SaasAccountRecord;
+  recoveryCode: string;
+  recoveryCodeExpiresAt: string;
+}> {
+  const input = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const email = normalizeEmail(input.email);
+  const recoveryCode = normalizeRecoveryCode(input.recoveryCode);
+  const password = assertPassword(input.password ?? input.newPassword);
+  const user = await store.findUserByEmail(email);
+  const now = new Date().toISOString();
+
+  if (!user) {
+    throw new SaasApiError(400, 'invalid_recovery_code', '账号或恢复码不正确，或恢复码已过期。');
+  }
+
+  const consumed = await store.consumeOneTimeToken({
+    userId: user.id,
+    tokenHash: hashOneTimeToken(recoveryCode),
+    purpose: 'password_reset',
+    now,
+  });
+  if (!consumed) {
+    throw new SaasApiError(400, 'invalid_recovery_code', '账号或恢复码不正确，或恢复码已过期。');
+  }
+
+  await store.updateUserPassword(user.id, hashPassword(password), now);
+  await store.revokeUserSessions(user.id, now);
+  const account = await store.getAccountForUser(user.id);
+  if (!account) {
+    throw new SaasApiError(500, 'account_incomplete', '账号租户信息不完整。');
+  }
+  const nextRecovery = await issuePasswordRecoveryCode(store, user.id);
+  return { account, ...nextRecovery };
+}
+
+export async function changeSaasPassword(store: SaasStore, account: SaasAccountRecord, value: unknown): Promise<{
+  account: SaasAccountRecord;
+  recoveryCode: string;
+  recoveryCodeExpiresAt: string;
+}> {
+  const input = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const currentPassword = typeof input.currentPassword === 'string' ? input.currentPassword : '';
+  const nextPassword = assertPassword(input.password ?? input.newPassword);
+  if (!verifyPassword(currentPassword, account.user.passwordHash)) {
+    throw new SaasApiError(401, 'invalid_credentials', '当前密码不正确。');
+  }
+
+  const now = new Date().toISOString();
+  await store.updateUserPassword(account.user.id, hashPassword(nextPassword), now);
+  await store.revokeUserSessions(account.user.id, now);
+  const updatedAccount = await store.getAccountForUser(account.user.id);
+  if (!updatedAccount) {
+    throw new SaasApiError(500, 'account_incomplete', '账号租户信息不完整。');
+  }
+  const nextRecovery = await issuePasswordRecoveryCode(store, account.user.id);
+  return { account: updatedAccount, ...nextRecovery };
 }
 
 export async function createWorkspaceInvitation(store: SaasStore, actor: SaasAccountRecord, value: unknown): Promise<{

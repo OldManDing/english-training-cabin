@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { CET4_VOCABULARY_BANK } from '../../src/data';
+import { CET4_MOCK_EXAM } from '../../src/questionBank';
+import { registerAndEnterApp, registerApiAccount } from './helpers/auth';
 
 async function answerOnboardingDiagnostic(page: Page) {
   await page.getByRole('button', { name: /A\. They mainly protect old books/ }).click();
@@ -17,7 +19,7 @@ async function answerOnboardingDiagnostic(page: Page) {
 }
 
 test('MVP critical reading flow persists local learning evidence', async ({ page }) => {
-  await page.goto('/');
+  await registerAndEnterApp(page, 'mvp-reading');
   await page.evaluate(() => indexedDB.deleteDatabase('english-training-cabin'));
   await page.reload();
 
@@ -124,7 +126,7 @@ test('MVP critical speaking retell flow persists review and ability evidence', a
     });
   });
 
-  await page.goto('/');
+  await registerAndEnterApp(page, 'mvp-speaking');
   await page.evaluate(() => indexedDB.deleteDatabase('english-training-cabin'));
   await page.reload();
 
@@ -176,7 +178,7 @@ test('MVP critical speaking retell flow persists review and ability evidence', a
 });
 
 test('onboarding diagnostic persists the initial ability portrait before entering daily training', async ({ page }) => {
-  await page.goto('/');
+  await registerAndEnterApp(page, 'mvp-diagnostic');
   await page.evaluate(() => indexedDB.deleteDatabase('english-training-cabin'));
   await page.reload();
 
@@ -253,7 +255,7 @@ test('MVP critical translation flow evaluates feedback and persists learning evi
     });
   });
 
-  await page.goto('/');
+  await registerAndEnterApp(page, 'mvp-translation');
   await page.evaluate(() => indexedDB.deleteDatabase('english-training-cabin'));
   await page.reload();
 
@@ -300,7 +302,7 @@ test('MVP critical translation flow evaluates feedback and persists learning evi
 });
 
 test('vocabulary practice plays audio controls, scores answers, and persists review evidence', async ({ page }) => {
-  await page.goto('/');
+  await registerAndEnterApp(page, 'mvp-vocabulary');
   await page.evaluate(() => indexedDB.deleteDatabase('english-training-cabin'));
   await page.reload();
 
@@ -354,6 +356,58 @@ test('vocabulary practice plays audio controls, scores answers, and persists rev
   });
 });
 
+test('staged mock exam covers CET-4 modules and persists score evidence', async ({ page }) => {
+  await registerAndEnterApp(page, 'mvp-mock');
+  await page.evaluate(() => indexedDB.deleteDatabase('english-training-cabin'));
+  await page.reload();
+
+  await page.getByRole('button', { name: /^阶段模考$/ }).click();
+  await expect(page.getByRole('heading', { name: CET4_MOCK_EXAM.title })).toBeVisible();
+  await page.getByTestId('mock-writing-answer').fill(
+    'Consistent practice is useful because students can receive feedback and improve step by step. For example, I write a short paragraph every day and review grammar mistakes after class.',
+  );
+  for (const question of [...CET4_MOCK_EXAM.listening.questions, ...CET4_MOCK_EXAM.reading.questions]) {
+    await page.getByTestId(`mock-choice-${question.id}-${question.correctAnswer}`).click();
+  }
+  await page.getByTestId('mock-translation-answer').fill(
+    'More and more college students use digital tools to learn English. Effective tools should not only give answers, but also help students find mistakes, actively recall knowledge and review at the right time.',
+  );
+  await page.getByTestId('mock-exam-submit').click();
+  await expect(page.getByTestId('mock-exam-result')).toBeVisible();
+  await page.getByTestId('mock-exam-persist').click();
+  await expect(page.getByRole('heading', { name: '能力地图' })).toBeVisible();
+
+  const result = await page.evaluate(async () => {
+    function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
+      return new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('english-training-cabin');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const tx = db.transaction(['practiceSessions', 'attempts', 'skillProfiles'], 'readonly');
+    const sessions = await requestToPromise(tx.objectStore('practiceSessions').getAll());
+    const attempts = await requestToPromise(tx.objectStore('attempts').count());
+    const skillProfiles = await requestToPromise(tx.objectStore('skillProfiles').getAll());
+    db.close();
+    return { sessions, attempts, skillProfiles };
+  });
+
+  expect(result.sessions.some((session: { modeId: string }) => session.modeId === 'cet4-standard-mock')).toBeTruthy();
+  expect(result.attempts).toBe(CET4_MOCK_EXAM.listening.questions.length + CET4_MOCK_EXAM.reading.questions.length + 2);
+  expect(result.skillProfiles.map((profile: { skillArea: string }) => profile.skillArea).sort()).toEqual([
+    'listening',
+    'reading',
+    'translation',
+    'writing',
+  ]);
+});
+
 test('application shell loads without browser console errors', async ({ page }) => {
   const consoleErrors: string[] = [];
   page.on('console', (message) => {
@@ -362,7 +416,7 @@ test('application shell loads without browser console errors', async ({ page }) 
     }
   });
 
-  await page.goto('/');
+  await registerAndEnterApp(page, 'mvp-console');
   await expect(page.getByRole('heading', { name: '今日训练' })).toBeVisible();
 
   expect(consoleErrors).toEqual([]);
@@ -371,13 +425,15 @@ test('application shell loads without browser console errors', async ({ page }) 
 test('API health, planning, and AI contracts are reachable from production build', async ({ request }) => {
   const health = await request.get('/api/health');
   expect(health.ok()).toBeTruthy();
+  const { token } = await registerApiAccount(request, 'mvp-api');
 
   const plan = await request.post('/api/study/daily-plan', {
+    headers: { Authorization: `Bearer ${token}` },
     data: {
       goal: {
         id: 'goal-cet4-primary',
         examId: 'cet4',
-        examDate: '2026-06-15',
+        examDate: '2026-06-13',
         dailyMinutes: 60,
         prioritySkills: ['reading', 'speaking'],
       },
@@ -387,18 +443,20 @@ test('API health, planning, and AI contracts are reachable from production build
   expect((await plan.json()).plan.tasks.length).toBeGreaterThan(0);
 
   const badAiMaterialRequest = await request.post('/api/ai/generate-passage', {
+    headers: { Authorization: `Bearer ${token}` },
     data: { topic: '' },
   });
   expect(badAiMaterialRequest.status()).toBe(400);
 
   const badAiSpeechRequest = await request.post('/api/ai/analyze-speech', {
+    headers: { Authorization: `Bearer ${token}` },
     data: {},
   });
   expect(badAiSpeechRequest.status()).toBe(400);
 });
 
 test('JSON material import enters a validated reading practice', async ({ page }) => {
-  await page.goto('/');
+  await registerAndEnterApp(page, 'mvp-material');
   await expect(page).toHaveTitle(/英语训练舱/);
 
   await page.getByRole('button', { name: '材料导入' }).click();
@@ -431,12 +489,16 @@ test('JSON material import enters a validated reading practice', async ({ page }
 });
 
 test('all MVP sections render their primary controls', async ({ page }) => {
-  await page.goto('/');
+  await registerAndEnterApp(page, 'mvp-sections');
 
   await page.getByRole('button', { name: '专项练习' }).click();
   await expect(page.getByRole('heading', { name: /专项练习/ })).toBeVisible();
   await expect(page.getByRole('button', { name: '开始单词练习' })).toBeVisible();
   await expect(page.getByRole('button', { name: /开始仔细阅读训练/ }).first()).toBeVisible();
+
+  await page.getByRole('button', { name: /^阶段模考$/ }).click();
+  await expect(page.getByRole('heading', { name: CET4_MOCK_EXAM.title })).toBeVisible();
+  await expect(page.getByTestId('mock-exam-submit')).toBeVisible();
 
   await page.getByRole('button', { name: '复习队列' }).click();
   await expect(page.getByRole('heading', { name: '复习队列' })).toBeVisible();
@@ -460,7 +522,7 @@ test('all MVP sections render their primary controls', async ({ page }) => {
 });
 
 test('local learning data can be exported and restored from settings', async ({ page }) => {
-  await page.goto('/');
+  await registerAndEnterApp(page, 'mvp-local-data');
   await page.evaluate(() => indexedDB.deleteDatabase('english-training-cabin'));
   await page.reload();
 

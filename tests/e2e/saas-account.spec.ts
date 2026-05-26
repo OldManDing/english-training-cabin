@@ -2,8 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('SaaS account trial can sync and restore local learning data', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: '设置' }).click();
-
+  await expect(page.getByText('账号密码保护已启用')).toBeVisible();
   await expect(page.getByText('云端账号与团队协作')).toBeVisible();
 
   const email = `saas-${Date.now()}@example.com`;
@@ -13,8 +12,12 @@ test('SaaS account trial can sync and restore local learning data', async ({ pag
   await page.getByTestId('saas-password-input').fill('secure-password-1');
   await page.getByTestId('saas-auth-submit').click();
 
+  await expect(page.getByTestId('saas-recovery-code')).toBeVisible();
+  await page.getByTestId('saas-enter-app').click();
+  await expect(page.getByRole('heading', { name: '今日训练' })).toBeVisible();
+  await page.getByRole('button', { name: '设置' }).click();
   await expect(page.getByText(email, { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('云端账号已创建，可同步学习数据；团队邀请会生成可复制的邀请链接。')).toBeVisible();
+  await expect(page.getByText('云端账号已连接，可同步当前学习数据。')).toBeVisible();
   await expect(page.getByText('云同步 已开通')).toBeVisible();
 
   await page.getByRole('button', { name: '同步到云端' }).click();
@@ -53,10 +56,10 @@ test('SaaS account trial can sync and restore local learning data', async ({ pag
 
   await page.getByRole('button', { name: '退出' }).click();
   await page.goto(`/workspace/accept-invitation?token=${encodeURIComponent(invitationToken)}`);
-  await page.getByRole('button', { name: '设置' }).click();
   await expect(page.getByText('接受团队邀请')).toBeVisible();
   await page.getByTestId('saas-name-input').fill('受邀学习者');
   await page.getByTestId('saas-password-input').fill('member-secure-password-1');
   await page.getByTestId('saas-auth-submit').click();
   await expect(page.getByText('邀请已接受，您已加入团队。')).toBeVisible();
+  await expect(page.getByTestId('saas-recovery-code')).toBeVisible();
 });

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Passage } from '../types';
 import { trackTelemetry } from '../lib/telemetry';
+import { apiRequest } from '../lib/api';
 
 interface MaterialImporterProps {
   onLoadCustomPassage: (customPassage: Passage) => void;
@@ -49,20 +50,12 @@ const sampleTopics = [
 ];
 
 async function validatePassageWithApi(passage: unknown, sourceType: 'user-imported' | 'ai-generated'): Promise<Passage> {
-  const response = await fetch('/api/materials/validate-passage', {
+  const data = await apiRequest<{ passage: Passage }>('/api/materials/validate-passage', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
     body: JSON.stringify({ passage, sourceType }),
   });
 
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.message || '材料格式校验失败');
-  }
-
-  return data.passage as Passage;
+  return data.passage;
 }
 
 export default function MaterialImporter({ onLoadCustomPassage }: MaterialImporterProps) {
@@ -89,16 +82,10 @@ export default function MaterialImporter({ onLoadCustomPassage }: MaterialImport
     const startedAt = performance.now();
 
     try {
-      const response = await fetch('/api/ai/generate-passage', {
+      const raw = await apiRequest<unknown>('/api/ai/generate-passage', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ topic: targetTopic }),
       });
-
-      const raw = await response.json();
-      if (!response.ok) throw new Error(raw.message || 'AI 生成失败');
 
       const passage = await validatePassageWithApi(raw, 'ai-generated');
       setStatus({ type: 'success', text: `已生成《${passage.title}》，正在进入训练。` });
