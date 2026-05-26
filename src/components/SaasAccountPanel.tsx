@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Cloud, DownloadCloud, LogIn, LogOut, RefreshCw, ShieldCheck, UploadCloud, UserPlus } from 'lucide-react';
+import { ChevronDown, Cloud, DownloadCloud, LogIn, LogOut, RefreshCw, ShieldCheck, UploadCloud, UserPlus } from 'lucide-react';
 import { exportLearningData, importLearningData } from '../lib/storage/db';
 import SaasOperationsPanel from './SaasOperationsPanel';
 
@@ -69,20 +69,15 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}, tok
   return response.json() as Promise<T>;
 }
 
-function formatSubscription(account: PublicSaasAccountContext) {
+function formatAccountState(account: PublicSaasAccountContext) {
   const statusMap = {
     trialing: '试运行',
-    active: '已开通',
+    active: '可使用',
     past_due: '需处理',
     canceled: '已停用',
   };
-  const tierMap = {
-    free: '本地版',
-    pro: '云端版',
-    team: '团队版',
-    enterprise: '机构版',
-  };
-  return `${tierMap[account.subscription.tier]} · ${statusMap[account.subscription.status]}`;
+  const syncState = account.entitlements.cloudSync ? '云同步已开通' : '仅本地可用';
+  return `${syncState} · ${statusMap[account.subscription.status]}`;
 }
 
 export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: SaasAccountPanelProps) {
@@ -97,6 +92,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
   const [account, setAccount] = useState<PublicSaasAccountContext | null>(null);
   const [statusText, setStatusText] = useState(INITIAL_CLOUD_STATUS);
   const [isBusy, setIsBusy] = useState(false);
+  const [showOperations, setShowOperations] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -252,7 +248,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
         </div>
         {account && (
           <span className="shrink-0 rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black text-emerald-700 border border-emerald-100">
-            {formatSubscription(account)}
+            {formatAccountState(account)}
           </span>
         )}
       </div>
@@ -316,7 +312,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               className="rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-4 py-3 text-xs font-bold text-[#003178] outline-none focus:ring-1 focus:ring-[#003178]"
-              placeholder="邮箱"
+              placeholder="账号邮箱（仅用于登录）"
               autoComplete="username"
               type="email"
             />
@@ -389,7 +385,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
             <div className="flex flex-wrap gap-2 text-[10px] font-black">
               <span className="rounded-full bg-white px-3 py-1 text-[#003178] border border-[#dbeafe]">{account.organization.name}</span>
               <span className="rounded-full bg-white px-3 py-1 text-[#1b6d24] border border-emerald-100">云同步 {account.entitlements.cloudSync ? '已开通' : '未开通'}</span>
-              <span className="rounded-full bg-white px-3 py-1 text-[#003178] border border-[#dbeafe]">AI 练习额度 {account.entitlements.aiMonthlyCredits}/月</span>
+              <span className="rounded-full bg-white px-3 py-1 text-[#003178] border border-[#dbeafe]">团队席位 {account.entitlements.teamSeats} 人</span>
             </div>
           </div>
 
@@ -414,11 +410,32 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored }: Saa
             </button>
           </div>
 
-          <SaasOperationsPanel
-            token={token}
-            account={account}
-            onStatus={setStatusText}
-          />
+          <section className="rounded-3xl border border-[#cfe6f2] bg-[#f7fbff] p-3 sm:p-4">
+            <button
+              data-testid="saas-ops-toggle"
+              type="button"
+              onClick={() => setShowOperations((current) => !current)}
+              className="flex w-full items-center justify-between gap-3 text-left"
+            >
+              <span>
+                <span className="block text-xs font-black text-[#003178]">团队与数据管理（高级）</span>
+                <span className="mt-1 block text-[10.5px] font-bold leading-5 text-[#434652]">
+                  展开后可邀请成员、管理内容授权、处理数据权利请求并查看聚合观测。
+                </span>
+              </span>
+              <ChevronDown className={`h-4 w-4 shrink-0 text-[#003178] transition ${showOperations ? 'rotate-180' : ''}`} />
+            </button>
+
+            {showOperations && (
+              <div className="mt-4">
+                <SaasOperationsPanel
+                  token={token}
+                  account={account}
+                  onStatus={setStatusText}
+                />
+              </div>
+            )}
+          </section>
         </div>
       )}
 

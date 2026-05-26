@@ -24,10 +24,12 @@ test('SaaS account trial can sync and restore local learning data', async ({ pag
   await expect(page.getByText('云端学习数据恢复完成', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '我知道了' }).click();
 
-  await expect(page.getByText('团队运营与合规控制台')).toBeVisible();
+  await expect(page.getByText('团队与数据管理（高级）')).toBeVisible();
+  await page.getByTestId('saas-ops-toggle').click();
+  await expect(page.getByText('团队协作与数据安全')).toBeVisible();
 
   await page.getByTestId('saas-invite-email').fill(`member-${Date.now()}@example.com`);
-  await page.getByRole('button', { name: '邀请' }).click();
+  await page.getByRole('button', { name: '邀请', exact: true }).click();
   const invitationLinkNotice = page.getByText(/^邀请链接：/);
   await expect(invitationLinkNotice).toBeVisible();
   const invitationLink = (await invitationLinkNotice.textContent())!.split('：')[1].trim();

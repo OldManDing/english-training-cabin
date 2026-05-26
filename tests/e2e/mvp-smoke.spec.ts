@@ -13,7 +13,7 @@ test('MVP critical reading flow persists local learning evidence', async ({ page
   for (let index = 0; index < 5; index += 1) {
     await page.getByRole('button', { name: /^A / }).click();
     await page.getByText('非常有把握').click();
-    await page.getByRole('button', { name: '提交此题并进行 AI 诊断' }).click();
+    await page.getByRole('button', { name: '提交此题并查看错因诊断' }).click();
     await page.getByRole('button', { name: index === 4 ? /完成训练/ : /进入第/ }).click();
   }
 

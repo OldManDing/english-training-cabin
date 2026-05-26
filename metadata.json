@@ -1,6 +1,6 @@
 {
   "name": "英语训练舱",
-  "description": "英语训练舱是本地优先的 AI 英语能力训练系统，提供今日训练、专项练习、错因复习、口语重说、材料导入和能力进展监测，首发聚焦 CET-4 并预留多考试扩展。",
+  "description": "英语训练舱是本地优先的英语能力训练系统，提供今日训练、专项练习、错因复习、口语重说、材料导入和能力进展监测，首发聚焦 CET-4 并预留多考试扩展。",
   "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

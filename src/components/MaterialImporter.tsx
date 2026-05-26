@@ -195,7 +195,7 @@ export default function MaterialImporter({ onLoadCustomPassage }: MaterialImport
             AI 模拟阅读生成
           </div>
           <p className="mt-3 text-xs font-semibold leading-6 text-slate-500">
-            输入话题后，系统会调用 AI 生成原创模拟材料；没有 API Key 时会自动返回离线样例，保证演示和训练流程不断裂。
+            输入话题后，系统会调用 AI 生成原创模拟材料；供应商不可用时会返回离线样例，保证演示和训练流程不断裂。
           </p>
 
           <div className="mt-5 space-y-3">

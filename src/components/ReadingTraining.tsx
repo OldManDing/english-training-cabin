@@ -481,7 +481,7 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
                     : 'bg-gray-200 text-gray-400 cursor-not-allowed text-xs'
                 }`}
               >
-                提交此题并进行 AI 诊断
+                提交此题并查看错因诊断
               </button>
             ) : (
               <button

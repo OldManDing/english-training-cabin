@@ -31,7 +31,7 @@ test('mobile viewport can reach the learning cockpit and launch disclosure', asy
   await expect(page).toHaveTitle(/英语训练舱/);
   await expect(page.getByRole('heading', { name: '今日训练' })).toBeVisible();
   await expectMobilePrimaryNavReadable(page);
-  await expect(page.getByText('上线声明：本地优先、模拟训练、AI 有兜底')).toBeVisible();
+  await expect(page.getByText('上线声明：本地优先、模拟训练、AI 辅助可降级')).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
   await page.getByRole('button', { name: '本地数据' }).click();

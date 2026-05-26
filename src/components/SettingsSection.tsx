@@ -538,7 +538,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
       {/* Clean elegant footer copyright notes aligned with bottom screenshot */}
       <footer className="shrink-0 pt-4 border-t border-[#cfe6f2] flex flex-col sm:flex-row items-center justify-between text-[11px] text-[#434652] opacity-75 sm:py-2 select-none">
         <div>
-          © 2026 英语训练舱 AI Study Coach
+            © 2026 英语训练舱 English Training System
         </div>
         <div className="flex items-center space-x-4 mt-2 sm:mt-0 font-bold">
           <a href="#privacy" onClick={(e) => { 

@@ -30,7 +30,7 @@ export default function LaunchReadinessNotice({ onOpen }: LaunchReadinessNoticeP
             <ShieldCheck className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-sm font-black text-[#003178]">上线声明：本地优先、模拟训练、AI 有兜底</h2>
+            <h2 className="text-sm font-black text-[#003178]">上线声明：本地优先、模拟训练、AI 辅助可降级</h2>
             <p className="mt-1 max-w-4xl text-xs font-semibold leading-5 text-slate-600">
               学习记录默认保存在当前浏览器；AI 生成内容为模拟题；导入材料需确保来源合法。供应商异常时会自动返回离线模拟结果，不中断训练。
             </p>
@@ -56,7 +56,7 @@ export default function LaunchReadinessNotice({ onOpen }: LaunchReadinessNoticeP
             className="inline-flex items-center justify-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-black text-amber-800 transition hover:bg-amber-100"
           >
             <AlertCircle className="h-4 w-4" />
-            AI 兜底
+            离线兜底
           </button>
         </div>
       </div>

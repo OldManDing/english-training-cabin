@@ -34,7 +34,7 @@
 | HTTPS 证书 | Let's Encrypt `study.xmlga.top`，到期日 `2026-08-23` | 通过 |
 | 外部健康检查 | `curl.exe -I https://study.xmlga.top/api/health` | 200 |
 | 线上 smoke | `SMOKE_BASE_URL=https://study.xmlga.top SMOKE_LIVE_AI=true npm.cmd run smoke:production` | 通过 |
-| 线上 UI 首页 | Playwright 打开 `https://study.xmlga.top`，标题为“英语训练舱 | AI 英语能力训练系统” | 通过 |
+| 线上 UI 首页 | Playwright 打开 `https://study.xmlga.top`，标题为“英语训练舱 | 英语能力训练系统” | 通过 |
 | 设置页控制台 | Playwright 进入设置页，Console errors/warnings 为 0 | 通过 |
 | 主要导航 | 今日训练、专项练习、复习队列、口语重说、能力进展、材料导入均可达 | 通过 |
 | 移动端视口 | 390x844 访问首页并截图 | 通过 |
@@ -54,7 +54,7 @@
 
 - 核心学习闭环可上线：入门诊断、今日任务、专项练习、评分反馈、错因复习、能力画像、材料导入和本地/云端学习数据同步均有自动化或 smoke 覆盖。
 - 学习方法已落地：主动回忆、语块化、挖空提取、语境化输出和间隔重复已进入复习数据结构与 UI 流程。
-- 对外定位已从单一 CET-4 备考工具调整为“英语训练舱 / AI 英语能力训练系统”，当前首发聚焦 CET-4，架构保留多考试扩展。
+- 对外定位已从单一 CET-4 备考工具调整为“英语训练舱 / 英语能力训练系统”，当前首发聚焦 CET-4，架构保留多考试扩展。
 - 线上 AI 供应商调用通过，`BaseUI` 的 OpenAI-compatible 接口可生成阅读材料。
 
 ## 已知上线风险
