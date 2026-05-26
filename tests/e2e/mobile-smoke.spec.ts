@@ -1,6 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
-async function expectNoHorizontalOverflow(page: import('@playwright/test').Page) {
+async function expectNoHorizontalOverflow(page: Page) {
   const overflow = await page.evaluate(() => ({
     body: document.body.scrollWidth - document.body.clientWidth,
     document: document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -10,7 +10,7 @@ async function expectNoHorizontalOverflow(page: import('@playwright/test').Page)
   expect(overflow.document).toBeLessThanOrEqual(1);
 }
 
-async function expectMobilePrimaryNavReadable(page: import('@playwright/test').Page) {
+async function expectMobilePrimaryNavReadable(page: Page) {
   const metrics = await page.locator('nav').first().evaluate((nav) => {
     const buttonWidths = Array.from(nav.querySelectorAll('button')).map((button) => button.getBoundingClientRect().width);
     return {
@@ -22,6 +22,20 @@ async function expectMobilePrimaryNavReadable(page: import('@playwright/test').P
 
   expect(metrics.minButtonWidth).toBeGreaterThanOrEqual(108);
   expect(metrics.scrollWidth).toBeGreaterThan(metrics.clientWidth);
+}
+
+async function answerMobileDiagnostic(page: Page) {
+  await page.getByRole('button', { name: /B\. They have become flexible learning hubs/ }).click();
+  await page.getByRole('button', { name: /C\. Join the online workshop/ }).click();
+  await page.getByLabel('翻译句法转换作答').fill(
+    'With the development of online learning, more college students can arrange their study time more flexibly.',
+  );
+  await page.getByLabel('写作结构与论证作答').fill(
+    'In my opinion, students can use AI tools wisely because they can receive quick feedback. For example, AI can point out grammar problems. However, students should revise the answer themselves.',
+  );
+  await page.getByLabel('口语连贯表达初筛作答').fill(
+    'One habit that helps me learn English is reading aloud every morning. It works because I can practice pronunciation. For example, I repeat useful sentences, so I become more confident.',
+  );
 }
 
 test('mobile viewport can reach the learning cockpit and launch disclosure', async ({ page }) => {
@@ -48,7 +62,8 @@ test('narrow phone reaches every primary workspace without horizontal clipping',
   await page.goto('/');
 
   await page.getByRole('button', { name: '专项练习' }).click();
-  await expect(page.getByRole('heading', { name: '仔细阅读专项突破库' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /专项练习/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: '开始单词练习' })).toBeVisible();
   await expect(page.getByRole('button', { name: '开始听力训练' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
@@ -77,15 +92,21 @@ test('narrow phone completes the responsive diagnostic layouts', async ({ page }
   await page.goto('/');
 
   await page.getByRole('button', { name: '入门能力诊断' }).click();
-  await expect(page.getByRole('heading', { name: '入门诊断' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /入门诊断/ })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
   await page.getByRole('button', { name: '开始诊断' }).click();
   await expect(page.getByRole('heading', { name: '学习目标设置' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
-  await page.getByRole('button', { name: '确认并生成计划' }).click();
-  await expect(page.getByRole('heading', { name: '诊断完成！您的能力画像已生成' })).toBeVisible({ timeout: 7_000 });
+  await page.getByRole('button', { name: '进入真实诊断' }).click();
+  await expect(page.getByRole('heading', { name: '真实小题诊断' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '播放听力材料' })).toBeVisible();
+  await answerMobileDiagnostic(page);
+  await expectNoHorizontalOverflow(page);
+
+  await page.getByRole('button', { name: '提交诊断并生成画像' }).click();
+  await expect(page.getByRole('heading', { name: '您的能力画像已生成' })).toBeVisible({ timeout: 7_000 });
   await expectNoHorizontalOverflow(page);
 });
 

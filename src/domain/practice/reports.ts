@@ -213,20 +213,26 @@ function buildReviewItem(params: {
   if (params.reasons.length === 0) return null;
 
   const isIncorrect = params.attempt.isCorrect === false;
+  const reviewLabels: Record<string, { prefix: string; category: ReviewItem['category']; contextLabel: string }> = {
+    listening: { prefix: '听力错因', category: '错题', contextLabel: '听力原句' },
+    vocabulary: { prefix: '词汇错因', category: '词汇', contextLabel: '词汇语块' },
+    reading: { prefix: '阅读错因', category: '错题', contextLabel: '阅读定位句' },
+  };
+  const labels = reviewLabels[params.skillArea] ?? { prefix: '练习错因', category: '错题' as const, contextLabel: '训练材料' };
   const nextReviewAt = new Date();
   nextReviewAt.setDate(nextReviewAt.getDate() + (isIncorrect ? 1 : 2));
   const sourceText = params.question.correctSentence || params.question.explanation || params.question.question;
   const memoryTask = buildMemoryReviewTask({
     sourceText,
-    contextLabel: params.skillArea === 'listening' ? '听力原句' : '阅读定位句',
+    contextLabel: labels.contextLabel,
     skillArea: params.skillArea,
     mistakeReasons: params.reasons,
   });
 
   return {
     id: makeId('review'),
-    title: `${params.skillArea === 'listening' ? '听力' : '阅读'}错因：${params.reasons[0]}`,
-    category: '错题',
+    title: `${labels.prefix}：${params.reasons[0]}`,
+    category: labels.category,
     detail: `题目：${params.question.question}\n你的答案：${String(params.attempt.answer || '未作答')}；正确答案：${params.question.correctAnswer}。\n复习重点：${params.reasons.join('、')}。`,
     daysAgo: 0,
     targetType: 'question',

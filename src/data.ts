@@ -1,5 +1,230 @@
 import { Passage, ReviewItem, AbilityScore, SkillGap, TimelineLog, SpeakingSession } from './types';
 
+export interface VocabularyPracticeItem {
+  id: string;
+  word: string;
+  phonetic: string;
+  partOfSpeech: string;
+  meaning: string;
+  options: {
+    A: string;
+    B: string;
+    C: string;
+    D: string;
+  };
+  correctAnswer: 'A' | 'B' | 'C' | 'D';
+  collocation: string;
+  example: string;
+  explanation: string;
+}
+
+export const CET4_VOCABULARY_BANK: VocabularyPracticeItem[] = [
+  {
+    id: 'vocab-adapt',
+    word: 'adapt',
+    phonetic: '/əˈdæpt/',
+    partOfSpeech: 'verb',
+    meaning: '适应；改编',
+    options: {
+      A: 'to refuse a new situation',
+      B: 'to adjust to a new condition',
+      C: 'to remove something completely',
+      D: 'to describe something in detail',
+    },
+    correctAnswer: 'B',
+    collocation: 'adapt to online learning',
+    example: 'Students need to adapt to online learning when classes move to digital platforms.',
+    explanation: 'adapt to 表示“适应……”，CET-4 阅读和写作中常用于环境、学习方式或技术变化。',
+  },
+  {
+    id: 'vocab-enhance',
+    word: 'enhance',
+    phonetic: '/ɪnˈhæns/',
+    partOfSpeech: 'verb',
+    meaning: '提高；增强',
+    options: {
+      A: 'to make something better or stronger',
+      B: 'to make something disappear',
+      C: 'to measure something exactly',
+      D: 'to delay a decision',
+    },
+    correctAnswer: 'A',
+    collocation: 'enhance learning efficiency',
+    example: 'Regular review can enhance learning efficiency and reduce repeated mistakes.',
+    explanation: 'enhance 比 improve 更正式，适合写作中替换“make better”。',
+  },
+  {
+    id: 'vocab-exacerbate',
+    word: 'exacerbate',
+    phonetic: '/ɪɡˈzæsərbeɪt/',
+    partOfSpeech: 'verb',
+    meaning: '使恶化；加剧',
+    options: {
+      A: 'to solve a problem quickly',
+      B: 'to make a problem worse',
+      C: 'to compare two similar ideas',
+      D: 'to create a useful habit',
+    },
+    correctAnswer: 'B',
+    collocation: 'exacerbate existing inequalities',
+    example: 'Unequal access to technology may exacerbate existing inequalities.',
+    explanation: 'exacerbate 常与 problem、inequality、tension 搭配，表示负面情况加剧。',
+  },
+  {
+    id: 'vocab-implement',
+    word: 'implement',
+    phonetic: '/ˈɪmplɪment/',
+    partOfSpeech: 'verb',
+    meaning: '实施；执行',
+    options: {
+      A: 'to put a plan into action',
+      B: 'to translate a passage',
+      C: 'to forget a detail',
+      D: 'to avoid responsibility',
+    },
+    correctAnswer: 'A',
+    collocation: 'implement a study plan',
+    example: 'A realistic study plan is useful only when students implement it consistently.',
+    explanation: 'implement 强调把计划、政策、方法真正落地执行。',
+  },
+  {
+    id: 'vocab-inevitable',
+    word: 'inevitable',
+    phonetic: '/ɪnˈevɪtəbl/',
+    partOfSpeech: 'adjective',
+    meaning: '不可避免的',
+    options: {
+      A: 'hard to understand',
+      B: 'impossible to avoid',
+      C: 'easy to forget',
+      D: 'safe and reliable',
+    },
+    correctAnswer: 'B',
+    collocation: 'an inevitable trend',
+    example: 'The use of digital tools in education seems to be an inevitable trend.',
+    explanation: 'inevitable 常用于趋势判断，写作中可替换 unavoidable。',
+  },
+  {
+    id: 'vocab-privacy',
+    word: 'privacy',
+    phonetic: '/ˈpraɪvəsi/',
+    partOfSpeech: 'noun',
+    meaning: '隐私',
+    options: {
+      A: 'personal information protection',
+      B: 'public transportation',
+      C: 'a learning schedule',
+      D: 'an official certificate',
+    },
+    correctAnswer: 'A',
+    collocation: 'data privacy',
+    example: 'Data privacy is a major concern when students use AI learning tools.',
+    explanation: 'privacy 在科技、教育、网络安全主题中高频出现。',
+  },
+  {
+    id: 'vocab-sustainable',
+    word: 'sustainable',
+    phonetic: '/səˈsteɪnəbl/',
+    partOfSpeech: 'adjective',
+    meaning: '可持续的',
+    options: {
+      A: 'lasting without damaging future resources',
+      B: 'requiring no effort',
+      C: 'limited to one person',
+      D: 'related to ancient culture only',
+    },
+    correctAnswer: 'A',
+    collocation: 'sustainable development',
+    example: 'Cities should encourage sustainable development while protecting local communities.',
+    explanation: 'sustainable development 是 CET-4 环境与城市主题常见表达。',
+  },
+  {
+    id: 'vocab-facilitate',
+    word: 'facilitate',
+    phonetic: '/fəˈsɪlɪteɪt/',
+    partOfSpeech: 'verb',
+    meaning: '促进；使便利',
+    options: {
+      A: 'to make a process easier',
+      B: 'to punish someone',
+      C: 'to copy a paragraph',
+      D: 'to lose interest',
+    },
+    correctAnswer: 'A',
+    collocation: 'facilitate communication',
+    example: 'Online platforms can facilitate communication between teachers and students.',
+    explanation: 'facilitate 是正式写作高频动词，可用于学习、沟通、合作等场景。',
+  },
+  {
+    id: 'vocab-alternative',
+    word: 'alternative',
+    phonetic: '/ɔːlˈtɜːrnətɪv/',
+    partOfSpeech: 'noun/adjective',
+    meaning: '可替代的；替代方案',
+    options: {
+      A: 'a possible different choice',
+      B: 'a repeated mistake',
+      C: 'a personal habit',
+      D: 'a grammar rule',
+    },
+    correctAnswer: 'A',
+    collocation: 'alternative energy',
+    example: 'Solar power is often seen as an alternative energy source.',
+    explanation: 'alternative 可作名词也可作形容词，常见搭配包括 alternative energy / an alternative to。',
+  },
+  {
+    id: 'vocab-mentorship',
+    word: 'mentorship',
+    phonetic: '/ˈmentərʃɪp/',
+    partOfSpeech: 'noun',
+    meaning: '导师指导；辅导关系',
+    options: {
+      A: 'guidance from an experienced person',
+      B: 'a sudden technical failure',
+      C: 'a type of public exam',
+      D: 'a short news report',
+    },
+    correctAnswer: 'A',
+    collocation: 'human mentorship',
+    example: 'Human mentorship remains important even when AI tools become more common.',
+    explanation: 'mentorship 常用于教育、职业发展主题，表示有经验者的持续指导。',
+  },
+  {
+    id: 'vocab-consistent',
+    word: 'consistent',
+    phonetic: '/kənˈsɪstənt/',
+    partOfSpeech: 'adjective',
+    meaning: '持续一致的；稳定的',
+    options: {
+      A: 'changing every minute',
+      B: 'done in the same way over time',
+      C: 'too expensive to use',
+      D: 'not related to the topic',
+    },
+    correctAnswer: 'B',
+    collocation: 'consistent practice',
+    example: 'Consistent practice is more effective than studying for many hours only once.',
+    explanation: 'consistent practice 可直接用于学习方法表达，强调稳定重复。',
+  },
+  {
+    id: 'vocab-retrieve',
+    word: 'retrieve',
+    phonetic: '/rɪˈtriːv/',
+    partOfSpeech: 'verb',
+    meaning: '取回；检索；主动提取',
+    options: {
+      A: 'to bring information back from memory',
+      B: 'to ignore a useful clue',
+      C: 'to make a sound louder',
+      D: 'to cancel an activity',
+    },
+    correctAnswer: 'A',
+    collocation: 'retrieve information from memory',
+    example: 'Active recall helps learners retrieve information from memory instead of only rereading it.',
+    explanation: 'retrieve 是主动回忆学习法的核心词，适合连接词汇练习和复习系统。',
+  },
+];
+
 export const INITIAL_PASSAGE: Passage = {
   id: 'cet-ai-edu',
   examId: 'cet4',

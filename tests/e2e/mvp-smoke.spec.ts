@@ -1,5 +1,20 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import { CET4_VOCABULARY_BANK } from '../../src/data';
+
+async function answerOnboardingDiagnostic(page: Page) {
+  await page.getByRole('button', { name: /A\. They mainly protect old books/ }).click();
+  await page.getByRole('button', { name: /C\. Join the online workshop/ }).click();
+  await page.getByLabel('翻译句法转换作答').fill(
+    'With the development of online learning, more college students can arrange their study time more flexibly.',
+  );
+  await page.getByLabel('写作结构与论证作答').fill(
+    'In my opinion, students can use AI tools wisely because they can receive quick feedback. For example, when I write an English paragraph, AI can point out grammar problems and suggest better expressions. However, students should revise the answer themselves instead of copying it.',
+  );
+  await page.getByLabel('口语连贯表达初筛作答').fill(
+    'One habit that helps me learn English is reading aloud every morning. It works because I can practice pronunciation and remember useful expressions. For example, I repeat one short paragraph three times, so I become more confident.',
+  );
+}
 
 test('MVP critical reading flow persists local learning evidence', async ({ page }) => {
   await page.goto('/');
@@ -167,11 +182,23 @@ test('onboarding diagnostic persists the initial ability portrait before enterin
 
   await page.getByRole('button', { name: '入门能力诊断' }).click();
   await page.getByRole('button', { name: '开始诊断' }).click();
-  await page.getByRole('button', { name: '确认并生成计划' }).click();
+  await expect(page.getByRole('heading', { name: '学习目标设置' })).toBeVisible();
+  await page.getByRole('button', { name: '上一步' }).click();
+  await expect(page.getByRole('heading', { name: /入门诊断/ })).toBeVisible();
+  await page.getByRole('button', { name: '开始诊断' }).click();
+  await page.getByRole('button', { name: '进入真实诊断' }).click();
+  await expect(page.getByRole('heading', { name: '真实小题诊断' })).toBeVisible();
+  await page.getByRole('button', { name: '上一步' }).click();
+  await expect(page.getByRole('heading', { name: '学习目标设置' })).toBeVisible();
+  await page.getByRole('button', { name: '进入真实诊断' }).click();
+  await answerOnboardingDiagnostic(page);
+  await page.getByRole('button', { name: '提交诊断并生成画像' }).click();
 
-  await expect(page.getByRole('heading', { name: '诊断完成！您的能力画像已生成' })).toBeVisible({ timeout: 7_000 });
+  await expect(page.getByRole('heading', { name: '您的能力画像已生成' })).toBeVisible({ timeout: 7_000 });
+  await expect(page.getByTestId('diagnostic-score-reading')).toContainText('42');
   await page.getByRole('button', { name: /开启今日训练/ }).click();
   await expect(page.getByRole('heading', { name: '今日训练' })).toBeVisible();
+  await expect(page.getByText('核心词汇听音与语块记忆')).toBeVisible();
 
   const result = await page.evaluate(async () => {
     function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
@@ -186,18 +213,28 @@ test('onboarding diagnostic persists the initial ability portrait before enterin
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
-    const tx = db.transaction(['studyGoals', 'skillProfiles'], 'readonly');
+    const tx = db.transaction(['studyGoals', 'practiceSessions', 'attempts', 'reviewItems', 'skillProfiles'], 'readonly');
     const goal = await requestToPromise(tx.objectStore('studyGoals').get('goal-cet4-primary'));
-    const skillProfiles = await requestToPromise(tx.objectStore('skillProfiles').count());
+    const sessions = await requestToPromise(tx.objectStore('practiceSessions').count());
+    const attempts = await requestToPromise(tx.objectStore('attempts').count());
+    const reviewItems = await requestToPromise(tx.objectStore('reviewItems').count());
+    const skillProfiles = await requestToPromise(tx.objectStore('skillProfiles').getAll());
     db.close();
-    return { goal, skillProfiles };
+    return { goal, sessions, attempts, reviewItems, skillProfiles };
   });
 
   expect(result.goal).toMatchObject({
     targetScore: 550,
     dailyMinutes: 45,
   });
-  expect(result.skillProfiles).toBe(5);
+  expect(result.sessions).toBe(1);
+  expect(result.attempts).toBe(5);
+  expect(result.reviewItems).toBeGreaterThanOrEqual(1);
+  expect(result.skillProfiles).toHaveLength(5);
+  expect(result.skillProfiles.find((profile: { skillArea: string }) => profile.skillArea === 'reading')).toMatchObject({
+    score: 42,
+    evidenceCount: 1,
+  });
 });
 
 test('MVP critical translation flow evaluates feedback and persists learning evidence', async ({ page }) => {
@@ -259,6 +296,61 @@ test('MVP critical translation flow evaluates feedback and persists learning evi
   expect(counts.translationProfile).toMatchObject({
     skillArea: 'translation',
     score: 69,
+  });
+});
+
+test('vocabulary practice plays audio controls, scores answers, and persists review evidence', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => indexedDB.deleteDatabase('english-training-cabin'));
+  await page.reload();
+
+  await page.getByRole('button', { name: '专项练习' }).click();
+  await expect(page.getByRole('heading', { name: /专项练习/ })).toBeVisible();
+  await expect(page.getByText(`核心词汇 ${CET4_VOCABULARY_BANK.length} 个`)).toBeVisible();
+  await page.getByRole('button', { name: '开始单词练习' }).click();
+
+  await expect(page.getByRole('heading', { name: CET4_VOCABULARY_BANK[0].word })).toBeVisible();
+  await page.getByRole('button', { name: '播放单词' }).click();
+
+  for (const item of CET4_VOCABULARY_BANK) {
+    await expect(page.getByRole('heading', { name: item.word })).toBeVisible();
+    const answerButton = page.getByRole('button', { name: new RegExp(`^${item.correctAnswer}\\. `) });
+    await answerButton.click();
+    await page.getByRole('button', { name: '有把握' }).click();
+    await page.getByRole('button', { name: '提交词汇答案' }).click();
+    await expect(page.getByText(`正确答案：${item.correctAnswer}`)).toBeVisible();
+    await page.getByRole('button', { name: item === CET4_VOCABULARY_BANK.at(-1) ? '完成词汇练习' : '进入下一个单词' }).click();
+  }
+
+  await expect(page.getByRole('heading', { name: '能力地图' })).toBeVisible();
+
+  const counts = await page.evaluate(async () => {
+    function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
+      return new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('english-training-cabin');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+
+    const tx = db.transaction(['practiceSessions', 'attempts', 'skillProfiles'], 'readonly');
+    const sessions = await requestToPromise(tx.objectStore('practiceSessions').count());
+    const attempts = await requestToPromise(tx.objectStore('attempts').count());
+    const skillProfiles = await requestToPromise(tx.objectStore('skillProfiles').getAll());
+    db.close();
+    return { sessions, attempts, skillProfiles };
+  });
+
+  expect(counts.sessions).toBe(1);
+  expect(counts.attempts).toBe(CET4_VOCABULARY_BANK.length);
+  expect(counts.skillProfiles.find((profile: { skillArea: string }) => profile.skillArea === 'vocabulary')).toMatchObject({
+    score: 100,
+    evidenceCount: CET4_VOCABULARY_BANK.length,
   });
 });
 
@@ -342,7 +434,8 @@ test('all MVP sections render their primary controls', async ({ page }) => {
   await page.goto('/');
 
   await page.getByRole('button', { name: '专项练习' }).click();
-  await expect(page.getByRole('heading', { name: '仔细阅读专项突破库' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /专项练习/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: '开始单词练习' })).toBeVisible();
   await expect(page.getByRole('button', { name: /开始仔细阅读训练/ }).first()).toBeVisible();
 
   await page.getByRole('button', { name: '复习队列' }).click();

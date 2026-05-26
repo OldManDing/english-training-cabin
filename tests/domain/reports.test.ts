@@ -78,6 +78,43 @@ describe('buildChoicePracticeReport', () => {
     expect(report.skillProfiles[0].score).toBe(100);
   });
 
+  it('creates vocabulary-specific review work for wrong or low-confidence words', () => {
+    const report = buildChoicePracticeReport({
+      examId: 'cet4',
+      moduleId: 'vocabulary',
+      questionTypeId: 'cet4-core-vocabulary',
+      modeId: 'vocabulary-audio-choice',
+      skillArea: 'vocabulary',
+      plannedMinutes: 12,
+      startedAt: new Date(Date.now() - 30_000).toISOString(),
+      questions: [
+        {
+          id: 'vocab-adapt',
+          question: 'adapt /əˈdæpt/: Students need to adapt to online learning.',
+          correctAnswer: 'B',
+          type: '词义辨析与听音识别',
+          trapType: '关键词漏听',
+          correctSentence: 'adapt to online learning. Students need to adapt to online learning.',
+          explanation: 'adapt to 表示适应。',
+        },
+      ],
+      answers: [
+        {
+          selected: 'A',
+          correct: false,
+          confidence: 'not_sure',
+        },
+      ],
+    });
+
+    expect(report.reviewItems[0]).toMatchObject({
+      title: '词汇错因：低信心',
+      category: '词汇',
+      skillArea: 'vocabulary',
+    });
+    expect(report.reviewItems[0].memoryTask?.recallPrompt).toContain('词汇语块');
+  });
+
   it('creates speaking attempts, review work, and skill evidence from a retell round', () => {
     const report = buildSpeakingPracticeReport({
       examId: 'cet4',

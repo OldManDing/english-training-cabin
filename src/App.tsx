@@ -15,9 +15,10 @@ import MaterialImporter from './components/MaterialImporter';
 import OnboardingDiagnostic from './components/OnboardingDiagnostic';
 import ListeningTraining from './components/ListeningTraining';
 import SettingsSection from './components/SettingsSection';
+import VocabularyTraining from './components/VocabularyTraining';
 import { ActiveTab, DailyPlan, Passage, PracticeCompletionReport, ReviewItem, SkillProfile, StudyGoal } from './types';
-import { INITIAL_PASSAGE } from './data';
-import { Sparkles, BookOpen, Clock, ChevronRight, GraduationCap, X } from 'lucide-react';
+import { CET4_VOCABULARY_BANK, INITIAL_PASSAGE } from './data';
+import { Sparkles, BookOpen, ChevronRight, GraduationCap, X, Volume2, LibraryBig } from 'lucide-react';
 import {
   completeReviewItem,
   getOrCreateActiveGoal,
@@ -29,6 +30,7 @@ import {
 } from './lib/storage/db';
 import { buildDailyPlan } from './domain/planner/dailyPlan';
 import { trackTelemetry } from './lib/telemetry';
+import { OnboardingDiagnosticReport } from './domain/diagnostic/onboardingDiagnostic';
 
 function getDaysRemaining(examDate?: string): number {
   if (!examDate) return 0;
@@ -112,6 +114,7 @@ export default function App() {
   const [customPassage, setCustomPassage] = useState<Passage>(INITIAL_PASSAGE);
   const [isPracticing, setIsPracticing] = useState(false);
   const [isListeningPracticing, setIsListeningPracticing] = useState(false);
+  const [isVocabularyPracticing, setIsVocabularyPracticing] = useState(false);
   const [subjectivePracticeMode, setSubjectivePracticeMode] = useState<'writing' | 'translation' | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [dailyStrategy, setDailyStrategy] = useState<'efficient' | 'review'>('efficient');
@@ -262,6 +265,7 @@ export default function App() {
     dailyMinutes: number;
     prioritySkills: StudyGoal['prioritySkills'];
     skillProfiles: SkillProfile[];
+    diagnosticReport?: OnboardingDiagnosticReport;
   }) => {
     try {
       const goal = await upsertActiveGoal({
@@ -270,16 +274,29 @@ export default function App() {
         dailyMinutes: result.dailyMinutes,
         prioritySkills: result.prioritySkills,
       });
-      await persistSkillProfiles(result.skillProfiles);
+      if (result.diagnosticReport) {
+        await persistPracticeCompletion({
+          session: {
+            ...result.diagnosticReport.session,
+            goalId: goal.id,
+          },
+          attempts: result.diagnosticReport.attempts,
+          reviewItems: result.diagnosticReport.reviewItems,
+          skillProfiles: result.diagnosticReport.skillProfiles,
+        });
+      } else {
+        await persistSkillProfiles(result.skillProfiles);
+      }
       setActiveGoal(goal);
       setTargetScoreLimit(goal.targetScore);
       await refreshStudyState();
       trackTelemetry('practice_completed', {
         mode: 'diagnostic',
         moduleId: 'onboarding',
-        score: Math.round(result.skillProfiles.reduce((sum, item) => sum + item.score, 0) / Math.max(1, result.skillProfiles.length)),
-        attempts: result.skillProfiles.length,
-        reviewItems: 0,
+        score: result.diagnosticReport?.averageScore
+          ?? Math.round(result.skillProfiles.reduce((sum, item) => sum + item.score, 0) / Math.max(1, result.skillProfiles.length)),
+        attempts: result.diagnosticReport?.attempts.length ?? result.skillProfiles.length,
+        reviewItems: result.diagnosticReport?.reviewItems.length ?? 0,
       });
     } catch (error) {
       console.error('Failed to save onboarding diagnostic:', error);
@@ -403,6 +420,23 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
     });
   };
 
+  const handleCompleteVocabularyPractice = (score: number, report: PracticeCompletionReport) => {
+    setIsVocabularyPracticing(false);
+    setActiveTab('progress');
+    trackTelemetry('practice_completed', {
+      mode: report.session.modeId,
+      moduleId: report.session.moduleId,
+      score,
+      attempts: report.attempts.length,
+      reviewItems: report.reviewItems.length,
+    });
+    persistCompletionReport(report).catch((error) => {
+      console.error('Failed to persist vocabulary practice:', error);
+      trackTelemetry('client_error', { area: 'vocabulary_practice_persist' });
+      handleTriggerModal('词汇练习保存失败', '本次词汇分数已显示，但错因和复习队列没有成功写入本地数据库。');
+    });
+  };
+
   const handleCompleteSpeakingPractice = async (report: PracticeCompletionReport) => {
     trackTelemetry('practice_completed', {
       mode: report.session.modeId,
@@ -424,6 +458,7 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
             onStartListening={() => setIsListeningPracticing(true)}
             onStartWriting={() => setSubjectivePracticeMode('writing')}
             onStartTranslation={() => setSubjectivePracticeMode('translation')}
+            onStartVocabulary={() => setIsVocabularyPracticing(true)}
             onStartOnboarding={() => setShowOnboarding(true)}
             onViewReview={() => setActiveTab('review')}
             onStartSpeaking={() => setActiveTab('speaking')}
@@ -442,21 +477,81 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
         );
       case 'practice':
         return (
-          <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-b from-[#f3faff] to-white min-h-[calc(100svh-9rem)] lg:h-screen flex flex-col justify-between">
-            <div className="shrink-0 mb-6">
-              <header className="pb-4 border-b border-[#cfe6f2]">
-                <h2 className="text-xl font-bold text-[#003178] flex items-center gap-1.5 animate-pulse">
-                  <Sparkles className="h-6 w-6 text-emerald-500 fill-emerald-500" />
-                  仔细阅读专项突破库
-                </h2>
-                <p className="text-xs text-gray-500 mt-1">
-                  选择下方原创模拟文章开始训练。系统会记录答题结果、信心和错因，用于生成复习队列。
-                </p>
+          <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#f8fafc_40%,#fff7ed_100%)] min-h-[calc(100svh-9rem)] lg:h-screen">
+            <div className="mx-auto w-full max-w-6xl space-y-5">
+              <header className="rounded-[2rem] border border-sky-100 bg-white/90 p-5 shadow-sm sm:p-6">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                  <div>
+                    <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-[#003178]/10 px-3 py-1 text-xs font-black text-[#003178]">
+                      <LibraryBig className="h-4 w-4" />
+                      内置基础材料库
+                    </div>
+                    <h2 className="text-2xl font-black text-[#003178] sm:text-3xl">
+                      专项练习：阅读、听力、写译、词汇都要能直接练
+                    </h2>
+                    <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
+                      当前内置原创 CET-4 模拟材料：阅读 {practicePassages.length} 组、核心词汇 {CET4_VOCABULARY_BANK.length} 个、
+                      听力 1 组、写作/翻译各 1 组。所有练习都会写入本地能力画像和复习队列。
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowOnboarding(true)}
+                    className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-2xl border border-[#cfe6f2] bg-[#003178] px-5 text-sm font-black text-white shadow-sm transition hover:bg-[#07244f]"
+                  >
+                    <GraduationCap className="h-4 w-4 text-emerald-300" />
+                    入门诊断与能力画像
+                  </button>
+                </div>
               </header>
-            </div>
 
-            <div className="flex-1 overflow-y-auto space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="rounded-[2rem] border border-emerald-100 bg-white p-5 shadow-sm sm:p-6">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">
+                    <Volume2 className="h-3.5 w-3.5" />
+                    词汇 · 听音识别
+                  </span>
+                  <h3 className="mt-3 text-lg font-black text-[#071e27]">CET-4 核心词汇听音练习</h3>
+                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
+                    播放单词和例句，完成词义辨析；低信心或错误项会进入主动回忆复习。
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold text-slate-500">
+                    <span className="rounded-full bg-slate-100 px-3 py-1">{CET4_VOCABULARY_BANK.length} 个基础词</span>
+                    <span className="rounded-full bg-slate-100 px-3 py-1">语音播报</span>
+                    <span className="rounded-full bg-slate-100 px-3 py-1">语块例句</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsVocabularyPracticing(true)}
+                    className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#1b6d24] px-5 text-sm font-black text-white shadow-sm transition hover:bg-emerald-700 sm:w-auto"
+                  >
+                    <Volume2 className="h-4 w-4" />
+                    开始单词练习
+                  </button>
+                </div>
+
+                <div className="rounded-[2rem] border border-sky-100 bg-white p-5 shadow-sm sm:p-6">
+                  <span className="inline-flex rounded-full border border-sky-100 bg-sky-50 px-2.5 py-1 text-[10px] font-black text-sky-700">
+                    题库结构
+                  </span>
+                  <h3 className="mt-3 text-lg font-black text-[#071e27]">基础题库不是空壳</h3>
+                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
+                    首发不内置未授权真题，只内置原创模拟题和核心词表；用户可继续通过“材料导入”扩展自有或授权材料。
+                  </p>
+                  <div className="mt-4 grid grid-cols-2 gap-2 text-center text-xs font-black">
+                    <div className="rounded-2xl bg-slate-50 p-3">
+                      <div className="text-2xl text-[#003178]">{practicePassages.length}</div>
+                      <div className="text-slate-500">阅读材料</div>
+                    </div>
+                    <div className="rounded-2xl bg-slate-50 p-3">
+                      <div className="text-2xl text-[#003178]">{CET4_VOCABULARY_BANK.length}</div>
+                      <div className="text-slate-500">词汇条目</div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {practicePassages.map((p) => (
                   <div
                     key={p.id}
@@ -487,8 +582,9 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
                     </div>
                   </div>
                 ))}
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              </section>
+
+              <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 <div className="bg-white border hover:border-[#003178] rounded-3xl p-4 sm:p-6 transition-all duration-200 shadow-xs flex flex-col justify-between group min-h-40">
                   <div>
                     <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">
@@ -548,7 +644,7 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
                     开始听力训练
                   </button>
                 </div>
-              </div>
+              </section>
             </div>
           </div>
         );
@@ -598,6 +694,7 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
             onStartListening={() => setIsListeningPracticing(true)}
             onStartWriting={() => setSubjectivePracticeMode('writing')}
             onStartTranslation={() => setSubjectivePracticeMode('translation')}
+            onStartVocabulary={() => setIsVocabularyPracticing(true)}
             onStartOnboarding={() => setShowOnboarding(true)}
             onViewReview={() => setActiveTab('review')}
             onStartSpeaking={() => setActiveTab('speaking')}
@@ -648,6 +745,12 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
             });
           }}
         />
+      ) : isVocabularyPracticing ? (
+        <VocabularyTraining
+          items={CET4_VOCABULARY_BANK}
+          onBack={() => setIsVocabularyPracticing(false)}
+          onComplete={handleCompleteVocabularyPractice}
+        />
       ) : isPracticing ? (
         <ReadingTraining
           passage={customPassage}
@@ -669,21 +772,6 @@ In conclusion, although integrating sustainable tech helps reduce footprints, it
             onTriggerModal={handleTriggerModal}
           />
           <main className="flex-1 min-w-0 flex flex-col min-h-0 lg:h-screen lg:overflow-hidden relative">
-            {/* Top Right Floating Coach Button exactly as screens - Hide on today page to avoid overlapping */}
-            {activeTab !== 'today' && (
-              <div className="absolute top-6 right-8 z-30 pointer-events-auto hidden lg:flex items-center gap-4">
-                <span className="text-xs font-semibold text-[#1e333c] select-none bg-slate-100/80 px-3 py-1.5 rounded-full border border-slate-200/45">
-                  距考试 {examCountdown} 天
-                </span>
-                <button
-                  onClick={() => setShowOnboarding(true)}
-                  className="px-4.5 py-2.5 bg-[#003178] hover:bg-[#07244f] text-white rounded-2xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer border border-[#cfe6f2] shadow-2xs hover:scale-[1.03]"
-                >
-                  <GraduationCap className="h-4.5 w-4.5 text-emerald-300 animate-pulse shrink-0" />
-                  <span>AI 英语能力教练</span>
-                </button>
-              </div>
-            )}
             {renderTabContent()}
           </main>
         </>

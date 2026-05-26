@@ -23,11 +23,12 @@ function practiceTitleForSkill(skill: string): string {
   if (skill === 'listening') return '长对话精听与选项定位';
   if (skill === 'writing') return '短文写作结构与论证';
   if (skill === 'translation') return '段落翻译与中文干扰修正';
+  if (skill === 'vocabulary') return '核心词汇听音与语块记忆';
   return '仔细阅读同义替换突破';
 }
 
-function isPracticeSkill(skill: SkillProfile['skillArea']): skill is 'reading' | 'listening' | 'writing' | 'translation' {
-  return ['reading', 'listening', 'writing', 'translation'].includes(skill);
+function isPracticeSkill(skill: SkillProfile['skillArea']): skill is 'reading' | 'listening' | 'writing' | 'translation' | 'vocabulary' {
+  return ['reading', 'listening', 'writing', 'translation', 'vocabulary'].includes(skill);
 }
 
 function clampMinutes(value: number, min: number, max: number): number {
@@ -94,6 +95,10 @@ export function buildDailyPlan(input: BuildDailyPlanInput): DailyPlan {
   const weakestPracticeSkill = sortedProfiles.find((profile) => isPracticeSkill(profile.skillArea))?.skillArea;
   const configuredPracticeSkill = input.goal.prioritySkills.find((skill) => skill !== 'speaking');
   const primaryPracticeSkill = weakestPracticeSkill ?? configuredPracticeSkill ?? 'reading';
+  const latestVocabularyProfile = [...(input.skillProfiles ?? [])]
+    .filter((profile) => profile.skillArea === 'vocabulary' && profile.evidenceCount > 0)
+    .sort((left, right) => right.lastUpdatedAt.localeCompare(left.lastUpdatedAt))[0];
+  const needsVocabularyTask = !latestVocabularyProfile || latestVocabularyProfile.score < 72;
   const hasReviewTask = reviewCandidates.length > 0;
   const speakingEnabled = input.goal.prioritySkills.includes('speaking');
   const taskMinutes = allocateTaskMinutes({
@@ -132,18 +137,40 @@ export function buildDailyPlan(input: BuildDailyPlanInput): DailyPlan {
     });
   }
 
+  const vocabularyMinutes = needsVocabularyTask && primaryPracticeSkill !== 'vocabulary' && taskMinutes.practiceMinutes >= 20
+    ? clampMinutes(Math.round(taskMinutes.practiceMinutes * 0.35), 8, 12)
+    : 0;
+  const primaryPracticeMinutes = primaryPracticeSkill === 'vocabulary'
+    ? taskMinutes.practiceMinutes
+    : Math.max(8, taskMinutes.practiceMinutes - vocabularyMinutes);
+
   tasks.push({
     id: `task-practice-${primaryPracticeSkill}-${date}`,
     type: 'practice',
     title: practiceTitleForSkill(primaryPracticeSkill),
     skillArea: primaryPracticeSkill,
-    estimatedMinutes: taskMinutes.practiceMinutes,
+    estimatedMinutes: primaryPracticeMinutes,
     priority: !hasAbilityEvidence || reviewCandidates.length > 0 ? 'medium' : 'high',
     reason: weakestSkill
       ? `${weakestSkill.subSkillId} 当前掌握度 ${weakestSkill.score}%，需要用新题补证据。`
       : '尚未积累足够练习证据，先用 CET-4 核心题型建立能力基线。',
     payload: { examId: input.goal.examId },
   });
+
+  if (needsVocabularyTask && primaryPracticeSkill !== 'vocabulary' && vocabularyMinutes > 0) {
+    tasks.push({
+      id: `task-vocabulary-${date}`,
+      type: 'practice',
+      title: '核心词汇听音与语块记忆',
+      skillArea: 'vocabulary',
+      estimatedMinutes: vocabularyMinutes || 8,
+      priority: latestVocabularyProfile ? 'medium' : 'high',
+      reason: latestVocabularyProfile
+        ? `词汇听音掌握度 ${latestVocabularyProfile.score}%，低于稳定线，需要用听音、释义和语块补证据。`
+        : '还没有词汇证据，必须补一组听音和语块记忆，避免阅读/听力被核心词阻断。',
+      payload: { examId: input.goal.examId, mode: 'vocabulary-audio-choice' },
+    });
+  }
 
   if (speakingEnabled && taskMinutes.speakingMinutes > 0) {
     tasks.push({
@@ -170,6 +197,7 @@ export function buildDailyPlan(input: BuildDailyPlanInput): DailyPlan {
       weakestSkill
         ? `最低能力点是 ${weakestSkill.skillArea}/${weakestSkill.subSkillId}，因此安排对应专项。`
         : '能力画像证据不足，先从阅读/听力核心模块开始。',
+      needsVocabularyTask ? '词汇证据不足或分数偏低，今日任务加入核心词汇听音练习。' : '词汇证据已达到当前稳定线，今天不强制安排词汇。',
       reviewStrategy ? '当前使用巩固策略，会优先处理高优先级复习项。' : '当前使用高效策略，优先分配新题训练与到期复习。',
       speakingEnabled ? '保留口语重说短回合，形成表达改进闭环。' : '当前目标未开启口语并行训练。',
     ],

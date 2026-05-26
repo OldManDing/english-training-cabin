@@ -53,6 +53,22 @@ export const CET4_EXAM_PROFILE: ExamProfile = {
       ],
     },
     {
+      id: 'vocabulary',
+      name: '核心词汇',
+      skillArea: 'vocabulary',
+      durationMinutes: 12,
+      scoreWeight: 0,
+      questionTypes: [
+        {
+          id: 'cet4-core-vocabulary',
+          name: '词义辨析与听音识别',
+          answerMode: 'single-choice',
+          defaultTimeLimitSeconds: 45,
+          supportedReviewReasons: ['关键词漏听', '低信心', '盲猜'],
+        },
+      ],
+    },
+    {
       id: 'translation',
       name: '翻译',
       skillArea: 'translation',
@@ -78,7 +94,7 @@ export const CET4_EXAM_PROFILE: ExamProfile = {
       id: 'cet4-60m-balanced',
       title: 'CET-4 60 分钟均衡备考',
       dailyMinutes: 60,
-      prioritySkills: ['reading', 'listening', 'speaking'],
+      prioritySkills: ['reading', 'listening', 'vocabulary', 'speaking'],
     },
   ],
 };

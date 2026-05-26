@@ -45,10 +45,10 @@ export async function getOrCreateActiveGoal(): Promise<StudyGoal> {
   const goal: StudyGoal = {
     id: DEFAULT_GOAL_ID,
     examId: 'cet4',
-    examDate: '2026-06-15',
+    examDate: '2026-06-13',
     targetScore: 550,
     dailyMinutes: 60,
-    prioritySkills: ['reading', 'listening', 'speaking'],
+    prioritySkills: ['reading', 'listening', 'vocabulary', 'speaking'],
     status: 'active',
     createdAt: now,
     updatedAt: now,

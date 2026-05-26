@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   Flag, Clock, Play, BookOpen, Sparkles, ChevronRight, 
   Headphones, Mic, BarChart2, TrendingUp,
-  BookMarked, Edit2, Sliders
+  BookMarked, Edit2, Sliders, Volume2
 } from 'lucide-react';
 import { DailyPlan, SkillProfile } from '../types';
 import LaunchReadinessNotice from './LaunchReadinessNotice';
@@ -12,6 +12,7 @@ interface TodayDashboardProps {
   onStartListening: () => void;
   onStartWriting: () => void;
   onStartTranslation: () => void;
+  onStartVocabulary: () => void;
   onStartOnboarding: () => void;
   onViewReview: () => void;
   onStartSpeaking: () => void;
@@ -33,6 +34,7 @@ export default function TodayDashboard({
   onStartListening, 
   onStartWriting,
   onStartTranslation,
+  onStartVocabulary,
   onStartOnboarding, 
   onViewReview, 
   onStartSpeaking,
@@ -64,6 +66,8 @@ export default function TodayDashboard({
     ? '写作输出'
     : displayedTask?.skillArea === 'translation'
     ? '段落翻译'
+    : displayedTask?.skillArea === 'vocabulary'
+    ? '词汇语块'
     : displayedTask?.skillArea === 'speaking'
     ? '口语表达'
     : '阅读理解';
@@ -77,6 +81,8 @@ export default function TodayDashboard({
     ? '包含 1 篇短文写作评阅'
     : displayedTask?.skillArea === 'translation'
     ? '包含 1 段中译英评阅'
+    : displayedTask?.skillArea === 'vocabulary'
+    ? '包含听音、释义辨析和语块例句'
     : displayedTask?.skillArea === 'speaking'
     ? '包含 1 轮重说和反馈对比'
     : '包含原创仔细阅读题组';
@@ -142,6 +148,10 @@ export default function TodayDashboard({
       onStartTranslation();
       return;
     }
+    if (task.skillArea === 'vocabulary') {
+      onStartVocabulary();
+      return;
+    }
     onStartReading();
   };
 
@@ -164,6 +174,7 @@ export default function TodayDashboard({
     if (task.type === 'diagnostic') return { Icon: Sparkles, border: 'border-l-[#003178]', bg: 'bg-[#eef7fc]', icon: 'text-[#003178]' };
     if (task.type === 'review') return { Icon: BookMarked, border: 'border-l-rose-500', bg: 'bg-rose-50', icon: 'text-rose-600' };
     if (task.skillArea === 'listening') return { Icon: Headphones, border: 'border-l-emerald-500', bg: 'bg-emerald-50', icon: 'text-emerald-600' };
+    if (task.skillArea === 'vocabulary') return { Icon: Volume2, border: 'border-l-emerald-500', bg: 'bg-emerald-50', icon: 'text-emerald-600' };
     if (task.skillArea === 'speaking') return { Icon: Mic, border: 'border-l-[#003178]', bg: 'bg-[#eef7fc]', icon: 'text-[#003178]' };
     if (task.skillArea === 'writing' || task.skillArea === 'translation') return { Icon: Edit2, border: 'border-l-amber-500', bg: 'bg-amber-50', icon: 'text-amber-700' };
     return { Icon: BookOpen, border: 'border-l-[#003178]', bg: 'bg-[#eef7fc]', icon: 'text-[#003178]' };

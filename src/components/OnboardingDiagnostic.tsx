@@ -1,6 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import { BookOpen, Calendar, HelpCircle, GraduationCap, CheckCircle, ChevronRight, Settings, Target, AlertTriangle, Play, Sparkles, Clock, RefreshCw } from 'lucide-react';
-import { SkillProfile, StudyGoal } from '../types';
+import React, { useEffect, useState } from 'react';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  BookOpenCheck,
+  Calendar,
+  CheckCircle,
+  ChevronRight,
+  Clock,
+  FilePenLine,
+  GraduationCap,
+  ListChecks,
+  Mic,
+  Play,
+  Target,
+  Volume2,
+  X,
+} from 'lucide-react';
+import { StudyGoal } from '../types';
+import {
+  buildOnboardingDiagnosticReport,
+  DiagnosticAnswerMap,
+  OnboardingDiagnosticReport,
+  ONBOARDING_DIAGNOSTIC_ITEMS,
+} from '../domain/diagnostic/onboardingDiagnostic';
 
 interface OnboardingDiagnosticProps {
   onDismiss: () => void;
@@ -10,15 +32,26 @@ interface OnboardingDiagnosticProps {
     examDate: string;
     dailyMinutes: number;
     prioritySkills: StudyGoal['prioritySkills'];
-    skillProfiles: SkillProfile[];
+    skillProfiles: OnboardingDiagnosticReport['skillProfiles'];
+    diagnosticReport: OnboardingDiagnosticReport;
   }) => Promise<void> | void;
 }
 
-function levelToScore(level: 'A' | 'B' | 'C'): number {
-  if (level === 'A') return 55;
-  if (level === 'B') return 72;
-  return 86;
-}
+const skillLabels: Record<string, string> = {
+  reading: '阅读',
+  listening: '听力',
+  translation: '翻译',
+  writing: '写作',
+  speaking: '口语',
+};
+
+const skillIcons: Record<string, React.ReactNode> = {
+  reading: <BookOpenCheck className="h-4 w-4" />,
+  listening: <ListChecks className="h-4 w-4" />,
+  translation: <FilePenLine className="h-4 w-4" />,
+  writing: <FilePenLine className="h-4 w-4" />,
+  speaking: <Mic className="h-4 w-4" />,
+};
 
 function getDaysRemaining(date: string): number {
   const target = new Date(`${date}T00:00:00`);
@@ -28,680 +61,501 @@ function getDaysRemaining(date: string): number {
   return Math.max(0, Math.ceil((target.getTime() - today.getTime()) / 86400000));
 }
 
-export default function OnboardingDiagnostic({ onDismiss, onSetScoreLimit, onCompleteDiagnostic }: OnboardingDiagnosticProps) {
+function getAnswerPreview(value: string | undefined): string {
+  const normalized = (value ?? '').replace(/\s+/g, ' ').trim();
+  if (!normalized) return '未作答';
+  return normalized.length > 42 ? `${normalized.slice(0, 42)}...` : normalized;
+}
+
+export default function OnboardingDiagnostic({
+  onDismiss,
+  onSetScoreLimit,
+  onCompleteDiagnostic,
+}: OnboardingDiagnosticProps) {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [targetScore, setTargetScore] = useState<number>(550);
-  const [countdownDate, setCountdownDate] = useState<string>("2026-06-15");
+  const [countdownDate, setCountdownDate] = useState<string>('2026-06-13');
   const [dailyMinutes, setDailyMinutes] = useState<number>(45);
-  const [testReading, setTestReading] = useState<'A' | 'B' | 'C'>('B'); // B = 中级
-  const [testListening, setTestListening] = useState<'A' | 'B' | 'C'>('B');
-  const [testTranslation, setTestTranslation] = useState<'A' | 'B' | 'C'>('A'); // A = 入门
-  const [testWriting, setTestWriting] = useState<'A' | 'B' | 'C'>('B');
-  const [testOral, setTestOral] = useState<'A' | 'B' | 'C'>('A');
-  const readingScore = levelToScore(testReading);
-  const listeningScore = levelToScore(testListening);
-  const translationScore = levelToScore(testTranslation);
-  const writingScore = levelToScore(testWriting);
-  const speakingScore = levelToScore(testOral);
+  const [answers, setAnswers] = useState<DiagnosticAnswerMap>({});
+  const [startedAt, setStartedAt] = useState<string>(() => new Date().toISOString());
+  const [report, setReport] = useState<OnboardingDiagnosticReport | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [speakingItemId, setSpeakingItemId] = useState<string | null>(null);
+
+  const answeredCount = ONBOARDING_DIAGNOSTIC_ITEMS.filter((item) => (answers[item.id] ?? '').trim().length > 0).length;
+  const canSubmitDiagnostic = answeredCount === ONBOARDING_DIAGNOSTIC_ITEMS.length && !isSaving;
   const daysRemaining = getDaysRemaining(countdownDate);
-  const skillLabelMap: Record<SkillProfile['skillArea'], string> = {
-    reading: '阅读',
-    listening: '听力',
-    translation: '翻译',
-    writing: '写作',
-    speaking: '口语',
-    vocabulary: '词汇',
-    grammar: '语法',
-  };
-  const prioritizedSkillEntries = [
-    { skillArea: 'reading' as const, score: readingScore },
-    { skillArea: 'listening' as const, score: listeningScore },
-    { skillArea: 'translation' as const, score: translationScore },
-    { skillArea: 'writing' as const, score: writingScore },
-    { skillArea: 'speaking' as const, score: speakingScore },
-  ].sort((left, right) => left.score - right.score);
-  const prioritySkills = prioritizedSkillEntries.map((item) => item.skillArea);
-  const topPriorityText = prioritizedSkillEntries
-    .slice(0, 2)
-    .map((item) => skillLabelMap[item.skillArea])
-    .join(' & ');
-  const skillCopy: Record<SkillProfile['skillArea'], { focus: string; strong: string; weak: string }> = {
-    reading: {
-      focus: '阅读定位与同义替换',
-      strong: '自评阅读基线较高，可先用限时仔细阅读巩固定位速度。',
-      weak: '阅读基线偏低，今日任务会优先安排题干定位和选项排除训练。',
-    },
-    listening: {
-      focus: '听力长对话与转折信息',
-      strong: '自评听力基线较高，可加入精听和影子跟读保持辨音稳定度。',
-      weak: '听力基线偏低，建议从长对话关键词、数字时间和转折信号开始。',
-    },
-    translation: {
-      focus: '翻译句法转换',
-      strong: '翻译基线较高，可继续积累搭配和复杂句表达。',
-      weak: '翻译基线偏低，系统会优先安排中文干扰、搭配和时态语态修正。',
-    },
-    writing: {
-      focus: '写作结构与论证',
-      strong: '写作基线较高，可用 AI 评阅继续打磨结构和表达多样性。',
-      weak: '写作基线偏低，先练主题句、例证展开和结尾收束。',
-    },
-    speaking: {
-      focus: '口语连贯与自然表达',
-      strong: '口语基线较高，适合每天用短回合保持输出和重说节奏。',
-      weak: '口语基线偏低，建议从图片描述、连接词和二次重说开始。',
-    },
-    vocabulary: {
-      focus: '词汇识别',
-      strong: '词汇基础较稳定。',
-      weak: '词汇证据不足，需要在阅读和听力中继续积累。',
-    },
-    grammar: {
-      focus: '语法结构',
-      strong: '语法基础较稳定。',
-      weak: '语法证据不足，需要在写作和翻译中继续积累。',
-    },
-  };
-  const strongestSkillEntries = [...prioritizedSkillEntries].sort((left, right) => right.score - left.score).slice(0, 2);
-  const weakestSkillEntries = prioritizedSkillEntries.slice(0, 2);
-  const ringOffset = 263.8 - Math.min(1, dailyMinutes / 90) * 263.8;
   const diagnosticMinutes = Math.max(8, Math.round(dailyMinutes * 0.25));
   const practiceMinutes = Math.max(12, Math.round(dailyMinutes * 0.45));
   const reviewMinutes = Math.max(6, dailyMinutes - diagnosticMinutes - practiceMinutes);
-
-  // Loading animation simulation for Step 3
-  const [simulatedLoadMsg, setSimulatedLoadMsg] = useState("正在抓取词汇储备模型...");
-  
-  useEffect(() => {
-    if (step === 3) {
-      const timers = [
-        setTimeout(() => setSimulatedLoadMsg("正在解析视幅及语法分析时间..."), 1000),
-        setTimeout(() => setSimulatedLoadMsg("正在测算听觉连读、弱读偏差度数..."), 2000),
-        setTimeout(() => setSimulatedLoadMsg("正在建立您的自适应能力雷达图..."), 3000),
-        setTimeout(() => setStep(4), 4000)
-      ];
-      return () => timers.forEach(t => clearTimeout(t));
-    }
-  }, [step]);
-
-  // Click handler to go next
-  const triggerStartDiagnostic = () => {
-    setStep(2);
+  const setAnswer = (itemId: string, value: string) => {
+    setAnswers((current) => ({ ...current, [itemId]: value }));
+    setSaveError(null);
   };
 
-  const handleConfirmPlan = () => {
-    setStep(3);
-    const now = new Date().toISOString();
-    const skillProfiles: SkillProfile[] = [
-      {
-        id: 'cet4-reading-diagnostic',
-        skillArea: 'reading',
-        subSkillId: 'diagnostic-reading',
-        score: levelToScore(testReading),
-        confidence: 3,
-        evidenceCount: 1,
-        lastUpdatedAt: now,
-      },
-      {
-        id: 'cet4-listening-diagnostic',
-        skillArea: 'listening',
-        subSkillId: 'diagnostic-listening',
-        score: levelToScore(testListening),
-        confidence: 3,
-        evidenceCount: 1,
-        lastUpdatedAt: now,
-      },
-      {
-        id: 'cet4-translation-diagnostic',
-        skillArea: 'translation',
-        subSkillId: 'diagnostic-translation',
-        score: levelToScore(testTranslation),
-        confidence: 3,
-        evidenceCount: 1,
-        lastUpdatedAt: now,
-      },
-      {
-        id: 'cet4-writing-diagnostic',
-        skillArea: 'writing',
-        subSkillId: 'diagnostic-writing',
-        score: levelToScore(testWriting),
-        confidence: 3,
-        evidenceCount: 1,
-        lastUpdatedAt: now,
-      },
-      {
-        id: 'cet4-speaking-diagnostic',
-        skillArea: 'speaking',
-        subSkillId: 'diagnostic-speaking',
-        score: levelToScore(testOral),
-        confidence: 3,
-        evidenceCount: 1,
-        lastUpdatedAt: now,
-      },
-    ];
+  useEffect(() => {
+    return () => {
+      window.speechSynthesis?.cancel();
+    };
+  }, []);
 
-    if (onCompleteDiagnostic) {
-      Promise.resolve(onCompleteDiagnostic({
-        targetScore,
-        examDate: countdownDate,
-        dailyMinutes,
-        prioritySkills,
-        skillProfiles,
-      })).catch((error) => {
-        console.error('Failed to save diagnostic result:', error);
-      });
-    } else if (onSetScoreLimit) {
-      onSetScoreLimit(targetScore);
+  const speakDiagnosticContext = (itemId: string, text: string) => {
+    if (!('speechSynthesis' in window)) {
+      setSaveError('当前浏览器不支持语音播报，请先查看听力转写完成诊断。');
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.86;
+    utterance.onend = () => setSpeakingItemId(null);
+    utterance.onerror = () => setSpeakingItemId(null);
+    setSpeakingItemId(itemId);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const goBack = () => {
+    setSaveError(null);
+    window.speechSynthesis?.cancel();
+    setSpeakingItemId(null);
+    if (step === 1) {
+      onDismiss();
+      return;
+    }
+    setStep((current) => (current - 1) as 1 | 2 | 3 | 4);
+  };
+
+  const beginQuestions = () => {
+    setStartedAt(new Date().toISOString());
+    setStep(3);
+  };
+
+  const submitDiagnostic = async () => {
+    if (!canSubmitDiagnostic) return;
+    const diagnosticReport = buildOnboardingDiagnosticReport({
+      answers,
+      targetScore,
+      dailyMinutes,
+      startedAt,
+    });
+    setReport(diagnosticReport);
+    setIsSaving(true);
+    setSaveError(null);
+
+    try {
+      if (onCompleteDiagnostic) {
+        await onCompleteDiagnostic({
+          targetScore,
+          examDate: countdownDate,
+          dailyMinutes,
+          prioritySkills: diagnosticReport.weakestSkills as StudyGoal['prioritySkills'],
+          skillProfiles: diagnosticReport.skillProfiles,
+          diagnosticReport,
+        });
+      } else if (onSetScoreLimit) {
+        onSetScoreLimit(targetScore);
+      }
+      setStep(4);
+    } catch (error) {
+      console.error('Failed to save diagnostic result:', error);
+      setSaveError('诊断已经完成，但保存到本地能力画像失败。请重试一次。');
+    } finally {
+      setIsSaving(false);
     }
   };
 
   return (
-    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-[#f3faff] to-white min-h-[100svh] lg:h-screen flex flex-col justify-between relative">
-      
-      {/* STEP 1: Entrance Diagnosis Banner (Image 3) */}
-      {step === 1 && (
-        <div className="max-w-2xl mx-auto my-auto w-full bg-white border-2 border-[#cfe6f2] p-5 sm:p-8 rounded-3xl shadow-md space-y-6">
-          <div className="flex flex-col items-center text-center space-y-3 pb-4 border-b border-gray-100">
-            <div className="w-16 h-16 bg-[#003178]/10 text-[#003178] rounded-full flex items-center justify-center">
-              <GraduationCap className="w-9 h-9 animate-pulse" />
-            </div>
-            <h2 className="text-2xl font-black text-[#003178]">入门诊断</h2>
-            <p className="text-xs text-gray-500 max-w-sm">
-              建立您的初始能力模型，定制专属训练路径。系统会根据测试成绩精准划线。
-            </p>
+    <main className="flex-1 min-h-[100svh] overflow-y-auto overflow-x-hidden bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#f8fafc_34%,#fff7ed_100%)] p-4 sm:p-6 lg:h-screen lg:p-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
+        <div className="flex flex-col gap-3 rounded-3xl border border-sky-100 bg-white/85 p-3 shadow-sm backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+          <button
+            type="button"
+            onClick={goBack}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-[#003178] shadow-xs transition hover:border-[#003178]"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            {step === 1 ? '返回今日训练' : '上一步'}
+          </button>
+          <div className="flex items-center justify-center gap-2 text-xs font-black text-slate-500">
+            {[1, 2, 3, 4].map((item) => (
+              <span
+                key={item}
+                className={`h-2.5 rounded-full transition-all ${step >= item ? 'w-8 bg-[#003178]' : 'w-2.5 bg-slate-200'}`}
+                aria-label={`第 ${item} 步`}
+              />
+            ))}
           </div>
-
-          {/* Phase progress line */}
-          <div className="space-y-2">
-            <div className="flex justify-between items-center text-[11px] font-bold text-[#434652]">
-              <span>阶段 1 / 3: 能力扫描</span>
-              <span>0% 已建立</span>
-            </div>
-            <div className="w-full bg-[#f3faff] h-2 rounded-full border border-[#cfe6f2] overflow-hidden">
-              <div className="bg-[#003178] h-full w-[5%]" />
-            </div>
-          </div>
-
-          {/* Grid layout cards representing categories */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            
-            <div className="p-4 bg-slate-50 border border-slate-200 hover:border-[#cfe6f2] rounded-xl flex items-start gap-3">
-              <span className="p-2 bg-[#dbf1fe] text-[#003178] font-bold rounded-lg text-xs shrink-0">📖</span>
-              <div>
-                <h4 className="text-xs font-bold text-[#071e27] mb-0.5">词汇量测试</h4>
-                <p className="text-[10px] text-gray-400">预估您的核心词汇储备。</p>
-              </div>
-            </div>
-
-            <div className="p-4 bg-slate-50 border border-slate-200 hover:border-[#cfe6f2] rounded-xl flex items-start gap-3">
-              <span className="p-2 bg-[#dbf1fe] text-[#003178] font-bold rounded-lg text-xs shrink-0">📊</span>
-              <div>
-                <h4 className="text-xs font-bold text-[#071e27] mb-0.5">语法结构</h4>
-                <p className="text-[10px] text-gray-400">检测对长难句及语法的理解。</p>
-              </div>
-            </div>
-
-            <div className="p-4 bg-slate-50 border border-slate-200 hover:border-[#cfe6f2] rounded-xl flex items-start gap-3">
-              <span className="p-2 bg-[#dbf1fe] text-[#003178] font-bold rounded-lg text-xs shrink-0">🎧</span>
-              <div>
-                <h4 className="text-xs font-bold text-[#071e27] mb-0.5">听力理解</h4>
-                <p className="text-[10px] text-gray-400">评估对话及短文的听辨能力。</p>
-              </div>
-            </div>
-
-            <div className="p-4 bg-slate-50 border border-slate-200 hover:border-[#cfe6f2] rounded-xl flex items-start gap-3">
-              <span className="p-2 bg-[#dbf1fe] text-[#003178] font-bold rounded-lg text-xs shrink-0">⚡</span>
-              <div>
-                <h4 className="text-xs font-bold text-[#071e27] mb-0.5">阅读速览</h4>
-                <p className="text-[10px] text-gray-400">测试信息提取和推理速度。</p>
-              </div>
-            </div>
-
-          </div>
-
-          <div className="pt-4 flex flex-col items-center space-y-2.5">
-            <button
-              onClick={triggerStartDiagnostic}
-              className="w-full py-3.5 bg-[#1b6d24] hover:bg-emerald-700 text-white font-extrabold text-sm rounded-xl flex items-center justify-center gap-1.5 transition-all shadow pointer-events-auto cursor-pointer"
-            >
-              <Play className="w-4 h-4 fill-white" />
-              <span>开始诊断</span>
-            </button>
-            <span className="text-[10px] text-gray-400 font-semibold flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5" /> 预计耗时: 15-20 分钟
-            </span>
-          </div>
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-500 shadow-xs transition hover:border-rose-200 hover:text-rose-600"
+          >
+            <X className="h-4 w-4" />
+            退出诊断
+          </button>
         </div>
-      )}
 
-      {/* STEP 2: Goal and current base setting widget (Image 4) */}
-      {step === 2 && (
-        <div className="max-w-5xl mx-auto my-auto w-full grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-8">
-          
-          {/* Left Columns (Target setting + Base levels) */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="p-5 sm:p-8 bg-white border border-[#c3c6d4] rounded-3xl shadow-xs space-y-6 sm:space-y-8">
+        {step === 1 && (
+          <section className="grid min-h-[calc(100svh-160px)] items-center gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+            <div className="rounded-[2rem] border border-sky-100 bg-white p-6 shadow-lg sm:p-8">
+              <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-[#003178]/10 px-3 py-1 text-xs font-black text-[#003178]">
+                <GraduationCap className="h-4 w-4" />
+                入门诊断
+              </div>
+              <h1 className="text-3xl font-black leading-tight text-[#071e27] sm:text-5xl">
+                入门诊断：先做题，再生成今日训练路线。
+              </h1>
+              <p className="mt-4 max-w-2xl text-sm font-semibold leading-7 text-slate-600">
+                这一步不再用自评冒充诊断。系统会让你完成阅读、听力转写、翻译、写作、口语表达初筛 5 个小任务，
+                根据答案规则评分，并把 session、attempt、review item 和 skill profile 写入本地学习证据。
+              </p>
+              <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                {[
+                  ['5 项', '真实任务'],
+                  ['规则评分', '可解释弱项'],
+                  ['自动写入', '今日计划依据'],
+                ].map(([value, label]) => (
+                  <div key={label} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                    <div className="text-2xl font-black text-[#003178]">{value}</div>
+                    <div className="mt-1 text-xs font-bold text-slate-500">{label}</div>
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setStep(2)}
+                className="mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#1b6d24] px-6 text-sm font-black text-white shadow-md transition hover:bg-emerald-700 sm:w-auto"
+              >
+                <Play className="h-4 w-4 fill-white" />
+                开始诊断
+              </button>
+            </div>
+
+            <div className="rounded-[2rem] border border-[#cfe6f2] bg-[#f0f9ff]/80 p-5 shadow-sm sm:p-6">
+              <h2 className="mb-4 text-lg font-black text-[#003178]">验收口径</h2>
+              <div className="space-y-3">
+                {[
+                  '必须有可作答题目，不能只点“生成”。',
+                  '必须按答案产生不同分数和弱项排序。',
+                  '必须能返回上一步修改目标或答案。',
+                  '必须留下 attempts 与复习项，今日任务才有真实依据。',
+                ].map((item) => (
+                  <div key={item} className="flex gap-3 rounded-2xl bg-white p-3 text-sm font-bold text-slate-700">
+                    <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {step === 2 && (
+          <section className="grid gap-5 lg:grid-cols-[1fr_360px]">
+            <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-md sm:p-8">
+              <h2 className="flex items-center gap-2 text-2xl font-black text-[#003178]">
+                <Target className="h-6 w-6" />
+                学习目标设置
+              </h2>
+              <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
+                目标只决定训练强度和计划节奏；能力画像必须由下一步真实题目评分生成。
+              </p>
+
+              <div className="mt-7 space-y-7">
+                <div>
+                  <label className="mb-3 block text-sm font-black text-slate-700">目标分数</label>
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                    <input
+                      type="range"
+                      min="425"
+                      max="710"
+                      step="5"
+                      value={targetScore}
+                      onChange={(event) => setTargetScore(Number(event.target.value))}
+                      className="h-2 flex-1 cursor-pointer appearance-none rounded-full bg-[#dbf1fe] accent-[#003178]"
+                    />
+                    <div className="rounded-2xl border border-sky-100 bg-sky-50 px-5 py-3 text-3xl font-black text-[#003178]">
+                      {targetScore}
+                    </div>
+                  </div>
+                  <div className="mt-2 flex justify-between text-xs font-bold text-slate-400">
+                    <span>425 过线</span>
+                    <span>550 稳妥</span>
+                    <span>710 满分</span>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="mb-2 flex items-center gap-2 text-sm font-black text-slate-700">
+                      <Calendar className="h-4 w-4" />
+                      考试日期
+                    </label>
+                    <input
+                      type="date"
+                      value={countdownDate}
+                      onChange={(event) => setCountdownDate(event.target.value)}
+                      className="min-h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold text-slate-700 outline-none focus:border-[#003178]"
+                    />
+                  </div>
+                  <div className="rounded-2xl border border-sky-100 bg-[#dbf1fe] p-4">
+                    <div className="text-xs font-black text-[#003178]">距离目标</div>
+                    <div className="mt-1 text-3xl font-black text-[#003178]">{daysRemaining} 天</div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-3 flex items-center gap-2 text-sm font-black text-slate-700">
+                    <Clock className="h-4 w-4" />
+                    每日可投入时间
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {[30, 45, 60, 90].map((minutes) => (
+                      <button
+                        key={minutes}
+                        type="button"
+                        onClick={() => setDailyMinutes(minutes)}
+                        className={`min-h-12 rounded-2xl border px-3 text-sm font-black transition ${
+                          dailyMinutes === minutes
+                            ? 'border-[#003178] bg-[#003178] text-white shadow-sm'
+                            : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-[#003178] hover:text-[#003178]'
+                        }`}
+                      >
+                        {minutes} 分钟
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <aside className="rounded-[2rem] border border-[#cfe6f2] bg-white p-5 shadow-sm">
+              <h3 className="text-lg font-black text-[#071e27]">今日预算预览</h3>
+              <div className="mt-5 space-y-3">
+                {[
+                  ['入门诊断', diagnosticMinutes, 'bg-blue-600'],
+                  ['弱项专项', practiceMinutes, 'bg-emerald-600'],
+                  ['错因复习', reviewMinutes, 'bg-amber-500'],
+                ].map(([label, minutes, color]) => (
+                  <div key={String(label)} className="flex items-center justify-between rounded-2xl bg-slate-50 p-3 text-sm font-black text-slate-600">
+                    <span className="flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${color}`} />
+                      {label}
+                    </span>
+                    <span className="text-[#003178]">{minutes} 分钟</span>
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={beginQuestions}
+                className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#003178] px-5 text-sm font-black text-white shadow-md transition hover:bg-[#0d47a1]"
+              >
+                进入真实诊断
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </aside>
+          </section>
+        )}
+
+        {step === 3 && (
+          <section className="grid gap-5 lg:grid-cols-[1fr_320px]">
+            <div className="space-y-4">
+              <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-md">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="text-2xl font-black text-[#003178]">真实小题诊断</h2>
+                    <p className="mt-1 text-sm font-semibold text-slate-500">
+                      请先完成作答。提交后会按答案生成分数、弱项和复习项。
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-[#003178]/10 px-4 py-2 text-sm font-black text-[#003178]">
+                    {answeredCount}/{ONBOARDING_DIAGNOSTIC_ITEMS.length} 已完成
+                  </div>
+                </div>
+              </div>
+
+              {ONBOARDING_DIAGNOSTIC_ITEMS.map((item, index) => (
+                <article key={item.id} className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                  <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
+                        {skillIcons[item.skillArea]}
+                        {index + 1}. {skillLabels[item.skillArea]} · {item.title}
+                      </div>
+                      <h3 className="text-lg font-black text-[#071e27]">{item.contextLabel}</h3>
+                    </div>
+                    <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-black text-[#003178]">
+                      {item.kind === 'single-choice' ? '客观题' : '产出题'}
+                    </span>
+                  </div>
+
+                  {item.skillArea === 'listening' ? (
+                    <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <div className="text-sm font-black text-[#003178]">听力材料</div>
+                          <p className="mt-1 text-xs font-bold leading-5 text-slate-600">
+                            请先播放材料并作答；听不清时再展开转写。这里使用浏览器语音合成播报原创诊断材料。
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => speakDiagnosticContext(item.id, item.context)}
+                          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-[#003178] px-4 text-sm font-black text-white shadow-sm transition hover:bg-[#0d47a1]"
+                        >
+                          <Volume2 className="h-4 w-4" />
+                          {speakingItemId === item.id ? '正在播放...' : '播放听力材料'}
+                        </button>
+                      </div>
+                      <details className="mt-3 rounded-2xl border border-sky-100 bg-white p-3 text-sm font-semibold leading-7 text-slate-600">
+                        <summary className="cursor-pointer text-xs font-black text-[#003178]">听不清时查看听力转写</summary>
+                        <p className="mt-2">{item.context}</p>
+                      </details>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold leading-7 text-slate-700">
+                      {item.context}
+                    </div>
+                  )}
+                  <p className="mt-4 text-sm font-black text-[#071e27]">{item.prompt}</p>
+
+                  {item.kind === 'single-choice' ? (
+                    <div className="mt-4 grid gap-2">
+                      {item.options.map((option) => {
+                        const selected = answers[item.id] === option.id;
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            aria-pressed={selected}
+                            onClick={() => setAnswer(item.id, option.id)}
+                            className={`min-h-12 rounded-2xl border px-4 text-left text-sm font-bold transition ${
+                              selected
+                                ? 'border-[#003178] bg-[#003178] text-white shadow-sm'
+                                : 'border-slate-200 bg-white text-slate-600 hover:border-[#003178] hover:text-[#003178]'
+                            }`}
+                          >
+                            {option.id}. {option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <textarea
+                      aria-label={`${item.title}作答`}
+                      value={answers[item.id] ?? ''}
+                      onChange={(event) => setAnswer(item.id, event.target.value)}
+                      placeholder={item.placeholder}
+                      className="mt-4 min-h-36 w-full resize-y rounded-2xl border border-slate-200 bg-white p-4 text-sm font-semibold leading-7 text-slate-700 outline-none transition focus:border-[#003178] focus:ring-2 focus:ring-[#003178]/10"
+                    />
+                  )}
+                </article>
+              ))}
+            </div>
+
+            <aside className="h-fit rounded-[2rem] border border-[#cfe6f2] bg-white p-5 shadow-sm lg:sticky lg:top-6">
+              <h3 className="text-lg font-black text-[#071e27]">诊断提交前检查</h3>
+              <div className="mt-4 space-y-3">
+                {ONBOARDING_DIAGNOSTIC_ITEMS.map((item) => (
+                  <div key={item.id} className="rounded-2xl bg-slate-50 p-3">
+                    <div className="text-xs font-black text-[#003178]">{skillLabels[item.skillArea]} · {item.title}</div>
+                    <div className="mt-1 text-xs font-semibold text-slate-500">{getAnswerPreview(answers[item.id])}</div>
+                  </div>
+                ))}
+              </div>
+              {saveError ? (
+                <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-700">
+                  {saveError}
+                </div>
+              ) : null}
+              <button
+                type="button"
+                disabled={!canSubmitDiagnostic}
+                onClick={submitDiagnostic}
+                className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#1b6d24] px-5 text-sm font-black text-white shadow-md transition enabled:hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {isSaving ? '正在写入能力画像...' : '提交诊断并生成画像'}
+                <CheckCircle className="h-4 w-4" />
+              </button>
+            </aside>
+          </section>
+        )}
+
+        {step === 4 && report && (
+          <section className="rounded-[2rem] border border-[#cfe6f2] bg-white p-5 shadow-lg sm:p-8">
+            <div className="flex flex-col gap-4 border-b border-slate-100 pb-6 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h3 className="text-xl font-bold text-[#003178] flex items-center gap-1.5 border-b pb-3 border-gray-100">
-                  <Target className="h-5 w-5" />
-                  学习目标设置
-                </h3>
-                <p className="text-xs text-gray-500 mt-1">设定明确的目标，系统将为您量身定制每日训练负荷与内容图谱。</p>
-              </div>
-
-              {/* Goal Range and Score Selector exactly shown in Image 4 */}
-              <div className="space-y-4">
-                <label className="text-xs font-bold text-[#071e27] block">🎯 目标分数</label>
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-3">
-                  <span className="text-xs text-slate-400 font-semibold">CET-4 标准体系</span>
-                  <div className="flex items-baseline space-x-1.5 text-[#003178]">
-                    <span className="text-4xl font-extrabold tracking-tight bg-sky-50 px-4 py-1.5 rounded-2xl border border-sky-100">{targetScore}</span>
-                    <span className="text-xs font-bold text-slate-400">分</span>
-                  </div>
+                <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700">
+                  <CheckCircle className="h-4 w-4" />
+                  诊断完成
                 </div>
-
-                {/* Simulated Custom range slider */}
-                <div className="space-y-2 relative">
-                  <input
-                    type="range"
-                    min="425"
-                    max="710"
-                    step="5"
-                    value={targetScore}
-                    onChange={(e) => setTargetScore(parseInt(e.target.value))}
-                    className="w-full h-2 bg-[#dbf1fe] rounded-full appearance-none cursor-pointer accent-[#003178]"
-                  />
-                  
-                  {/* Milestones display */}
-                  <div className="flex justify-between text-[10px] text-slate-400 font-bold px-1 select-none">
-                    <span>425 (过线)</span>
-                    <span className={targetScore >= 500 ? 'text-[#003178]' : ''}>500</span>
-                    <span className={targetScore >= 600 ? 'text-[#003178]' : ''}>600</span>
-                    <span>710 (满分)</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Exam date and countdown Picker container */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-[#071e27] block">📅 考试日期</label>
-                  <input
-                    type="date"
-                    value={countdownDate}
-                    onChange={(e) => setCountdownDate(e.target.value)}
-                    className="w-full text-xs rounded-xl border border-gray-200 px-4 py-3 bg-[#f8fafc] text-slate-700 font-semibold focus:outline-none focus:border-[#003178]"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-[#071e27] block">倒计时</label>
-                  <div className="bg-[#dbf1fe] text-[#003178] border border-[#cfe6f2] px-4 py-2.5 rounded-xl font-black text-sm flex items-center justify-between">
-                    <span className="text-xs font-semibold">剩余</span>
-                    <span className="text-lg">{daysRemaining} <span className="text-xs font-bold">天</span></span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-[#071e27] block">⏱ 每日可投入时间</label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {[30, 45, 60, 90].map((minutes) => (
-                    <button
-                      key={minutes}
-                      type="button"
-                      onClick={() => setDailyMinutes(minutes)}
-                      className={`rounded-xl border px-3 py-2 text-xs font-black transition-all ${
-                        dailyMinutes === minutes
-                          ? 'border-[#003178] bg-[#003178] text-white shadow-2xs'
-                          : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-[#003178] hover:text-[#003178]'
-                      }`}
-                    >
-                      {minutes}m
-                    </button>
-                  ))}
-                </div>
-                <p className="text-[10px] font-semibold text-slate-400">
-                  诊断会把此时间写入学习目标，今日任务会按该预算自动切分诊断、练习、复习和口语。
+                <h2 className="text-3xl font-black text-[#003178]">您的能力画像已生成</h2>
+                <p className="mt-2 text-sm font-semibold text-slate-500">
+                  已写入 {report.attempts.length} 条作答证据、{report.skillProfiles.length} 条能力画像、
+                  {report.reviewItems.length} 条复习项。今日任务会优先处理最低分弱项。
                 </p>
               </div>
-
-              {/* Baseline capabilities select toggles */}
-              <div className="pt-4 space-y-4 border-t border-gray-100">
-                <label className="text-xs font-bold text-[#071e27] block">📊 当前水平基线评估 (自诊)</label>
-
-                <div className="space-y-3">
-                  {/* Reading capability toggle */}
-                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center text-xs">
-                    <span className="text-slate-600 font-semibold">阅读能力水平</span>
-                    <div className="grid grid-cols-3 rounded-lg bg-neutral-100 p-0.5 border">
-                      {(['A', 'B', 'C'] as const).map((v) => (
-                        <button
-                          key={v}
-                          onClick={() => setTestReading(v)}
-                          className={`px-3 py-2 sm:py-1 text-[10px] font-bold rounded ${
-                            testReading === v ? 'bg-white text-[#003178] shadow-2xs' : 'text-gray-400'
-                          }`}
-                        >
-                          {v === 'A' ? '入门' : v === 'B' ? '中级' : '高级'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Listening level toggle */}
-                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center text-xs">
-                    <span className="text-slate-600 font-semibold">听力理解能力</span>
-                    <div className="grid grid-cols-3 rounded-lg bg-neutral-100 p-0.5 border">
-                      {(['A', 'B', 'C'] as const).map((v) => (
-                        <button
-                          key={v}
-                          onClick={() => setTestListening(v)}
-                          className={`px-3 py-2 sm:py-1 text-[10px] font-bold rounded ${
-                            testListening === v ? 'bg-white text-[#003178] shadow-2xs' : 'text-gray-400'
-                          }`}
-                        >
-                          {v === 'A' ? '入门' : v === 'B' ? '中级' : '高级'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Translation horizontal selection */}
-                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center text-xs">
-                    <span className="text-slate-600 font-semibold">翻译与语法结构</span>
-                    <div className="grid grid-cols-3 rounded-lg bg-neutral-100 p-0.5 border">
-                      {(['A', 'B', 'C'] as const).map((v) => (
-                        <button
-                          key={v}
-                          onClick={() => setTestTranslation(v)}
-                          className={`px-3 py-2 sm:py-1 text-[10px] font-bold rounded ${
-                            testTranslation === v ? 'bg-white text-[#003178] shadow-2xs' : 'text-gray-400'
-                          }`}
-                        >
-                          {v === 'A' ? '入门' : v === 'B' ? '中级' : '高级'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Writing selector */}
-                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center text-xs">
-                    <span className="text-slate-600 font-semibold">写作文字输出</span>
-                    <div className="grid grid-cols-3 rounded-lg bg-neutral-100 p-0.5 border">
-                      {(['A', 'B', 'C'] as const).map((v) => (
-                        <button
-                          key={v}
-                          onClick={() => setTestWriting(v)}
-                          className={`px-3 py-2 sm:py-1 text-[10px] font-bold rounded ${
-                            testWriting === v ? 'bg-white text-[#003178] shadow-2xs' : 'text-gray-400'
-                          }`}
-                        >
-                          {v === 'A' ? '入门' : v === 'B' ? '中级' : '高级'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Speaking base assessment */}
-                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center text-xs">
-                    <span className="text-slate-600 font-semibold">口语表达连贯性</span>
-                    <div className="grid grid-cols-3 rounded-lg bg-neutral-100 p-0.5 border">
-                      {(['A', 'B', 'C'] as const).map((v) => (
-                        <button
-                          key={v}
-                          onClick={() => setTestOral(v)}
-                          className={`px-3 py-2 sm:py-1 text-[10px] font-bold rounded ${
-                            testOral === v ? 'bg-white text-[#003178] shadow-2xs' : 'text-gray-400'
-                          }`}
-                        >
-                          {v === 'A' ? '入门' : v === 'B' ? '中级' : '高级'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                </div>
+              <div className="rounded-[2rem] border border-sky-100 bg-sky-50 p-5 text-center">
+                <div className="text-xs font-black text-[#003178]">综合诊断分</div>
+                <div className="mt-1 text-5xl font-black text-[#003178]">{report.averageScore}</div>
               </div>
-
             </div>
-          </div>
 
-          {/* Right column: Study Load details ring layout (exactly matching style) */}
-          <div className="space-y-6">
-            <div className="p-5 sm:p-8 bg-gradient-to-b from-[#dbf1fe]/50 to-white border border-[#cfe6f2] rounded-3xl shadow-sm space-y-6 sm:space-y-8 h-full flex flex-col justify-between">
-              
-              <div className="space-y-4">
-                <h3 className="text-sm font-black text-[#071e27] pb-2 border-b border-gray-100 flex items-center gap-1">
-                  📈 每日训练负荷
-                </h3>
-                <p className="text-[11px] text-gray-500">基于目标、剩余时间与自评基线的本地调度算法</p>
-
-                {/* Circular ring chart */}
-                <div className="flex flex-col items-center justify-center py-6">
-                  <div className="relative w-40 h-40 flex items-center justify-center">
-                    {/* SVG Progress Circle Background and Filled */}
-                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="42"
-                        stroke="#f1f5f9"
-                        strokeWidth="8"
-                        fill="transparent"
-                      />
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="42"
-                        stroke="#0d47a1"
-                        strokeWidth="8"
-                        fill="transparent"
-                        strokeDasharray="263.8"
-                        strokeDashoffset={ringOffset}
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                    
-                    {/* Ring Inner Text label */}
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                      <span className="text-4xl font-extrabold text-[#003178] tracking-tight">{dailyMinutes}</span>
-                      <span className="text-[10px] text-gray-400 font-bold">分钟/天</span>
-                    </div>
+            <div className="mt-6 grid gap-4 lg:grid-cols-5">
+              {report.details.map((detail) => (
+                <div
+                  key={detail.itemId}
+                  data-testid={`diagnostic-score-${detail.skillArea}`}
+                  className={`rounded-[1.5rem] border p-4 ${
+                    detail.score >= 70 ? 'border-emerald-100 bg-emerald-50' : 'border-rose-100 bg-rose-50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-black text-slate-600">{skillLabels[detail.skillArea]}</span>
+                    <span className="text-2xl font-black text-[#003178]">{detail.score}</span>
                   </div>
+                  <div className="mt-2 text-sm font-black text-[#071e27]">{detail.title}</div>
+                  <p className="mt-2 text-xs font-semibold leading-5 text-slate-600">{detail.feedback}</p>
                 </div>
+              ))}
+            </div>
 
-                {/* Subtask breakdowns inside schedule container */}
-                <div className="space-y-3.5 pt-4">
-                  <div className="flex items-center justify-between text-xs font-semibold">
-                      <span className="flex items-center gap-2 text-slate-600">
-                        <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
-                      入门诊断
-                    </span>
-                    <span className="text-[#003178] font-mono">{diagnosticMinutes} 分钟</span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs font-semibold">
-                    <span className="flex items-center gap-2 text-slate-600">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
-                      弱项专项
-                    </span>
-                    <span className="text-[#003178] font-mono">{practiceMinutes} 分钟</span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs font-semibold">
-                    <span className="flex items-center gap-2 text-slate-600">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-600" />
-                      错题复习
-                    </span>
-                    <span className="text-[#003178] font-mono">{reviewMinutes} 分钟</span>
-                  </div>
+            <div className="mt-6 rounded-[1.5rem] border border-amber-100 bg-amber-50 p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+                <div>
+                  <h3 className="text-sm font-black text-amber-900">下一步训练重点</h3>
+                  <p className="mt-1 text-sm font-bold leading-6 text-amber-800">
+                    优先训练 {report.weakestSkills.map((skill) => skillLabels[skill]).join('、')}。
+                    复习队列会先安排低分题的主动回忆、挖空补全和输出复述。
+                  </p>
                 </div>
-
               </div>
+            </div>
 
-              {/* Confirm Generate study plan button */}
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:justify-center">
               <button
-                onClick={handleConfirmPlan}
-                className="w-full py-4.5 bg-[#003178] hover:bg-[#0d47a1] text-white font-extrabold text-xs tracking-wider uppercase rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-md pointer-events-auto cursor-pointer text-center"
+                type="button"
+                onClick={() => setStep(3)}
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 text-sm font-black text-[#003178] transition hover:border-[#003178]"
               >
-                <CheckCircle className="h-4 w-4" />
-                <span>确认并生成计划</span>
+                <ArrowLeft className="h-4 w-4" />
+                返回修改答案
               </button>
-
+              <button
+                type="button"
+                onClick={onDismiss}
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[#1b6d24] px-8 text-sm font-black text-white shadow-md transition hover:bg-emerald-700"
+              >
+                开启今日训练
+                <ChevronRight className="h-4 w-4" />
+              </button>
             </div>
-          </div>
-
-        </div>
-      )}
-
-      {/* STEP 3: Simulated scanner layout */}
-      {step === 3 && (
-        <div className="max-w-md mx-auto my-auto w-full bg-white border border-[#c3c6d4] p-5 sm:p-8 rounded-3xl text-center space-y-6 flex flex-col items-center justify-center shadow-lg animate-pulse">
-          <div className="w-16 h-16 rounded-full bg-[#dbf1fe] flex items-center justify-center text-[#003178]">
-            <RefreshCw className="h-8 w-8 animate-spin" />
-          </div>
-          <div className="space-y-2">
-            <h3 className="font-extrabold text-[#003178] text-base">系统正在建模分析中...</h3>
-            <p className="text-xs text-slate-400 font-mono font-medium">{simulatedLoadMsg}</p>
-          </div>
-        </div>
-      )}
-
-      {/* STEP 4: Diagnosis Complete Portrait Report (Image 6) */}
-      {step === 4 && (
-        <div className="max-w-4xl mx-auto my-auto w-full bg-white border-2 border-[#cfe6f2] rounded-3xl p-5 sm:p-8 shadow-md space-y-6 sm:space-y-8 animate-fade-in relative">
-          
-          {/* Header Banner */}
-          <div className="flex flex-col items-center text-center space-y-2 pb-5 border-b border-gray-100">
-            <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center border border-emerald-200">
-              <CheckCircle className="w-6 h-6" />
-            </div>
-            <h2 className="text-xl sm:text-2xl font-black text-[#003178] tracking-tight">
-              诊断完成！您的能力画像已生成
-            </h2>
-            <p className="text-xs text-gray-500 font-medium">
-              基于初步测试和您设定的分数指标，系统已为您量身定制学习路径规划。
-            </p>
-          </div>
-
-          {/* Grid Layout of results panel */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-            
-              {/* SVG RADAR CHART based on selected self-diagnostic levels */}
-              <div className="bg-[#f8fafc] rounded-2xl border p-6 flex flex-col items-center justify-center relative shadow-2xs">
-              <span className="text-[10px] font-bold text-[#003178] bg-white border px-2 py-0.5 rounded-full mb-4">
-                综合能力雷达图
-              </span>
-
-              {/* Radar diagram in SVG */}
-              <svg viewBox="0 0 200 200" className="w-[180px] h-[180px]">
-                {/* Regular circular baseline grids representing levels */}
-                <circle cx="100" cy="100" r="30" fill="none" stroke="#e2e8f0" strokeWidth="1" strokeDasharray="2,2" />
-                <circle cx="100" cy="100" r="60" fill="none" stroke="#e2e8f0" strokeWidth="1" strokeDasharray="2,2" />
-                <circle cx="100" cy="100" r="80" fill="none" stroke="#cbd5e1" strokeWidth="1" />
-                
-                {/* 4 Diagonal baseline axes pointing directions */}
-                <line x1="100" y1="20" x2="100" y2="180" stroke="#cbd5e1" strokeWidth="1" />
-                <line x1="20" y1="100" x2="180" y2="100" stroke="#cbd5e1" strokeWidth="1" />
-
-                <polygon
-                  points={`100,${100 - listeningScore * 0.8} ${100 + readingScore * 0.8},100 100,${100 + writingScore * 0.8} ${100 - speakingScore * 0.8},100`}
-                  fill="rgba(13, 71, 161, 0.15)"
-                  stroke="#003178"
-                  strokeWidth="2.5"
-                />
-
-                {/* Points highlights */}
-                <circle cx="100" cy={100 - listeningScore * 0.8} r="4" fill="#003178" />
-                <circle cx={100 + readingScore * 0.8} cy="100" r="4" fill="#003178" />
-                <circle cx="100" cy={100 + writingScore * 0.8} r="4" fill="#003178" />
-                <circle cx={100 - speakingScore * 0.8} cy="100" r="4" fill="#003178" />
-
-                {/* Text labels exactly as diagram */}
-                <text x="100" y="15" textAnchor="middle" fontSize="9" fontWeight="bold" fill="#475569">听力 ({listeningScore}/100)</text>
-                <text x="184" y="103" textAnchor="start" fontSize="9" fontWeight="bold" fill="#475569">阅读 ({readingScore})</text>
-                <text x="100" y="193" textAnchor="middle" fontSize="9" fontWeight="bold" fill="#475569">写作 ({writingScore})</text>
-                <text x="14" y="103" textAnchor="end" fontSize="9" fontWeight="bold" fill="#475569">口语 ({speakingScore})</text>
-              </svg>
-              <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-[10px] font-bold text-amber-800">
-                翻译基线：{translationScore}/100，会进入能力画像并影响今日任务调度。
-              </div>
-            </div>
-
-            {/* Strengths & Weaknesses column */}
-            <div className="space-y-6">
-              {/* Strengths */}
-              <div className="space-y-3">
-                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/80 px-2.5 py-1 rounded-lg border border-emerald-200 uppercase tracking-widest inline-block">
-                  当前强项
-                </span>
-
-                <div className="space-y-3">
-                  {strongestSkillEntries.map((item) => (
-                    <div key={item.skillArea} className="p-3 bg-[#e8f5e9]/50 border-l-4 border-emerald-500 rounded-r-xl">
-                      <h4 className="text-xs font-bold text-[#071e27] flex items-center gap-1.5">
-                        <span className="text-emerald-600">✓</span> {skillCopy[item.skillArea].focus} · {item.score}/100
-                      </h4>
-                      <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                        {skillCopy[item.skillArea].strong}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Areas to improve */}
-              <div className="space-y-3">
-                <span className="text-[10px] font-bold text-rose-800 bg-rose-100/80 px-2.5 py-1 rounded-lg border border-rose-200 uppercase tracking-widest inline-block">
-                  亟待提升
-                </span>
-
-                <div className="space-y-3">
-                  {weakestSkillEntries.map((item) => (
-                    <div key={item.skillArea} className="p-3 bg-[#ffebee]/50 border-l-4 border-rose-400 rounded-r-xl">
-                      <h4 className="text-xs font-bold text-[#071e27] flex items-center gap-1.5">
-                        <AlertTriangle className="h-3.5 w-3.5 text-rose-500 shrink-0" />
-                        {skillCopy[item.skillArea].focus} · {item.score}/100
-                      </h4>
-                      <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                        {skillCopy[item.skillArea].weak}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-            </div>
-
-          </div>
-
-          {/* AI Strategy recommendation line */}
-          <div className="bg-[#f0f9ff] border border-[#bae6fd] p-4.5 rounded-2xl flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-xs">
-            <div className="flex items-center gap-2 text-[#0369a1]">
-              <Sparkles className="h-5 w-5 animate-spin-slow shrink-0" />
-              <div>
-                <span className="font-semibold block text-[#0284c7] text-[10px] uppercase">系统推荐策略</span>
-                <p className="font-extrabold text-[#0369a1] text-xs">建议优先训练模块: {topPriorityText}</p>
-              </div>
-            </div>
-            <span className="text-[10px] font-bold text-[#0369a1] bg-[#e0f2fe] border border-[#bae6fd] px-2 py-1 rounded-full sm:shrink-0">
-              依据：目标分数 · 每日 {dailyMinutes} 分钟 · 自评基线
-            </span>
-          </div>
-
-          <div className="flex justify-center pt-2">
-            <button
-              onClick={onDismiss}
-              className="w-full sm:w-auto justify-center px-10 py-3.5 bg-[#1b6d24] hover:bg-emerald-700 text-white font-extrabold text-xs tracking-wider uppercase rounded-xl shadow-md flex items-center gap-1 hover:scale-[1.02] transition-all pointer-events-auto cursor-pointer"
-            >
-              🚀 开启今日训练
-            </button>
-          </div>
-
-        </div>
-      )}
-
-    </div>
+          </section>
+        )}
+      </div>
+    </main>
   );
 }

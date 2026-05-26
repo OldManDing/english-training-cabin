@@ -6,9 +6,9 @@ describe('buildDailyPlan', () => {
   const goal: Pick<StudyGoal, 'id' | 'examId' | 'examDate' | 'dailyMinutes' | 'prioritySkills'> = {
     id: 'goal-cet4-primary',
     examId: 'cet4',
-    examDate: '2026-06-15',
+    examDate: '2026-06-13',
     dailyMinutes: 60,
-    prioritySkills: ['reading', 'listening', 'speaking'],
+    prioritySkills: ['reading', 'listening', 'vocabulary', 'speaking'],
   };
 
   it('prioritizes due review items before new practice', () => {
@@ -117,6 +117,63 @@ describe('buildDailyPlan', () => {
 
     expect(plan.tasks.find((task) => task.type === 'practice')).toMatchObject({
       skillArea: 'listening',
+    });
+  });
+
+  it('adds vocabulary listening practice when vocabulary evidence is missing', () => {
+    const plan = buildDailyPlan({
+      goal,
+      date: '2026-05-24',
+      skillProfiles: [
+        {
+          id: 'cet4-reading-careful-reading',
+          skillArea: 'reading',
+          subSkillId: 'careful-reading',
+          score: 82,
+          confidence: 4,
+          evidenceCount: 5,
+          lastUpdatedAt: '2026-05-24T00:00:00.000Z',
+        },
+      ],
+    });
+
+    expect(plan.tasks).toContainEqual(expect.objectContaining({
+      title: '核心词汇听音与语块记忆',
+      skillArea: 'vocabulary',
+      priority: 'high',
+    }));
+    expect(plan.rationale).toContain('词汇证据不足或分数偏低，今日任务加入核心词汇听音练习。');
+    expect(plan.tasks.reduce((sum, task) => sum + task.estimatedMinutes, 0)).toBeLessThanOrEqual(plan.plannedMinutes);
+  });
+
+  it('adds vocabulary practice when vocabulary score is below the stable line', () => {
+    const plan = buildDailyPlan({
+      goal,
+      date: '2026-05-24',
+      skillProfiles: [
+        {
+          id: 'cet4-vocabulary-cet4-core-vocabulary',
+          skillArea: 'vocabulary',
+          subSkillId: 'cet4-core-vocabulary',
+          score: 58,
+          confidence: 2,
+          evidenceCount: 12,
+          lastUpdatedAt: '2026-05-24T00:00:00.000Z',
+        },
+        {
+          id: 'cet4-reading-careful-reading',
+          skillArea: 'reading',
+          subSkillId: 'careful-reading',
+          score: 84,
+          confidence: 4,
+          evidenceCount: 5,
+          lastUpdatedAt: '2026-05-24T00:00:00.000Z',
+        },
+      ],
+    });
+
+    expect(plan.tasks.find((task) => task.skillArea === 'vocabulary')).toMatchObject({
+      title: '核心词汇听音与语块记忆',
     });
   });
 });
