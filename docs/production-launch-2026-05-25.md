@@ -6,9 +6,9 @@
 
 - 域名：`https://study.xmlga.top`
 - 服务器：`8.159.136.223`
-- 发布提交：`ca5d0ed`
-- 部署路径：`/opt/english-training-cabin/releases/ca5d0ed`
-- 当前指针：`/opt/english-training-cabin/current -> /opt/english-training-cabin/releases/ca5d0ed`
+- 发布提交：`e448004`
+- 部署路径：`/opt/english-training-cabin/releases/e448004`
+- 当前指针：`/opt/english-training-cabin/current -> /opt/english-training-cabin/releases/e448004`
 - 容器入口：Nginx -> `127.0.0.1:3312` -> `english-training-cabin-app-1`
 - 数据存储：Postgres 容器，`/api/health` 返回 `store=postgres`
 
@@ -38,6 +38,17 @@
 | 设置页控制台 | Playwright 进入设置页，Console errors/warnings 为 0 | 通过 |
 | 主要导航 | 今日训练、专项练习、复习队列、口语重说、能力进展、材料导入均可达 | 通过 |
 | 移动端视口 | 390x844 访问首页并截图 | 通过 |
+
+## 2026-05-26 GA 复核
+
+| 检查项 | 证据 | 结果 |
+| --- | --- | --- |
+| 发布版本 | `readlink -f /opt/english-training-cabin/current` -> `/opt/english-training-cabin/releases/e448004` | 通过 |
+| 容器健康 | `docker inspect english-training-cabin-app-1` 返回 `healthy` | 通过 |
+| 线上基础 smoke | `SMOKE_BASE_URL=https://study.xmlga.top npm.cmd run smoke:production` | 通过，`store=postgres` |
+| 线上 GA smoke | `SMOKE_BASE_URL=https://study.xmlga.top npm.cmd run smoke:ga` | 通过，真实 AI 生成通过 |
+| 移动端 UI | 320px 宽度导航按钮 `minWidth=116px`，页面级横向溢出为 0 | 通过 |
+| 浏览器控制台 | Playwright 访问线上首页与专项练习页，console warning/error 为 0 | 通过 |
 
 ## 产品验收结论
 
