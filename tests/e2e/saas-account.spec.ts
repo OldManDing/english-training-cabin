@@ -2,6 +2,22 @@ import { expect, test } from '@playwright/test';
 
 const REGISTRATION_INVITE_CODE = process.env.E2E_REGISTRATION_INVITE_CODE || 'ETC-LOCAL-2026';
 
+test('SaaS registration shows a visible error for invalid invite codes', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByText('账号密码登录')).toBeVisible();
+
+  await page.getByRole('button', { name: '使用邀请码注册' }).click();
+  await page.getByTestId('saas-name-input').fill('无效邀请码用户');
+  await page.getByTestId('saas-organization-input').fill('无效邀请码团队');
+  await page.getByTestId('saas-invite-code-input').fill('WRONG-CODE');
+  await page.getByTestId('saas-email-input').fill(`bad-invite-${Date.now()}@example.com`);
+  await page.getByTestId('saas-password-input').fill('secure-password-1');
+  await page.getByTestId('saas-auth-submit').click();
+
+  await expect(page.getByTestId('saas-auth-error')).toBeVisible();
+  await expect(page.getByTestId('saas-auth-error')).toHaveText('邀请码无效或已失效。');
+});
+
 test('SaaS account trial can sync and restore local learning data', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByText('账号密码登录')).toBeVisible();

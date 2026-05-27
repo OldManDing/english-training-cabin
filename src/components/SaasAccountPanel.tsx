@@ -85,8 +85,13 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
   const latestTokenRef = useRef<string | null>(getStoredAuthToken());
   const [account, setAccount] = useState<PublicSaasAccountContext | null>(null);
   const [statusText, setStatusText] = useState(INITIAL_CLOUD_STATUS);
+  const [authError, setAuthError] = useState('');
   const [isBusy, setIsBusy] = useState(false);
   const [showOperations, setShowOperations] = useState(false);
+
+  useEffect(() => {
+    setAuthError('');
+  }, [mode]);
 
   useEffect(() => {
     if (!token) return;
@@ -127,6 +132,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
 
   const handleAuthSubmit = async () => {
     setIsBusy(true);
+    setAuthError('');
     try {
       const endpoint = mode === 'register'
         ? '/api/auth/register'
@@ -153,6 +159,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
       latestTokenRef.current = payload.token;
       setToken(payload.token);
       setAccount(payload.account);
+      setAuthError('');
       const statusByMode: Record<AuthMode, string> = {
         register: '云端账号已创建，学习档案同步能力已开通。请立即保存账号恢复码。',
         login: '已登录云端账号。',
@@ -167,7 +174,9 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
         onAuthenticated?.();
       }
     } catch (error) {
-      setStatusText(getApiMessage(error));
+      const message = getApiMessage(error);
+      setAuthError(message);
+      setStatusText(message);
     } finally {
       setIsBusy(false);
     }
@@ -428,6 +437,17 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
             {isBusy ? <RefreshCw className="h-4 w-4 animate-spin" /> : mode === 'register' || mode === 'invitation' ? <UserPlus className="h-4 w-4" /> : mode === 'reset' ? <KeyRound className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
             {mode === 'register' ? '创建云端账号' : mode === 'login' ? '登录云端账号' : mode === 'reset' ? '用恢复码重置密码' : '接受邀请并加入团队'}
           </button>
+
+          {authError && (
+            <div
+              data-testid="saas-auth-error"
+              role="alert"
+              aria-live="assertive"
+              className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-black leading-5 text-red-700"
+            >
+              {authError}
+            </div>
+          )}
 
           {mode !== 'invitation' && (
             <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[11px] font-black">
