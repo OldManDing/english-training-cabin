@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const externalBaseUrl = process.env.PLAYWRIGHT_BASE_URL;
+
 export default defineConfig({
   testDir: './tests/e2e',
   timeout: 30_000,
@@ -7,15 +9,17 @@ export default defineConfig({
     timeout: 5_000,
   },
   use: {
-    baseURL: 'http://127.0.0.1:3310',
+    baseURL: externalBaseUrl || 'http://127.0.0.1:3310',
     trace: 'retain-on-failure',
   },
-  webServer: {
-    command: 'cmd /c "set PORT=3310&& set SAAS_SESSION_SECRET=playwright-saas-secret&& set SAAS_DATA_FILE=test-results\\saas-e2e-store.json&& set DISABLE_RATE_LIMITS=true&& npm.cmd start"',
-    url: 'http://127.0.0.1:3310/api/health',
-    reuseExistingServer: false,
-    timeout: 20_000,
-  },
+  webServer: externalBaseUrl
+    ? undefined
+    : {
+        command: 'cmd /c "set PORT=3310&& set SAAS_SESSION_SECRET=playwright-saas-secret&& set SAAS_DATA_FILE=test-results\\saas-e2e-store.json&& set DISABLE_RATE_LIMITS=true&& npm.cmd start"',
+        url: 'http://127.0.0.1:3310/api/health',
+        reuseExistingServer: false,
+        timeout: 20_000,
+      },
   projects: [
     {
       name: 'chromium',
