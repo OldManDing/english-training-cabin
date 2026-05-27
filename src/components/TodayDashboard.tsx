@@ -5,6 +5,7 @@ import {
   BookMarked, Edit2, Sliders, Volume2
 } from 'lucide-react';
 import { DailyPlan, SkillProfile } from '../types';
+import type { ReviewGateStatus } from '../domain/review/reviewGate';
 import LaunchReadinessNotice from './LaunchReadinessNotice';
 
 interface TodayDashboardProps {
@@ -25,6 +26,7 @@ interface TodayDashboardProps {
   abilityEvidenceCount?: number;
   dailyPlan?: DailyPlan | null;
   reviewItemCount?: number;
+  reviewGateStatus?: ReviewGateStatus;
   skillProfiles?: SkillProfile[];
   strategy: 'efficient' | 'review';
   onStrategyChange: (strategy: 'efficient' | 'review') => void;
@@ -48,6 +50,7 @@ export default function TodayDashboard({
   abilityEvidenceCount = 0,
   dailyPlan,
   reviewItemCount = 0,
+  reviewGateStatus,
   skillProfiles = [],
   strategy,
   onStrategyChange,
@@ -243,6 +246,51 @@ export default function TodayDashboard({
             </div>
           </div>
         </header>
+
+        {reviewGateStatus?.locked && (
+          <section
+            data-testid="review-gate-banner"
+            className="overflow-hidden rounded-[2rem] border border-rose-100 bg-gradient-to-r from-rose-50 via-white to-[#eef7fc] p-4 shadow-sm sm:p-5"
+          >
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                <span className="inline-flex rounded-full bg-rose-600 px-3 py-1 text-[11px] font-black text-white">
+                  先复习再开新题
+                </span>
+                <h3 className="mt-3 text-lg font-black text-[#003178] sm:text-xl">
+                  今日必须先完成 {reviewGateStatus.remainingRequired} 条到期主动回忆
+                </h3>
+                <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
+                  到期项会按优先级进入 1/3/7/14/30 天间隔计划。完成今日最低剂量后，专项练习、模考和口语训练自动解锁。
+                </p>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center text-xs font-black sm:min-w-80">
+                <div className="rounded-2xl bg-white/80 p-3">
+                  <div className="text-2xl text-rose-700">{reviewGateStatus.dueCount}</div>
+                  <div className="text-slate-500">到期复习</div>
+                </div>
+                <div className="rounded-2xl bg-white/80 p-3">
+                  <div className="text-2xl text-emerald-700">{reviewGateStatus.completedToday}</div>
+                  <div className="text-slate-500">今日完成</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={onViewReview}
+                  className="rounded-2xl bg-[#003178] p-3 text-white transition hover:bg-[#0d47a1]"
+                >
+                  <div className="text-2xl">{reviewGateStatus.remainingRequired}</div>
+                  <div>去复习</div>
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {!reviewGateStatus?.locked && reviewGateStatus && reviewGateStatus.dueCount > 0 && (
+          <section className="rounded-[2rem] border border-emerald-100 bg-emerald-50 p-4 text-sm font-semibold leading-6 text-emerald-900 shadow-sm">
+            今日最低复习剂量已完成，新训练已解锁；剩余 {reviewGateStatus.dueCount} 条到期项仍建议在今天处理完。
+          </section>
+        )}
 
         {/* Row 1: Triple cards top grid layout */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-5">

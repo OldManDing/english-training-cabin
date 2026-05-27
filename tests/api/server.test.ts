@@ -1,8 +1,11 @@
 import request from 'supertest';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildContentSecurityPolicy, createApp } from '../../server';
 import { CET4_MOCK_EXAM } from '../../src/questionBank';
-import { createInMemorySaasStore, signBillingWebhookPayload } from '../../src/server/saas';
+import { createFileSaasStore, createInMemorySaasStore, signBillingWebhookPayload } from '../../src/server/saas';
 
 describe('server API', () => {
   const app = createApp();
@@ -228,6 +231,52 @@ describe('server API', () => {
       .expect(409);
 
     expect(duplicateEmail.body.error).toBe('email_exists');
+  });
+
+  it('keeps file-backed SaaS sessions valid under concurrent registration load', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'english-training-saas-store-'));
+    const filePath = path.join(tempDir, 'saas-store.json');
+    const saasApp = createApp({
+      saasStore: createFileSaasStore(filePath),
+      saasSessionSecret: 'file-store-concurrency-secret',
+    });
+
+    try {
+      const registrations = await Promise.all(Array.from({ length: 8 }, (_, index) => {
+        const email = `file-store-${index}-${Date.now()}@example.com`;
+        return request(saasApp)
+          .post('/api/auth/register')
+          .send({
+            email,
+            password: 'secure-password-1',
+            name: `文件存储用户${index}`,
+            organizationName: `文件存储团队${index}`,
+          })
+          .expect(201)
+          .then((response) => ({ email, token: response.body.token as string }));
+      }));
+
+      await Promise.all(registrations.map(({ email, token }) =>
+        request(saasApp)
+          .get('/api/auth/session')
+          .set('Authorization', `Bearer ${token}`)
+          .expect(200)
+          .then((response) => {
+            expect(response.body).toMatchObject({
+              authenticated: true,
+              account: {
+                user: { email },
+              },
+            });
+          }),
+      ));
+
+      const persisted = JSON.parse(await fs.readFile(filePath, 'utf8'));
+      expect(persisted.users).toHaveLength(registrations.length);
+      expect(persisted.sessions).toHaveLength(registrations.length);
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
   });
 
   it('isolates SaaS cloud snapshots by authenticated user and tenant', async () => {

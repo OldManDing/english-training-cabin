@@ -544,12 +544,22 @@ function createStoreFromDatabase(options: {
 }): SaasStore {
   let database = options.initial ?? createEmptyDatabase();
   let loaded = !options.load;
-  let writeQueue = Promise.resolve();
+  let loadQueue: Promise<void> | null = null;
+  let mutationQueue = Promise.resolve();
 
   async function ensureLoaded() {
     if (loaded || !options.load) return;
-    database = await options.load();
-    loaded = true;
+    if (!loadQueue) {
+      loadQueue = options.load()
+        .then((loadedDatabase) => {
+          database = loadedDatabase;
+          loaded = true;
+        })
+        .finally(() => {
+          loadQueue = null;
+        });
+    }
+    await loadQueue;
   }
 
   async function read<T>(reader: (db: SaasDatabaseShape) => T): Promise<T> {
@@ -558,12 +568,15 @@ function createStoreFromDatabase(options: {
   }
 
   async function mutate<T>(writer: (db: SaasDatabaseShape) => T): Promise<T> {
-    await ensureLoaded();
-    const result = writer(database);
-    const clonedResult = clone(result);
-    writeQueue = writeQueue.then(() => options.persist?.(database) ?? Promise.resolve());
-    await writeQueue;
-    return clonedResult;
+    const operation = mutationQueue.then(async () => {
+      await ensureLoaded();
+      const result = writer(database);
+      const clonedResult = clone(result);
+      await options.persist?.(database);
+      return clonedResult;
+    });
+    mutationQueue = operation.then(() => undefined, () => undefined);
+    return operation;
   }
 
   return {

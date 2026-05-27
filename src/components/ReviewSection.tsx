@@ -14,11 +14,13 @@ import {
   X,
 } from 'lucide-react';
 import { MemoryReviewTask, ReviewItem } from '../types';
+import type { ReviewGateStatus } from '../domain/review/reviewGate';
 
 interface ReviewSectionProps {
   onTriggerModal?: (title: string, body: string) => void;
   persistedReviewCount?: number;
   persistedReviewItems?: ReviewItem[];
+  reviewGateStatus?: ReviewGateStatus;
   onCompleteReviewItem?: (reviewItemId: string) => Promise<void> | void;
 }
 
@@ -79,6 +81,7 @@ export default function ReviewSection({
   onTriggerModal,
   persistedReviewCount = 0,
   persistedReviewItems = [],
+  reviewGateStatus,
   onCompleteReviewItem,
 }: ReviewSectionProps) {
   const [view, setView] = useState<'dashboard' | 'practice'>('dashboard');
@@ -331,6 +334,53 @@ export default function ReviewSection({
             学习法说明
           </button>
         </header>
+
+        {reviewGateStatus && (
+          <section
+            data-testid="review-gate-status"
+            className={`rounded-[2rem] border p-4 shadow-sm sm:p-5 ${
+              reviewGateStatus.locked
+                ? 'border-rose-100 bg-rose-50'
+                : reviewGateStatus.dueCount > 0
+                ? 'border-emerald-100 bg-emerald-50'
+                : 'border-[#cfe6f2] bg-white'
+            }`}
+          >
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-black ${
+                  reviewGateStatus.locked ? 'bg-rose-600 text-white' : 'bg-[#eef7fc] text-[#003178]'
+                }`}>
+                  间隔复习计划
+                </span>
+                <h3 className="mt-3 text-lg font-black text-[#003178]">
+                  {reviewGateStatus.locked
+                    ? `还需完成 ${reviewGateStatus.remainingRequired} 条，才能解锁新训练`
+                    : reviewGateStatus.dueCount > 0
+                    ? '今日最低复习剂量已完成'
+                    : '今天没有到期复习项'}
+                </h3>
+                <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
+                  系统按最高优先级安排到期项；积压较多时先强制完成 3 条，避免用户被大量旧账卡死。
+                </p>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center text-xs font-black sm:min-w-80">
+                <div className="rounded-2xl bg-white/80 p-3">
+                  <div className="text-2xl text-rose-700">{reviewGateStatus.dueCount}</div>
+                  <div className="text-slate-500">到期</div>
+                </div>
+                <div className="rounded-2xl bg-white/80 p-3">
+                  <div className="text-2xl text-emerald-700">{reviewGateStatus.completedToday}</div>
+                  <div className="text-slate-500">今日完成</div>
+                </div>
+                <div className="rounded-2xl bg-white/80 p-3">
+                  <div className="text-2xl text-[#003178]">{reviewGateStatus.requiredToday}</div>
+                  <div className="text-slate-500">最低剂量</div>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
 
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-4">
           <div className="rounded-3xl border border-[#cfe6f2] bg-white p-5 shadow-sm">

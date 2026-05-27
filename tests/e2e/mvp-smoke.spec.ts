@@ -18,9 +18,39 @@ async function answerOnboardingDiagnostic(page: Page) {
   );
 }
 
+async function resetLocalLearningData(page: Page) {
+  await page.evaluate(async () => {
+    function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
+      return new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('english-training-cabin');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const stores = ['studyGoals', 'practiceSessions', 'attempts', 'reviewItems', 'skillProfiles'];
+    const existingStores = stores.filter((store) => db.objectStoreNames.contains(store));
+    if (existingStores.length > 0) {
+      const tx = db.transaction(existingStores, 'readwrite');
+      const txComplete = new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      });
+      await Promise.all(existingStores.map((store) => requestToPromise(tx.objectStore(store).clear())));
+      await txComplete;
+    }
+    db.close();
+  });
+}
+
 test('MVP critical reading flow persists local learning evidence', async ({ page }) => {
   await registerAndEnterApp(page, 'mvp-reading');
-  await page.evaluate(() => indexedDB.deleteDatabase('english-training-cabin'));
+  await resetLocalLearningData(page);
   await page.reload();
 
   await expect(page.getByRole('heading', { name: '今日训练' })).toBeVisible();
@@ -108,6 +138,66 @@ test('MVP critical reading flow persists local learning evidence', async ({ page
   });
 });
 
+test('review gate blocks new practice until the daily spaced-review minimum is completed', async ({ page }) => {
+  await registerAndEnterApp(page, 'mvp-review-gate');
+  await resetLocalLearningData(page);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: '今日训练' })).toBeVisible();
+
+  await page.evaluate(async () => {
+    function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
+      return new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('english-training-cabin');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const tx = db.transaction(['reviewItems'], 'readwrite');
+    await requestToPromise(tx.objectStore('reviewItems').put({
+      id: 'gate-review-1',
+      title: '同义替换错因强制复习',
+      category: '错题',
+      detail: '先用自己的话回忆同义替换线索，再进入新题训练。',
+      daysAgo: 0,
+      targetType: 'question',
+      targetId: 'gate-question-1',
+      examId: 'cet4',
+      moduleId: 'reading',
+      skillArea: 'reading',
+      masteryScore: 35,
+      priorityScore: 95,
+      reviewIntervalDays: 1,
+      nextReviewAt: new Date(Date.now() - 86_400_000).toISOString(),
+      createdAt: new Date().toISOString(),
+    }));
+    db.close();
+  });
+
+  await page.reload();
+  await expect(page.getByTestId('review-gate-banner')).toBeVisible();
+
+  await page.getByRole('button', { name: '专项练习' }).click();
+  await expect(page.getByRole('heading', { name: /先完成到期复习/ })).toBeVisible();
+  await page.getByRole('button', { name: '开始强制复习' }).click();
+  await expect(page.getByTestId('review-gate-status')).toBeVisible();
+
+  await page.getByRole('button', { name: '开始复习' }).click();
+  await page.getByTestId('review-recall-answer').fill('I remember the synonym replacement mistake.');
+  await page.getByRole('button', { name: /完成主动回忆，进入挖空/ }).click();
+  await page.getByTestId('review-cloze-answer').fill('synonym replacement');
+  await page.getByRole('button', { name: /完成挖空，进入输出/ }).click();
+  await page.getByTestId('review-production-answer').fill('I will locate synonym replacement before choosing the answer.');
+  await page.getByRole('button', { name: /完成复习并安排下次间隔/ }).click();
+
+  await page.getByRole('button', { name: '专项练习' }).click();
+  await expect(page.getByRole('heading', { name: /专项练习/ })).toBeVisible();
+});
+
 test('MVP critical speaking retell flow persists review and ability evidence', async ({ page }) => {
   await page.route('**/api/ai/analyze-speech', async (route) => {
     await route.fulfill({
@@ -127,7 +217,7 @@ test('MVP critical speaking retell flow persists review and ability evidence', a
   });
 
   await registerAndEnterApp(page, 'mvp-speaking');
-  await page.evaluate(() => indexedDB.deleteDatabase('english-training-cabin'));
+  await resetLocalLearningData(page);
   await page.reload();
 
   await page.getByRole('button', { name: '口语重说' }).click();
@@ -179,7 +269,7 @@ test('MVP critical speaking retell flow persists review and ability evidence', a
 
 test('onboarding diagnostic persists the initial ability portrait before entering daily training', async ({ page }) => {
   await registerAndEnterApp(page, 'mvp-diagnostic');
-  await page.evaluate(() => indexedDB.deleteDatabase('english-training-cabin'));
+  await resetLocalLearningData(page);
   await page.reload();
 
   await page.getByRole('button', { name: '入门能力诊断' }).click();
@@ -256,7 +346,7 @@ test('MVP critical translation flow evaluates feedback and persists learning evi
   });
 
   await registerAndEnterApp(page, 'mvp-translation');
-  await page.evaluate(() => indexedDB.deleteDatabase('english-training-cabin'));
+  await resetLocalLearningData(page);
   await page.reload();
 
   await page.getByRole('button', { name: '专项练习' }).click();
@@ -303,7 +393,7 @@ test('MVP critical translation flow evaluates feedback and persists learning evi
 
 test('vocabulary practice plays audio controls, scores answers, and persists review evidence', async ({ page }) => {
   await registerAndEnterApp(page, 'mvp-vocabulary');
-  await page.evaluate(() => indexedDB.deleteDatabase('english-training-cabin'));
+  await resetLocalLearningData(page);
   await page.reload();
 
   await page.getByRole('button', { name: '专项练习' }).click();
@@ -358,7 +448,7 @@ test('vocabulary practice plays audio controls, scores answers, and persists rev
 
 test('staged mock exam covers CET-4 modules and persists score evidence', async ({ page }) => {
   await registerAndEnterApp(page, 'mvp-mock');
-  await page.evaluate(() => indexedDB.deleteDatabase('english-training-cabin'));
+  await resetLocalLearningData(page);
   await page.reload();
 
   await page.getByRole('button', { name: /^阶段模考$/ }).click();
@@ -523,7 +613,7 @@ test('all MVP sections render their primary controls', async ({ page }) => {
 
 test('local learning data can be exported and restored from settings', async ({ page }) => {
   await registerAndEnterApp(page, 'mvp-local-data');
-  await page.evaluate(() => indexedDB.deleteDatabase('english-training-cabin'));
+  await resetLocalLearningData(page);
   await page.reload();
 
   await page.getByRole('button', { name: '设置' }).click();

@@ -32,6 +32,7 @@ import {
   upsertActiveGoal,
 } from './lib/storage/db';
 import { buildDailyPlan } from './domain/planner/dailyPlan';
+import { buildReviewGateStatus } from './domain/review/reviewGate';
 import { trackTelemetry } from './lib/telemetry';
 import { OnboardingDiagnosticReport } from './domain/diagnostic/onboardingDiagnostic';
 
@@ -123,6 +124,7 @@ function StudyApp() {
   const [dailyStrategy, setDailyStrategy] = useState<'efficient' | 'review'>('efficient');
   const [targetScoreLimit, setTargetScoreLimit] = useState<number | undefined>(undefined);
   const [modalContent, setModalContent] = useState<{ title: string; body: string } | null>(null);
+  const [reviewGatePrompt, setReviewGatePrompt] = useState<{ requestedLabel: string } | null>(null);
 
   const handleTriggerModal = (title: string, body: string) => {
     setModalContent({ title, body });
@@ -135,6 +137,37 @@ function StudyApp() {
   const examCountdown = getDaysRemaining(activeGoal?.examDate);
   const estimatedScore = estimateCetScore(persistedSkillProfiles);
   const abilityEvidenceCount = persistedSkillProfiles.reduce((sum, profile) => sum + profile.evidenceCount, 0);
+  const reviewGateStatus = buildReviewGateStatus(persistedReviewItems);
+
+  const blockForReviewGate = (requestedLabel: string) => {
+    if (!reviewGateStatus.locked) return false;
+
+    setReviewGatePrompt({ requestedLabel });
+    setActiveTab('review');
+    trackTelemetry('review_gate_blocked', {
+      requestedLabel,
+      dueCount: reviewGateStatus.dueCount,
+      remainingRequired: reviewGateStatus.remainingRequired,
+    });
+    return true;
+  };
+
+  const startLearningIfUnlocked = (requestedLabel: string, start: () => void) => {
+    if (blockForReviewGate(requestedLabel)) return;
+    start();
+  };
+
+  const handleSetActiveTab = (tab: ActiveTab) => {
+    const gatedLabels: Partial<Record<ActiveTab, string>> = {
+      practice: '专项练习',
+      mock: '阶段模考',
+      speaking: '口语重说',
+    };
+    const requestedLabel = gatedLabels[tab];
+
+    if (requestedLabel && blockForReviewGate(requestedLabel)) return;
+    setActiveTab(tab);
+  };
 
   const refreshStudyState = async () => {
     const [goal, reviewItems, skillProfiles] = await Promise.all([
@@ -320,7 +353,7 @@ function StudyApp() {
 
   const handleSelectPassage = (passageData: Passage) => {
     setCustomPassage(passageData);
-    setIsPracticing(true);
+    startLearningIfUnlocked('仔细阅读训练', () => setIsPracticing(true));
   };
 
   const handleCompletePractice = (score: number, report: PracticeCompletionReport) => {
@@ -408,15 +441,15 @@ function StudyApp() {
       case 'today':
         return (
           <TodayDashboard
-            onStartReading={() => setIsPracticing(true)}
-            onStartListening={() => setIsListeningPracticing(true)}
-            onStartWriting={() => setSubjectivePracticeMode('writing')}
-            onStartTranslation={() => setSubjectivePracticeMode('translation')}
-            onStartVocabulary={() => setIsVocabularyPracticing(true)}
-            onStartMockExam={() => setActiveTab('mock')}
+            onStartReading={() => startLearningIfUnlocked('仔细阅读训练', () => setIsPracticing(true))}
+            onStartListening={() => startLearningIfUnlocked('听力训练', () => setIsListeningPracticing(true))}
+            onStartWriting={() => startLearningIfUnlocked('写作训练', () => setSubjectivePracticeMode('writing'))}
+            onStartTranslation={() => startLearningIfUnlocked('翻译训练', () => setSubjectivePracticeMode('translation'))}
+            onStartVocabulary={() => startLearningIfUnlocked('单词练习', () => setIsVocabularyPracticing(true))}
+            onStartMockExam={() => startLearningIfUnlocked('阶段模考', () => setActiveTab('mock'))}
             onStartOnboarding={() => setShowOnboarding(true)}
             onViewReview={() => setActiveTab('review')}
-            onStartSpeaking={() => setActiveTab('speaking')}
+            onStartSpeaking={() => startLearningIfUnlocked('口语重说', () => setActiveTab('speaking'))}
             onTriggerModal={handleTriggerModal}
             readingProgress={readingProgress}
             examCountdown={examCountdown}
@@ -425,6 +458,7 @@ function StudyApp() {
             abilityEvidenceCount={abilityEvidenceCount}
             dailyPlan={dailyPlan}
             reviewItemCount={reviewItemCount}
+            reviewGateStatus={reviewGateStatus}
             skillProfiles={persistedSkillProfiles}
             strategy={dailyStrategy}
             onStrategyChange={setDailyStrategy}
@@ -477,7 +511,7 @@ function StudyApp() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setIsVocabularyPracticing(true)}
+                    onClick={() => startLearningIfUnlocked('单词练习', () => setIsVocabularyPracticing(true))}
                     className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#1b6d24] px-5 text-sm font-black text-white shadow-sm transition hover:bg-emerald-700 sm:w-auto"
                   >
                     <Volume2 className="h-4 w-4" />
@@ -515,7 +549,7 @@ function StudyApp() {
                   </p>
                   <button
                     type="button"
-                    onClick={() => setActiveTab('mock')}
+                    onClick={() => startLearningIfUnlocked('阶段模考', () => setActiveTab('mock'))}
                     className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-amber-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-amber-700 sm:w-auto"
                   >
                     开始阶段模考
@@ -603,7 +637,7 @@ function StudyApp() {
                     </p>
                   </div>
                   <button
-                    onClick={() => setSubjectivePracticeMode('writing')}
+                    onClick={() => startLearningIfUnlocked('写作训练', () => setSubjectivePracticeMode('writing'))}
                     className="mt-4 w-full sm:w-auto px-5 py-3 sm:py-2 bg-[#003178] hover:bg-[#0d47a1] text-white font-bold text-xs rounded-xl self-end cursor-pointer"
                   >
                     开始写作训练
@@ -623,7 +657,7 @@ function StudyApp() {
                     </p>
                   </div>
                   <button
-                    onClick={() => setSubjectivePracticeMode('translation')}
+                    onClick={() => startLearningIfUnlocked('翻译训练', () => setSubjectivePracticeMode('translation'))}
                     className="mt-4 w-full sm:w-auto px-5 py-3 sm:py-2 bg-[#003178] hover:bg-[#0d47a1] text-white font-bold text-xs rounded-xl self-end cursor-pointer"
                   >
                     开始翻译训练
@@ -643,7 +677,7 @@ function StudyApp() {
                     </p>
                   </div>
                   <button
-                    onClick={() => setIsListeningPracticing(true)}
+                    onClick={() => startLearningIfUnlocked('听力训练', () => setIsListeningPracticing(true))}
                     className="mt-4 w-full sm:w-auto px-5 py-3 sm:py-2 bg-[#003178] hover:bg-[#0d47a1] text-white font-bold text-xs rounded-xl self-end cursor-pointer"
                   >
                     开始听力训练
@@ -666,6 +700,7 @@ function StudyApp() {
             onTriggerModal={handleTriggerModal}
             persistedReviewCount={reviewItemCount}
             persistedReviewItems={persistedReviewItems}
+            reviewGateStatus={reviewGateStatus}
             onCompleteReviewItem={handleCompleteReviewItem}
           />
         );
@@ -683,7 +718,7 @@ function StudyApp() {
           <MaterialImporter
             onLoadCustomPassage={(passage) => {
               setCustomPassage(passage);
-              setIsPracticing(true);
+              startLearningIfUnlocked('导入材料训练', () => setIsPracticing(true));
             }}
           />
         );
@@ -702,15 +737,15 @@ function StudyApp() {
       default:
         return (
           <TodayDashboard
-            onStartReading={() => setIsPracticing(true)}
-            onStartListening={() => setIsListeningPracticing(true)}
-            onStartWriting={() => setSubjectivePracticeMode('writing')}
-            onStartTranslation={() => setSubjectivePracticeMode('translation')}
-            onStartVocabulary={() => setIsVocabularyPracticing(true)}
-            onStartMockExam={() => setActiveTab('mock')}
+            onStartReading={() => startLearningIfUnlocked('仔细阅读训练', () => setIsPracticing(true))}
+            onStartListening={() => startLearningIfUnlocked('听力训练', () => setIsListeningPracticing(true))}
+            onStartWriting={() => startLearningIfUnlocked('写作训练', () => setSubjectivePracticeMode('writing'))}
+            onStartTranslation={() => startLearningIfUnlocked('翻译训练', () => setSubjectivePracticeMode('translation'))}
+            onStartVocabulary={() => startLearningIfUnlocked('单词练习', () => setIsVocabularyPracticing(true))}
+            onStartMockExam={() => startLearningIfUnlocked('阶段模考', () => setActiveTab('mock'))}
             onStartOnboarding={() => setShowOnboarding(true)}
             onViewReview={() => setActiveTab('review')}
-            onStartSpeaking={() => setActiveTab('speaking')}
+            onStartSpeaking={() => startLearningIfUnlocked('口语重说', () => setActiveTab('speaking'))}
             onTriggerModal={handleTriggerModal}
             readingProgress={readingProgress}
             examCountdown={examCountdown}
@@ -719,6 +754,7 @@ function StudyApp() {
             abilityEvidenceCount={abilityEvidenceCount}
             dailyPlan={dailyPlan}
             reviewItemCount={reviewItemCount}
+            reviewGateStatus={reviewGateStatus}
             skillProfiles={persistedSkillProfiles}
             strategy={dailyStrategy}
             onStrategyChange={setDailyStrategy}
@@ -780,7 +816,7 @@ function StudyApp() {
         <>
           <Sidebar
             activeTab={activeTab}
-            setActiveTab={setActiveTab}
+            setActiveTab={handleSetActiveTab}
             examCountdown={examCountdown}
             onTriggerModal={handleTriggerModal}
           />
@@ -788,6 +824,72 @@ function StudyApp() {
             {renderTabContent()}
           </main>
         </>
+      )}
+
+      {reviewGatePrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-xs select-none">
+          <div className="w-full max-w-lg rounded-[2rem] border border-rose-100 bg-white p-5 shadow-2xl sm:p-6">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
+              <div>
+                <span className="inline-flex rounded-full bg-rose-50 px-3 py-1 text-[11px] font-black text-rose-700">
+                  今日复习闸门
+                </span>
+                <h3 className="mt-3 text-xl font-black text-[#003178]">先完成到期复习，再进入{reviewGatePrompt.requestedLabel}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReviewGatePrompt(null)}
+                className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-50 hover:text-[#003178]"
+                aria-label="关闭复习闸门提示"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="mt-4 space-y-4">
+              <p className="rounded-2xl bg-rose-50 p-4 text-sm font-semibold leading-7 text-slate-700">
+                当前有 {reviewGateStatus.dueCount} 条到期复习。为了让间隔复习真正生效，今天需要先完成
+                <strong className="mx-1 text-rose-700">{reviewGateStatus.remainingRequired}</strong>
+                条最高优先级主动回忆；完成后专项练习、模考和口语入口会自动解锁。
+              </p>
+              <div className="grid grid-cols-3 gap-3 text-center text-xs font-black">
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <div className="text-2xl text-[#003178]">{reviewGateStatus.dueCount}</div>
+                  <div className="text-slate-500">到期项</div>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <div className="text-2xl text-emerald-700">{reviewGateStatus.completedToday}</div>
+                  <div className="text-slate-500">今日已复习</div>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <div className="text-2xl text-rose-700">{reviewGateStatus.requiredToday}</div>
+                  <div className="text-slate-500">解锁要求</div>
+                </div>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReviewGatePrompt(null);
+                    setActiveTab('today');
+                  }}
+                  className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 px-5 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+                >
+                  回到今日计划
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReviewGatePrompt(null);
+                    setActiveTab('review');
+                  }}
+                  className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-[#003178] px-5 text-sm font-black text-white shadow-sm transition hover:bg-[#0d47a1]"
+                >
+                  开始强制复习
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Premium Unified Custom Modal Component overlay */}
