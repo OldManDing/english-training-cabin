@@ -16,6 +16,8 @@ test('SaaS registration shows a visible error for invalid invite codes', async (
 
   await expect(page.getByTestId('saas-auth-error')).toBeVisible();
   await expect(page.getByTestId('saas-auth-error')).toHaveText('邀请码无效或已失效。');
+  await expect(page.getByText('邀请码无效或已失效。')).toHaveCount(1);
+  await expect(page.getByText('登录后可把当前浏览器的学习记录同步到服务端，形成可恢复的云端学习档案。')).toBeVisible();
 });
 
 test('SaaS account trial can sync and restore local learning data', async ({ page }) => {

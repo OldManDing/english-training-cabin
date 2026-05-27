@@ -176,7 +176,6 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
     } catch (error) {
       const message = getApiMessage(error);
       setAuthError(message);
-      setStatusText(message);
     } finally {
       setIsBusy(false);
     }
