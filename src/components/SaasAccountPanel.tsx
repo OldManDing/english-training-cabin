@@ -72,11 +72,12 @@ type AuthPayload = {
 
 export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAuthenticated, onLogout }: SaasAccountPanelProps) {
   const [initialAction] = useState(getInitialAuthAction);
-  const [mode, setMode] = useState<AuthMode>(initialAction.mode ?? 'register');
+  const [mode, setMode] = useState<AuthMode>(initialAction.mode ?? 'login');
   const [name, setName] = useState('学习者');
   const [organizationName, setOrganizationName] = useState('英语训练团队');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [recoveryCode, setRecoveryCode] = useState(initialAction.mode === 'reset' ? initialAction.token ?? '' : '');
   const [oneTimeRecoveryCode, setOneTimeRecoveryCode] = useState<string | null>(null);
   const [actionToken, setActionToken] = useState(initialAction.token ?? '');
@@ -135,7 +136,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
             ? '/api/auth/password-reset'
             : '/api/workspace/invitations/accept';
       const body = mode === 'register'
-        ? { email, password, name, organizationName }
+        ? { email, password, name, organizationName, inviteCode }
         : mode === 'login'
           ? { email, password }
           : mode === 'reset'
@@ -265,10 +266,10 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
         <div>
           <h3 className="text-sm font-black text-[#003178] flex items-center gap-2">
             <Cloud className="h-4 w-4 text-[#003178]" />
-            云端账号与团队协作
+            {account ? '云端账号与团队协作' : '账号登录'}
           </h3>
           <p className="text-[11px] leading-5 text-[#434652] font-semibold mt-2">
-            账号、团队空间和云端学习快照已经接入服务端；当前仍保留本地优先体验。
+            {account ? '同步学习记录、管理会话和恢复码。' : '已有账号直接登录；注册必须填写邀请码。'}
           </p>
         </div>
         {account && (
@@ -286,25 +287,35 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
             void handleAuthSubmit();
           }}
         >
-          {(mode === 'register' || mode === 'login' || mode === 'reset') ? <div className="flex rounded-2xl bg-[#f0f7fc] p-1 border border-[#cfe6f2]">
+          {(mode === 'register' || mode === 'login' || mode === 'reset') ? <div className="space-y-1.5">
+            <h3 className="text-lg font-black text-[#101828]">
+              {mode === 'register' ? '邀请码注册' : mode === 'reset' ? '重置密码' : '登录'}
+            </h3>
+            <p className="text-xs font-semibold leading-5 text-[#667085]">
+              {mode === 'register'
+                ? '请输入邀请码后创建账号。没有邀请码无法注册。'
+                : mode === 'reset'
+                  ? '使用注册时保存的恢复码重置密码。'
+                  : '输入邮箱和密码即可进入训练舱。'}
+            </p>
             <button
               type="button"
               onClick={() => setMode('register')}
-              className={`flex-1 rounded-xl px-3 py-2 text-xs font-black transition ${mode === 'register' ? 'bg-[#003178] text-white' : 'text-[#003178]'}`}
+              className="hidden"
             >
               创建账号
             </button>
             <button
               type="button"
               onClick={() => setMode('login')}
-              className={`flex-1 rounded-xl px-3 py-2 text-xs font-black transition ${mode === 'login' ? 'bg-[#003178] text-white' : 'text-[#003178]'}`}
+              className="hidden"
             >
               登录
             </button>
             <button
               type="button"
               onClick={() => setMode('reset')}
-              className={`flex-1 rounded-xl px-3 py-2 text-xs font-black transition ${mode === 'reset' ? 'bg-[#003178] text-white' : 'text-[#003178]'}`}
+              className="hidden"
             >
               找回
             </button>
@@ -336,6 +347,17 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
                 placeholder="团队 / 学校名称"
               />}
             </div>
+          )}
+
+          {mode === 'register' && (
+            <input
+              data-testid="saas-invite-code-input"
+              value={inviteCode}
+              onChange={(event) => setInviteCode(event.target.value)}
+              className="w-full rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-4 py-3 text-xs font-bold text-[#003178] outline-none focus:ring-1 focus:ring-[#003178]"
+              autoComplete="one-time-code"
+              placeholder="注册邀请码"
+            />
           )}
 
           {(mode === 'register' || mode === 'login' || mode === 'reset') && <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -406,6 +428,26 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
             {isBusy ? <RefreshCw className="h-4 w-4 animate-spin" /> : mode === 'register' || mode === 'invitation' ? <UserPlus className="h-4 w-4" /> : mode === 'reset' ? <KeyRound className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
             {mode === 'register' ? '创建云端账号' : mode === 'login' ? '登录云端账号' : mode === 'reset' ? '用恢复码重置密码' : '接受邀请并加入团队'}
           </button>
+
+          {mode !== 'invitation' && (
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[11px] font-black">
+              {mode !== 'login' && (
+                <button type="button" onClick={() => setMode('login')} className="text-[#003178]">
+                  返回登录
+                </button>
+              )}
+              {mode !== 'register' && (
+                <button type="button" onClick={() => setMode('register')} className="text-[#003178]">
+                  使用邀请码注册
+                </button>
+              )}
+              {mode !== 'reset' && (
+                <button type="button" onClick={() => setMode('reset')} className="text-[#667085]">
+                  忘记密码
+                </button>
+              )}
+            </div>
+          )}
 
           {mode === 'login' && (
             <p className="text-center text-[10.5px] font-bold text-[#5d6472]">

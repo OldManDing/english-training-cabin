@@ -1,5 +1,6 @@
 import Dexie, { Table } from 'dexie';
-import { Attempt, PracticeSession, ReviewItem, SkillProfile, StudyGoal } from '../../types';
+import { buildReviewCompletionRecords } from '../../domain/review/reviewCompletion';
+import { Attempt, PracticeSession, ReviewCompletionEvidence, ReviewItem, SkillProfile, StudyGoal } from '../../types';
 
 export interface LearningDataBackup {
   app: 'english-training-cabin';
@@ -125,45 +126,41 @@ export async function persistSkillProfiles(skillProfiles: SkillProfile[]): Promi
   await db.skillProfiles.bulkPut(skillProfiles);
 }
 
-export async function completeReviewItem(itemId: string): Promise<ReviewItem | undefined> {
+function buildFallbackReviewEvidence(item: ReviewItem, now: string): ReviewCompletionEvidence {
+  return {
+    recallAnswer: item.memoryTask?.recallAnswer ?? item.detail,
+    clozeAnswer: item.memoryTask?.clozeAnswer ?? item.title,
+    productionAnswer: item.memoryTask?.productionPrompt ?? item.detail,
+    completedStepCount: 3,
+    startedAt: now,
+  };
+}
+
+export async function completeReviewItem(
+  itemId: string,
+  evidence?: ReviewCompletionEvidence,
+): Promise<ReviewItem | undefined> {
   let updatedItem: ReviewItem | undefined;
 
-  await db.transaction('rw', db.reviewItems, db.skillProfiles, async () => {
+  await db.transaction('rw', db.practiceSessions, db.attempts, db.reviewItems, db.skillProfiles, async () => {
     const current = await db.reviewItems.get(itemId);
     if (!current) return;
 
-    const now = new Date();
-    const currentMastery = current.masteryScore ?? 35;
-    const masteryScore = Math.min(100, currentMastery + (currentMastery < 60 ? 25 : 15));
-    const reviewIntervalDays =
-      masteryScore >= 95 ? 30 : masteryScore >= 85 ? 14 : masteryScore >= 70 ? 7 : masteryScore >= 55 ? 3 : 1;
-    const nextReview = new Date(now);
-    nextReview.setDate(nextReview.getDate() + reviewIntervalDays);
+    const now = new Date().toISOString();
+    const records = buildReviewCompletionRecords({
+      reviewItem: current,
+      evidence: evidence ?? buildFallbackReviewEvidence(current, now),
+      now,
+    });
 
-    updatedItem = {
-      ...current,
-      masteryScore,
-      priorityScore: Math.max(10, (current.priorityScore ?? 50) - 25),
-      reviewIntervalDays,
-      lastReviewedAt: now.toISOString(),
-      nextReviewAt: nextReview.toISOString(),
-      daysAgo: 0,
-      retrievalCount: (current.retrievalCount ?? 0) + 1,
-    };
-    await db.reviewItems.put(updatedItem);
+    updatedItem = records.reviewItem;
+    await db.reviewItems.put(records.reviewItem);
+    await db.practiceSessions.put(records.session);
+    await db.attempts.put(records.attempt);
 
-    if (current.skillArea) {
-      const reviewProfile: SkillProfile = {
-        id: `${current.examId ?? 'cet4'}-${current.skillArea}-review`,
-        skillArea: current.skillArea,
-        subSkillId: `review-${current.targetType ?? 'evidence'}`,
-        score: masteryScore,
-        confidence: 4,
-        evidenceCount: 1,
-        lastUpdatedAt: now.toISOString(),
-      };
-      const existingProfile = await db.skillProfiles.get(reviewProfile.id);
-      await db.skillProfiles.put(existingProfile ? mergeSkillProfile(existingProfile, reviewProfile) : reviewProfile);
+    if (records.skillProfile) {
+      const existingProfile = await db.skillProfiles.get(records.skillProfile.id);
+      await db.skillProfiles.put(existingProfile ? mergeSkillProfile(existingProfile, records.skillProfile) : records.skillProfile);
     }
   });
 

@@ -154,6 +154,14 @@ export interface PracticeCompletionReport {
   skillProfiles: SkillProfile[];
 }
 
+export interface ReviewCompletionEvidence {
+  recallAnswer: string;
+  clozeAnswer: string;
+  productionAnswer: string;
+  completedStepCount: number;
+  startedAt?: string;
+}
+
 export interface MemoryReviewTask {
   version: 1;
   sourceText: string;

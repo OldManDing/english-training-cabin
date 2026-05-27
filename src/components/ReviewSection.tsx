@@ -13,7 +13,7 @@ import {
   Target,
   X,
 } from 'lucide-react';
-import { MemoryReviewTask, ReviewItem } from '../types';
+import { MemoryReviewTask, ReviewCompletionEvidence, ReviewItem } from '../types';
 import type { ReviewGateStatus } from '../domain/review/reviewGate';
 
 interface ReviewSectionProps {
@@ -21,7 +21,7 @@ interface ReviewSectionProps {
   persistedReviewCount?: number;
   persistedReviewItems?: ReviewItem[];
   reviewGateStatus?: ReviewGateStatus;
-  onCompleteReviewItem?: (reviewItemId: string) => Promise<void> | void;
+  onCompleteReviewItem?: (reviewItemId: string, evidence: ReviewCompletionEvidence) => Promise<void> | void;
 }
 
 function isDue(item: ReviewItem): boolean {
@@ -90,6 +90,7 @@ export default function ReviewSection({
   const [recallAnswer, setRecallAnswer] = useState('');
   const [clozeAnswer, setClozeAnswer] = useState('');
   const [productionAnswer, setProductionAnswer] = useState('');
+  const [reviewStartedAt, setReviewStartedAt] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [resolvedCount, setResolvedCount] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
@@ -127,6 +128,7 @@ export default function ReviewSection({
       return;
     }
     setSelectedReviewItemId(itemId ?? activeReview.id);
+    setReviewStartedAt(new Date().toISOString());
     setView('practice');
   };
 
@@ -134,8 +136,15 @@ export default function ReviewSection({
     if (!activeReview) return;
     try {
       setIsSaving(true);
-      await onCompleteReviewItem?.(activeReview.id);
+      await onCompleteReviewItem?.(activeReview.id, {
+        recallAnswer,
+        clozeAnswer,
+        productionAnswer,
+        completedStepCount: 3,
+        startedAt: reviewStartedAt ?? new Date().toISOString(),
+      });
       setResolvedCount((count) => count + 1);
+      setReviewStartedAt(null);
       setView('dashboard');
       triggerToast('已完成一次主动回忆复习，并更新掌握度与下次间隔。');
     } catch (error) {

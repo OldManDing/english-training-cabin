@@ -5,6 +5,16 @@ type AnswerKey = Question['correctAnswer'];
 
 const ANSWER_KEYS: AnswerKey[] = ['A', 'B', 'C', 'D'];
 const SOURCE_TYPES: SourceType[] = ['original', 'user-imported', 'licensed', 'ai-generated'];
+const SOURCE_TYPE_LABEL = SOURCE_TYPES.join(', ');
+const OFFICIAL_CONTENT_CLAIM_PATTERNS = [
+  /真题/,
+  /官方(?:题库|试卷|原题|真题|资料|材料)/,
+  /历年(?:真题|原题|试卷)/,
+  /\bofficial\s+(?:cet[-\s]?4|college\s+english|exam|test|paper|question|questions|question\s+bank|past\s+paper)\b/i,
+  /\breal\s+(?:cet[-\s]?4|exam|test|paper|question|questions)\b/i,
+  /\bpast\s+(?:exam|test)\s+(?:paper|question|questions)\b/i,
+  /\bauthentic\s+(?:exam|test|paper|question|questions)\b/i,
+];
 
 interface NormalizePassageOptions {
   defaultExamId?: string;
@@ -68,11 +78,53 @@ function normalizeOptions(value: unknown, questionIndex: number): Question['opti
   };
 }
 
-function normalizeSourceType(value: unknown, fallback: SourceType): SourceType {
+function normalizeSourceType(value: unknown, fallback: SourceType, field = 'sourceType'): SourceType {
+  if (value == null || value === '') {
+    return fallback;
+  }
   if (typeof value === 'string' && SOURCE_TYPES.includes(value as SourceType)) {
     return value as SourceType;
   }
+  if (typeof value === 'string') {
+    throw new Error(`${field} must be one of ${SOURCE_TYPE_LABEL}`);
+  }
   return fallback;
+}
+
+function collectQuestionComplianceText(question: unknown): string[] {
+  if (!question || typeof question !== 'object' || Array.isArray(question)) return [];
+  const record = question as Record<string, unknown>;
+  const fields = [
+    record.question,
+    record.explanation,
+    record.type,
+    record.questionType,
+    record.correctSentence,
+    record.distractorSentence,
+  ];
+  if (record.options && typeof record.options === 'object' && !Array.isArray(record.options)) {
+    fields.push(...Object.values(record.options as Record<string, unknown>));
+  }
+  if (Array.isArray(record.tags)) {
+    fields.push(...record.tags);
+  }
+  return fields.filter((value): value is string => typeof value === 'string');
+}
+
+function assertAllowedContentProvenance(record: Record<string, unknown>): void {
+  const text = [
+    record.title,
+    record.content,
+    record.sourceNotice,
+    record.copyrightNotice,
+    ...(Array.isArray(record.questions) ? record.questions.flatMap(collectQuestionComplianceText) : []),
+  ]
+    .filter((value): value is string => typeof value === 'string')
+    .join('\n');
+
+  if (OFFICIAL_CONTENT_CLAIM_PATTERNS.some((pattern) => pattern.test(text))) {
+    throw new Error('content provenance cannot claim official, real, or past exam material; import only original, self-owned, authorized, or AI-simulated materials');
+  }
 }
 
 function clampRange(start: number, end: number, max: number): [number, number] {
@@ -128,7 +180,7 @@ function normalizeQuestion(
   const record = assertRecord(value, `questions[${index}]`);
   const id = typeof record.id === 'string' || typeof record.id === 'number' ? record.id : index + 1;
   const type = readOptionalString(record, 'type', 80) ?? readOptionalString(record, 'questionType', 80) ?? '细节理解';
-  const sourceType = normalizeSourceType(record.sourceType, options.defaultSourceType);
+  const sourceType = normalizeSourceType(record.sourceType, options.defaultSourceType, `questions[${index}].sourceType`);
 
   return {
     id,
@@ -158,7 +210,7 @@ export function normalizePassage(value: unknown, normalizeOptionsInput: Normaliz
     defaultExamId: normalizeOptionsInput.defaultExamId ?? 'cet4',
     defaultModuleId: normalizeOptionsInput.defaultModuleId ?? 'reading',
     defaultQuestionTypeId: normalizeOptionsInput.defaultQuestionTypeId ?? 'careful-reading',
-    defaultSourceType: normalizeOptionsInput.defaultSourceType ?? 'user-imported',
+    defaultSourceType: normalizeSourceType(normalizeOptionsInput.defaultSourceType, 'user-imported'),
   };
 
   if (!Array.isArray(record.questions) || record.questions.length === 0) {
@@ -167,6 +219,7 @@ export function normalizePassage(value: unknown, normalizeOptionsInput: Normaliz
   if (record.questions.length > 50) {
     throw new Error('questions cannot contain more than 50 questions');
   }
+  assertAllowedContentProvenance(record);
 
   return {
     id: readOptionalString(record, 'id', 120) ?? `passage-${Date.now()}`,

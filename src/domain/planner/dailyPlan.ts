@@ -1,4 +1,5 @@
 import { DailyPlan, ReviewItem, SkillProfile, StudyGoal } from '../../types';
+import { buildStageProgressSummary } from '../progress/abilityEvidence';
 
 interface BuildDailyPlanInput {
   goal: Pick<StudyGoal, 'id' | 'examId' | 'examDate' | 'dailyMinutes' | 'prioritySkills'>;
@@ -98,11 +99,18 @@ export function buildDailyPlan(input: BuildDailyPlanInput): DailyPlan {
     .sort((a, b) => (b.priorityScore ?? 0) - (a.priorityScore ?? 0));
   const sortedProfiles = [...(input.skillProfiles ?? [])].sort((a, b) => a.score - b.score);
   const hasAbilityEvidence = sortedProfiles.some((profile) => profile.evidenceCount > 0);
+  const stageProgress = buildStageProgressSummary(input.skillProfiles ?? []);
+  const declinedStageSection = stageProgress.sectionChanges
+    .filter((section) => section.delta <= -3 && isPracticeSkill(section.skillArea))
+    .sort((left, right) => {
+      if (left.delta !== right.delta) return left.delta - right.delta;
+      return left.mockScore - right.mockScore;
+    })[0];
   const examDaysLeft = daysUntilExam(input.goal.examDate, date);
   const weakestSkill = sortedProfiles[0];
   const weakestPracticeSkill = sortedProfiles.find((profile) => isPracticeSkill(profile.skillArea))?.skillArea;
   const configuredPracticeSkill = input.goal.prioritySkills.find((skill) => skill !== 'speaking');
-  const primaryPracticeSkill = weakestPracticeSkill ?? configuredPracticeSkill ?? 'reading';
+  const primaryPracticeSkill = declinedStageSection?.skillArea ?? weakestPracticeSkill ?? configuredPracticeSkill ?? 'reading';
   const latestVocabularyProfile = [...(input.skillProfiles ?? [])]
     .filter((profile) => profile.skillArea === 'vocabulary' && profile.evidenceCount > 0)
     .sort((left, right) => right.lastUpdatedAt.localeCompare(left.lastUpdatedAt))[0];
@@ -176,8 +184,10 @@ export function buildDailyPlan(input: BuildDailyPlanInput): DailyPlan {
     title: practiceTitleForSkill(primaryPracticeSkill),
     skillArea: primaryPracticeSkill,
     estimatedMinutes: primaryPracticeMinutes,
-    priority: !hasAbilityEvidence || reviewCandidates.length > 0 ? 'medium' : 'high',
-    reason: weakestSkill
+    priority: declinedStageSection || (!reviewCandidates.length && hasAbilityEvidence) ? 'high' : 'medium',
+    reason: declinedStageSection
+      ? `${declinedStageSection.label} 阶段模考从 ${declinedStageSection.baselineScore}% 回落到 ${declinedStageSection.mockScore}%，需要优先用新题和错因复盘修正训练路径。`
+      : weakestSkill
       ? `${weakestSkill.subSkillId} 当前掌握度 ${weakestSkill.score}%，需要用新题补证据。`
       : '尚未积累足够练习证据，先用 CET-4 核心题型建立能力基线。',
     payload: { examId: input.goal.examId },
@@ -220,7 +230,9 @@ export function buildDailyPlan(input: BuildDailyPlanInput): DailyPlan {
     tasks,
     rationale: [
       !hasAbilityEvidence ? '首次使用先做入门诊断，避免系统凭空推荐。' : dueReviews.length > 0 ? '到期复习优先级高于新题训练。' : '今天没有到期复习项，优先建立新练习证据。',
-      weakestSkill
+      declinedStageSection
+        ? `${declinedStageSection.label} 阶段模考较基线下降 ${Math.abs(declinedStageSection.delta)} 个能力点，今日主训练优先修正该回落分项。`
+        : weakestSkill
         ? `最低能力点是 ${weakestSkill.skillArea}/${weakestSkill.subSkillId}，因此安排对应专项。`
         : '能力画像证据不足，先从阅读/听力核心模块开始。',
       needsVocabularyTask ? '词汇证据不足或分数偏低，今日任务加入核心词汇听音练习。' : '词汇证据已达到当前稳定线，今天不强制安排词汇。',

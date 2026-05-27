@@ -122,19 +122,38 @@ test('MVP critical reading flow persists local learning evidence', async ({ page
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
-    const tx = db.transaction(['reviewItems', 'skillProfiles'], 'readonly');
+    const tx = db.transaction(['reviewItems', 'skillProfiles', 'practiceSessions', 'attempts'], 'readonly');
     const items = await requestToPromise(tx.objectStore('reviewItems').getAll());
     const reviewProfile = await requestToPromise(tx.objectStore('skillProfiles').get('cet4-reading-review'));
+    const reviewSessions = await requestToPromise(tx.objectStore('practiceSessions').getAll());
+    const reviewAttempts = await requestToPromise(tx.objectStore('attempts').getAll());
     db.close();
     return {
       reviewed: items.some((item) => Boolean(item.lastReviewedAt) && item.masteryScore > 35),
       reviewProfile,
+      reviewSession: reviewSessions.find((session) => session.moduleId === 'review'),
+      reviewAttempt: reviewAttempts.find((attempt) => attempt.moduleId === 'review'),
     };
   });
 
   expect(reviewedEvidence.reviewed).toBeTruthy();
   expect(reviewedEvidence.reviewProfile).toMatchObject({
     skillArea: 'reading',
+  });
+  expect(reviewedEvidence.reviewSession).toMatchObject({
+    moduleId: 'review',
+    modeId: 'active-recall-cloze-production',
+    status: 'completed',
+  });
+  expect(reviewedEvidence.reviewAttempt).toMatchObject({
+    moduleId: 'review',
+    questionTypeId: 'active-recall-cloze-production',
+    isCorrect: true,
+  });
+  expect(reviewedEvidence.reviewAttempt.answer).toMatchObject({
+    recallAnswer: 'I remember the key sentence and the mistake reason.',
+    clozeAnswer: 'key phrase',
+    productionAnswer: 'Active recall improves long-term learning when students use it in context.',
   });
 });
 
@@ -466,6 +485,8 @@ test('staged mock exam covers CET-4 modules and persists score evidence', async 
   await expect(page.getByTestId('mock-exam-result')).toBeVisible();
   await page.getByTestId('mock-exam-persist').click();
   await expect(page.getByRole('heading', { name: '能力地图' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '阶段提分验证' })).toBeVisible();
+  await expect(page.getByText('阶段提分验证待建立')).toBeVisible();
 
   const result = await page.evaluate(async () => {
     function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {

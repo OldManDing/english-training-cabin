@@ -343,6 +343,7 @@ const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 const PASSWORD_MIN_LENGTH = 8;
 const PASSWORD_RECOVERY_CODE_TTL_SECONDS = 60 * 60 * 24 * 365;
 const MAX_BACKUP_BYTES = 2 * 1024 * 1024;
+export const LOCAL_REGISTRATION_INVITE_CODE = 'ETC-LOCAL-2026';
 
 export interface BillingEventInput {
   eventId: string;
@@ -475,6 +476,56 @@ function assertPassword(value: unknown): string {
     throw new SaasApiError(400, 'weak_password', '密码必须包含字母和数字，且不能包含控制字符。');
   }
   return value;
+}
+
+function normalizeInviteCodeText(value: string): string {
+  return value.trim().replace(/\s+/g, '').toUpperCase();
+}
+
+function normalizeRegistrationInviteCode(value: unknown): string {
+  const code = typeof value === 'string' ? normalizeInviteCodeText(value) : '';
+  if (code.length < 6 || code.length > 80) {
+    throw new SaasApiError(400, 'registration_invite_required', '请输入有效邀请码。');
+  }
+  return code;
+}
+
+function getConfiguredRegistrationInviteCodes(): string[] {
+  const raw = [
+    process.env.REGISTRATION_INVITE_CODE,
+    process.env.REGISTRATION_INVITE_CODES,
+  ]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .join(',');
+
+  const codes = raw
+    .split(/[\s,;]+/)
+    .map((value) => normalizeInviteCodeText(value))
+    .filter((value) => value.length >= 6 && value.length <= 80);
+
+  if (codes.length > 0) return [...new Set(codes)];
+  return process.env.NODE_ENV === 'production' ? [] : [LOCAL_REGISTRATION_INVITE_CODE];
+}
+
+function safeCompareText(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function assertRegistrationInviteCode(value: unknown): void {
+  const candidate = normalizeRegistrationInviteCode(value);
+  const allowedCodes = getConfiguredRegistrationInviteCodes();
+  if (allowedCodes.length === 0) {
+    throw new SaasApiError(503, 'registration_closed', '注册暂未开放，请联系管理员获取邀请码。');
+  }
+  if (!allowedCodes.some((code) => safeCompareText(candidate, code))) {
+    throw new SaasApiError(403, 'invalid_registration_invite', '邀请码无效或已失效。');
+  }
+}
+
+export function isRegistrationInviteConfigured(): boolean {
+  return getConfiguredRegistrationInviteCodes().length > 0;
 }
 
 function normalizeRecoveryCode(value: unknown): string {
@@ -1167,6 +1218,7 @@ export function verifySessionToken(token: string, secret: string, now = Math.flo
 
 export async function registerSaasAccount(store: SaasStore, value: unknown): Promise<SaasAccountRecord> {
   const input = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  assertRegistrationInviteCode(input.inviteCode ?? input.registrationInviteCode);
   const email = normalizeEmail(input.email);
   const name = normalizeName(input.name);
   const password = assertPassword(input.password);

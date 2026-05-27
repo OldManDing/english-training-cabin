@@ -1,9 +1,14 @@
 import crypto from 'node:crypto';
+import dotenv from 'dotenv';
+import { assertSmokeLearningBackupRoundTrip, createSmokeLearningBackup } from './smoke-learning-backup.mjs';
+
+dotenv.config({ path: ['.env.production', '.env.local', '.env'] });
 
 const baseUrl = (process.env.SMOKE_BASE_URL || process.env.APP_URL || 'http://127.0.0.1:3000').replace(/\/$/, '');
 const timeoutMs = Number(process.env.SMOKE_TIMEOUT_MS || 60000);
 const smokeRunId = crypto.randomUUID();
 const smokeAccountDomain = (process.env.SMOKE_ACCOUNT_DOMAIN || 'example.com').trim();
+const registrationInviteCode = process.env.SMOKE_REGISTRATION_INVITE_CODE || process.env.REGISTRATION_INVITE_CODE || 'ETC-LOCAL-2026';
 
 function withTimeout(promise, label) {
   const controller = new AbortController();
@@ -39,6 +44,8 @@ const checks = [];
 const health = await requestJson('/api/health');
 assert(health.status === 'ok', 'health status is not ok');
 assert(health.saas?.authConfigured === true, 'SaaS auth is not configured');
+assert(health.saas?.registrationInviteRequired === true, 'registration invite gate is not required');
+assert(health.saas?.registrationInviteConfigured === true, 'registration invite code is not configured');
 if (process.env.REQUIRE_AI_CONFIGURED !== 'false') {
   assert(health.aiConfigured === true, 'AI provider is not configured');
 }
@@ -46,6 +53,8 @@ checks.push(`health ok (${health.aiProvider}/${health.aiModel}, store=${health.s
 
 const exams = await requestJson('/api/exams');
 assert(Array.isArray(exams.exams) && exams.exams.length > 0, 'exam registry is empty');
+assert(exams.activeExamIds?.includes('cet4'), 'CET-4 is not marked as the active trainable exam');
+assert(exams.roadmapExamIds?.includes('ielts') && exams.roadmapExamIds?.includes('toefl'), 'roadmap exams are not published as metadata');
 assert(exams.mockExam?.plannedMinutes === 125, 'standard mock exam metadata is not published');
 assert(exams.mockExam?.listeningQuestionCount === 25, 'listening mock count is not standard');
 assert(exams.mockExam?.readingQuestionCount === 30, 'reading mock count is not standard');
@@ -56,6 +65,7 @@ const register = await requestJson('/api/auth/register', {
   method: 'POST',
   body: JSON.stringify({
     email: registerEmail,
+    inviteCode: registrationInviteCode,
     password: `smoke-password-${smokeRunId}`,
     name: '上线冒烟账号',
     organizationName: `英语训练舱冒烟组织-${smokeRunId.slice(0, 8)}`,
@@ -63,6 +73,32 @@ const register = await requestJson('/api/auth/register', {
 });
 assert(register.token && register.account?.user?.email === registerEmail, 'account registration failed');
 checks.push('account registration ok');
+
+let provenanceGuardRejected = false;
+try {
+  await requestJson('/api/materials/validate-passage', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${register.token}` },
+    body: JSON.stringify({
+      passage: {
+        title: 'CET-4 official past paper',
+        content: 'Students should use original or authorized materials.',
+        questions: [
+          {
+            id: 1,
+            question: 'What should students use?',
+            options: { A: 'Original materials', B: 'Leaked files', C: 'Unmarked scans', D: 'Forum copies' },
+            correctAnswer: 'A',
+          },
+        ],
+      },
+    }),
+  });
+} catch (error) {
+  provenanceGuardRejected = String(error).includes('400') && String(error).includes('content provenance');
+}
+assert(provenanceGuardRejected, 'content provenance guard did not reject official exam claims');
+checks.push('content provenance guard ok');
 
 const plan = await requestJson('/api/study/daily-plan', {
   method: 'POST',
@@ -86,22 +122,20 @@ const cloud = await requestJson('/api/cloud/learning-data', {
   method: 'PUT',
   headers: { Authorization: `Bearer ${register.token}` },
   body: JSON.stringify({
-    backup: {
-      app: 'english-training-cabin',
-      schemaVersion: 1,
-      exportedAt: new Date().toISOString(),
-      data: {
-        studyGoals: [{ id: 'smoke-goal' }],
-        practiceSessions: [],
-        attempts: [],
-        reviewItems: [],
-        skillProfiles: [],
-      },
-    },
+    backup: createSmokeLearningBackup(smokeRunId.slice(0, 8)),
   }),
 });
 assert(cloud.snapshot?.counts?.studyGoals === 1, 'cloud learning snapshot failed');
-checks.push('cloud snapshot ok');
+assert(cloud.snapshot?.counts?.practiceSessions === 1, 'cloud snapshot did not count review sessions');
+assert(cloud.snapshot?.counts?.attempts === 1, 'cloud snapshot did not count review attempts');
+assert(cloud.snapshot?.counts?.reviewItems === 1, 'cloud snapshot did not count review items');
+assert(cloud.snapshot?.counts?.skillProfiles === 1, 'cloud snapshot did not count skill profiles');
+
+const cloudRoundTrip = await requestJson('/api/cloud/learning-data', {
+  headers: { Authorization: `Bearer ${register.token}` },
+});
+assertSmokeLearningBackupRoundTrip(cloudRoundTrip.snapshot, assert);
+checks.push('cloud review evidence snapshot ok');
 
 if (process.env.SMOKE_LIVE_AI === 'true') {
   const passage = await requestJson('/api/ai/generate-passage', {

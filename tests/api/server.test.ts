@@ -4,8 +4,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildContentSecurityPolicy, createApp } from '../../server';
+import { assertSmokeLearningBackupRoundTrip, createSmokeLearningBackup, getSmokeReviewEvidenceIds } from '../../scripts/smoke-learning-backup.mjs';
 import { CET4_MOCK_EXAM } from '../../src/questionBank';
-import { createFileSaasStore, createInMemorySaasStore, signBillingWebhookPayload } from '../../src/server/saas';
+import {
+  createFileSaasStore,
+  createInMemorySaasStore,
+  LOCAL_REGISTRATION_INVITE_CODE,
+  signBillingWebhookPayload,
+} from '../../src/server/saas';
 
 describe('server API', () => {
   const app = createApp();
@@ -15,6 +21,7 @@ describe('server API', () => {
       .post('/api/auth/register')
       .send({
         email,
+        inviteCode: LOCAL_REGISTRATION_INVITE_CODE,
         password: 'secure-password-1',
         name: '接口测试学习者',
         organizationName: '接口测试团队',
@@ -36,6 +43,10 @@ describe('server API', () => {
       app: 'english-training-cabin',
     });
     expect(response.body).toHaveProperty('aiProvider');
+    expect(response.body.saas).toMatchObject({
+      registrationInviteRequired: true,
+      registrationInviteConfigured: true,
+    });
     expect(response.body).not.toHaveProperty('aiApiKey');
     expect(response.body).not.toHaveProperty('emailDelivery');
     expect(response.body.collaboration).toEqual({ invitationDelivery: 'manual-link' });
@@ -97,10 +108,32 @@ describe('server API', () => {
       account: null,
     });
 
+    await request(saasApp)
+      .post('/api/auth/register')
+      .send({
+        email: `missing-invite-${Date.now()}@example.com`,
+        password: 'secure-password-1',
+        name: '缺少邀请码用户',
+        organizationName: '缺少邀请码团队',
+      })
+      .expect(400);
+
+    await request(saasApp)
+      .post('/api/auth/register')
+      .send({
+        email: `bad-invite-${Date.now()}@example.com`,
+        inviteCode: 'WRONG-CODE',
+        password: 'secure-password-1',
+        name: '错误邀请码用户',
+        organizationName: '错误邀请码团队',
+      })
+      .expect(403);
+
     const registerResponse = await request(saasApp)
       .post('/api/auth/register')
       .send({
         email,
+        inviteCode: LOCAL_REGISTRATION_INVITE_CODE,
         password: 'secure-password-1',
         name: '商业化学习者',
         organizationName: '英语训练商业化团队',
@@ -154,18 +187,7 @@ describe('server API', () => {
 
     expect(loginResponse.body.account.entitlements.aiMonthlyCredits).toBeGreaterThan(0);
 
-    const backup = {
-      app: 'english-training-cabin',
-      schemaVersion: 1,
-      exportedAt: new Date().toISOString(),
-      data: {
-        studyGoals: [{ id: 'goal-cet4-primary', status: 'active' }],
-        practiceSessions: [{ id: 'session-1' }],
-        attempts: [{ id: 'attempt-1' }],
-        reviewItems: [{ id: 'review-1' }],
-        skillProfiles: [{ id: 'profile-1' }],
-      },
-    };
+    const backup = createSmokeLearningBackup('api');
 
     const syncResponse = await request(saasApp)
       .put('/api/cloud/learning-data')
@@ -187,6 +209,19 @@ describe('server API', () => {
       .expect(200);
 
     expect(cloudResponse.body.snapshot.backup.data.practiceSessions).toHaveLength(1);
+    assertSmokeLearningBackupRoundTrip(cloudResponse.body.snapshot);
+    const ids = getSmokeReviewEvidenceIds();
+    expect(cloudResponse.body.snapshot.backup.data.attempts[0]).toMatchObject({
+      id: ids.reviewAttemptId,
+      sessionId: ids.reviewSessionId,
+      moduleId: 'review',
+      questionTypeId: 'active-recall-cloze-production',
+      answer: {
+        reviewItemId: ids.reviewItemId,
+        clozeAnswer: 'quiet study spaces',
+        completedStepCount: 3,
+      },
+    });
   });
 
   it('allows repeated organization names without blocking public self-service signup', async () => {
@@ -200,6 +235,7 @@ describe('server API', () => {
       .post('/api/auth/register')
       .send({
         email: 'same-org-first@example.com',
+        inviteCode: LOCAL_REGISTRATION_INVITE_CODE,
         password: 'secure-password-1',
         name: '同名团队用户一',
         organizationName,
@@ -210,6 +246,7 @@ describe('server API', () => {
       .post('/api/auth/register')
       .send({
         email: 'same-org-second@example.com',
+        inviteCode: LOCAL_REGISTRATION_INVITE_CODE,
         password: 'secure-password-1',
         name: '同名团队用户二',
         organizationName,
@@ -224,6 +261,7 @@ describe('server API', () => {
       .post('/api/auth/register')
       .send({
         email: 'same-org-first@example.com',
+        inviteCode: LOCAL_REGISTRATION_INVITE_CODE,
         password: 'secure-password-1',
         name: '重复邮箱用户',
         organizationName: '另一个团队',
@@ -248,6 +286,7 @@ describe('server API', () => {
           .post('/api/auth/register')
           .send({
             email,
+            inviteCode: LOCAL_REGISTRATION_INVITE_CODE,
             password: 'secure-password-1',
             name: `文件存储用户${index}`,
             organizationName: `文件存储团队${index}`,
@@ -289,6 +328,7 @@ describe('server API', () => {
       .post('/api/auth/register')
       .send({
         email: 'first-tenant@example.com',
+        inviteCode: LOCAL_REGISTRATION_INVITE_CODE,
         password: 'secure-password-1',
         name: '第一位学习者',
         organizationName: '第一租户',
@@ -299,6 +339,7 @@ describe('server API', () => {
       .post('/api/auth/register')
       .send({
         email: 'second-tenant@example.com',
+        inviteCode: LOCAL_REGISTRATION_INVITE_CODE,
         password: 'secure-password-1',
         name: '第二位学习者',
         organizationName: '第二租户',
@@ -342,6 +383,7 @@ describe('server API', () => {
       .post('/api/auth/register')
       .send({
         email: 'verify-reset@example.com',
+        inviteCode: LOCAL_REGISTRATION_INVITE_CODE,
         password: 'secure-password-1',
         name: '安全学习者',
         organizationName: '认证安全团队',
@@ -415,6 +457,7 @@ describe('server API', () => {
       .post('/api/auth/register')
       .send({
         email: 'billing@example.com',
+        inviteCode: LOCAL_REGISTRATION_INVITE_CODE,
         password: 'secure-password-1',
         name: '付费学习者',
         organizationName: '付费租户',
@@ -485,6 +528,7 @@ describe('server API', () => {
       .post('/api/auth/register')
       .send({
         email: 'incremental-first@example.com',
+        inviteCode: LOCAL_REGISTRATION_INVITE_CODE,
         password: 'secure-password-1',
         name: '增量学习者一',
         organizationName: '增量租户一',
@@ -495,6 +539,7 @@ describe('server API', () => {
       .post('/api/auth/register')
       .send({
         email: 'incremental-second@example.com',
+        inviteCode: LOCAL_REGISTRATION_INVITE_CODE,
         password: 'secure-password-1',
         name: '增量学习者二',
         organizationName: '增量租户二',
@@ -555,6 +600,7 @@ describe('server API', () => {
       .post('/api/auth/register')
       .send({
         email: 'session-owner@example.com',
+        inviteCode: LOCAL_REGISTRATION_INVITE_CODE,
         password: 'secure-password-1',
         name: '会话学习者',
         organizationName: '会话团队',
@@ -601,6 +647,7 @@ describe('server API', () => {
       .post('/api/auth/register')
       .send({
         email: 'workspace-owner@example.com',
+        inviteCode: LOCAL_REGISTRATION_INVITE_CODE,
         password: 'secure-password-1',
         name: '团队所有者',
         organizationName: '免费协作团队',
@@ -692,7 +739,24 @@ describe('server API', () => {
     expect(response.body.exams[0]).toMatchObject({
       id: 'cet4',
       name: '大学英语四级',
+      trainingStatus: 'active',
+      routeAvailability: 'trainable',
+      contentBoundary: {
+        builtInContent: 'original-simulated',
+        officialQuestionBank: false,
+      },
     });
+    expect(response.body.exams.map((exam: { id: string }) => exam.id)).toEqual(expect.arrayContaining(['cet6', 'ielts', 'toefl']));
+    expect(response.body.exams.find((exam: { id: string }) => exam.id === 'ielts')).toMatchObject({
+      trainingStatus: 'roadmap',
+      routeAvailability: 'metadata-only',
+      contentBoundary: {
+        builtInContent: 'metadata-only',
+        officialQuestionBank: false,
+      },
+    });
+    expect(response.body.activeExamIds).toEqual(['cet4']);
+    expect(response.body.roadmapExamIds).toEqual(['cet6', 'ielts', 'toefl']);
     expect(response.body.questionBankCoverage.length).toBeGreaterThanOrEqual(8);
     expect(response.body.mockExam).toMatchObject({
       id: 'cet4-standard-mock-001',
@@ -735,6 +799,28 @@ describe('server API', () => {
     expect(response.body.plan.plannedMinutes).toBe(45);
   });
 
+  it('rejects unknown or roadmap-only exams before building a daily plan', async () => {
+    const { token } = await registerApiUser(app, 'daily-plan-exam-guard');
+
+    await request(app)
+      .post('/api/study/daily-plan')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ goal: { examId: 'unknown-exam', dailyMinutes: 45 } })
+      .expect(400)
+      .expect((response) => {
+        expect(response.body.error).toBe('unsupported_exam');
+      });
+
+    await request(app)
+      .post('/api/study/daily-plan')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ goal: { examId: 'IELTS', dailyMinutes: 45 } })
+      .expect(409)
+      .expect((response) => {
+        expect(response.body.error).toBe('exam_not_trainable');
+      });
+  });
+
   it('validates and normalizes imported passage material', async () => {
     const { token } = await registerApiUser(app, 'material-valid');
 
@@ -766,6 +852,35 @@ describe('server API', () => {
       questionTypeId: 'careful-reading',
       sourceType: 'user-imported',
     });
+  });
+
+  it('rejects imported passage material with official exam provenance claims', async () => {
+    const { token } = await registerApiUser(app, 'material-provenance');
+
+    const response = await request(app)
+      .post('/api/materials/validate-passage')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        passage: {
+          title: 'CET-4 official past paper',
+          content: 'Students should practice with original or authorized materials.',
+          questions: [
+            {
+              id: 1,
+              question: 'What should students use?',
+              options: { A: 'Original materials', B: 'Random scans', C: 'Unmarked sources', D: 'Forum leaks' },
+              correctAnswer: 'A',
+              explanation: 'The passage mentions original or authorized materials.',
+            },
+          ],
+        },
+      })
+      .expect(400);
+
+    expect(response.body).toMatchObject({
+      error: 'invalid_passage',
+    });
+    expect(response.body.message).toContain('content provenance cannot claim official');
   });
 
   it('rejects malformed imported passage material', async () => {
@@ -1040,6 +1155,7 @@ describe('server API', () => {
       .set('User-Agent', 'Playwright Chrome Owner')
       .send({
         email: 'commercial-owner@example.com',
+        inviteCode: LOCAL_REGISTRATION_INVITE_CODE,
         password: 'secure-password-1',
         name: '商业化所有者',
         organizationName: '商业化运营团队',

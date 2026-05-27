@@ -1,13 +1,18 @@
 import { expect, test } from '@playwright/test';
 
+const REGISTRATION_INVITE_CODE = process.env.E2E_REGISTRATION_INVITE_CODE || 'ETC-LOCAL-2026';
+
 test('SaaS account trial can sync and restore local learning data', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByText('账号密码保护已启用')).toBeVisible();
-  await expect(page.getByText('云端账号与团队协作')).toBeVisible();
+  await expect(page.getByText('账号密码登录')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '账号登录' })).toBeVisible();
 
   const email = `saas-${Date.now()}@example.com`;
+  await page.getByRole('button', { name: '使用邀请码注册' }).click();
+  await expect(page.getByRole('heading', { name: '邀请码注册' })).toBeVisible();
   await page.getByTestId('saas-name-input').fill('云端学习者');
   await page.getByTestId('saas-organization-input').fill('商业化训练团队');
+  await page.getByTestId('saas-invite-code-input').fill(REGISTRATION_INVITE_CODE);
   await page.getByTestId('saas-email-input').fill(email);
   await page.getByTestId('saas-password-input').fill('secure-password-1');
   await page.getByTestId('saas-auth-submit').click();

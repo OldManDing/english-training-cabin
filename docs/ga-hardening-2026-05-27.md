@@ -12,14 +12,19 @@
 - 标准模考：内置原创 CET-4 标准结构模拟卷，覆盖写作 1 题、听力 25 题、阅读 30 题、翻译 1 题，时长 125 分钟。
 - 题库基础量：内置阅读专项材料、标准模考题、核心词汇与语块练习；内容均标注为原创模拟，不冒充官方真题。
 - 默认日期：新用户默认 CET-4 笔试日期统一为 `2026-06-13`。
+- 复习证据云同步：主动回忆、挖空补全和语境输出会形成 `review` 练习 session、attempt、复习项状态和能力画像，并纳入云端快照 round-trip 验证。
+- 阶段提分验证：能力地图新增基线证据与最近阶段模考的分项对比；证据不足时只提示下一步，不制造提分结论。
 
 ## 验收结果
 
 - `npm.cmd run lint`：通过。
-- `npm.cmd run test`：6 个测试文件、48 个用例通过。
+- `npm.cmd run test`：10 个测试文件、67 个用例通过。
 - `npm.cmd run build`：通过，存在 Vite 单 chunk 大小提示，不阻塞发布。
-- `npx.cmd playwright test`：18 条桌面/移动端 E2E 通过。
-- 本地生产 smoke：`http://127.0.0.1:3311` 通过健康检查、标准模考元数据、账号注册、受保护日计划和云快照。
+- `npx.cmd playwright test`：19 条桌面/移动端 E2E 通过。
+- 本地生产 smoke：`http://localhost:3000` 通过健康检查、标准模考元数据、账号注册、内容来源防冒用、受保护日计划和复习证据云快照；GA smoke 通过真实 AI 生成。
+- 线上发布：`/opt/english-training-cabin/current -> /opt/english-training-cabin/releases/v1-20260527-cet4-v1-r2`，应用容器与 Postgres 容器均为 healthy。
+- 线上 smoke：`SMOKE_BASE_URL=https://study.xmlga.top` 的 production smoke 和 GA smoke 均通过，覆盖账号注册、内容合规、每日计划、云端复习证据快照和真实 AI 生成。
+- 线上回归：`PLAYWRIGHT_BASE_URL=https://study.xmlga.top npx.cmd playwright test` 19 条桌面/移动端 E2E 通过。
 
 ## 上线口径
 

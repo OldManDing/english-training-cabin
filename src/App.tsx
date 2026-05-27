@@ -18,7 +18,7 @@ import SettingsSection from './components/SettingsSection';
 import VocabularyTraining from './components/VocabularyTraining';
 import AuthGate from './components/AuthGate';
 import MockExam from './components/MockExam';
-import { ActiveTab, DailyPlan, Passage, PracticeCompletionReport, ReviewItem, SkillProfile, StudyGoal } from './types';
+import { ActiveTab, DailyPlan, Passage, PracticeCompletionReport, ReviewCompletionEvidence, ReviewItem, SkillProfile, StudyGoal } from './types';
 import { CET4_VOCABULARY_BANK, INITIAL_PASSAGE } from './data';
 import { CET4_QUESTION_BANK_COVERAGE, CET4_READING_BANK } from './questionBank';
 import { Sparkles, BookOpen, ChevronRight, GraduationCap, X, Volume2, LibraryBig } from 'lucide-react';
@@ -236,8 +236,8 @@ function StudyApp() {
     setPersistedSkillProfiles(skillProfiles);
   };
 
-  const handleCompleteReviewItem = async (reviewItemId: string) => {
-    await completeReviewItem(reviewItemId);
+  const handleCompleteReviewItem = async (reviewItemId: string, evidence: ReviewCompletionEvidence) => {
+    await completeReviewItem(reviewItemId, evidence);
     await refreshStudyState();
     trackTelemetry('practice_completed', {
       mode: 'scheduled-review',

@@ -1,332 +1,302 @@
 import React, { useState } from 'react';
-import { AreaChart, TrendingUp, HelpCircle, Activity, Award, BellRing, Sparkles, CheckSquare, Sparkle, Target, Check, Zap, AlertCircle, FileText, Globe } from 'lucide-react';
-import { TIMELINE_LOGS } from '../data';
+import { Activity, AlertCircle, Award, Check, FileText, Globe, Sparkle, Zap } from 'lucide-react';
 import { SkillProfile } from '../types';
+import {
+  buildAbilityEvidenceSummary,
+  buildAbilityTimelineBars,
+  buildEvidenceKnowledgeTabs,
+  buildStageProgressSummary,
+  type AbilityEvidenceTab,
+  type AbilityNodeIcon,
+} from '../domain/progress/abilityEvidence';
 
 interface ProgressSectionProps {
   scoreChange?: { from: number; to: number };
   persistedSkillProfiles?: SkillProfile[];
 }
 
-interface KnowledgeNode {
-  name: string;
-  percent: number;
-  type: 'success' | 'warning' | 'error' | 'primary' | 'normal';
-  icon: any;
+const KNOWLEDGE_NODE_ICONS: Record<AbilityNodeIcon, React.ComponentType<{ className?: string }>> = {
+  check: Check,
+  zap: Zap,
+  alert: AlertCircle,
+  file: FileText,
+  globe: Globe,
+};
+
+const TAB_LABELS: Record<AbilityEvidenceTab, string> = {
+  reading: '阅读',
+  listening: '听力',
+  grammar: '语法',
+};
+
+function barColor(type: string): string {
+  if (type === 'success') return 'bg-emerald-600';
+  if (type === 'error') return 'bg-rose-500';
+  if (type === 'warning') return 'bg-amber-500';
+  return 'bg-[#003178]';
 }
 
 export default function ProgressSection({ scoreChange, persistedSkillProfiles = [] }: ProgressSectionProps) {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'reading' | 'listening' | 'grammar'>('reading');
+  const [activeTab, setActiveTab] = useState<AbilityEvidenceTab>('reading');
   const [selectedWeek, setSelectedWeek] = useState<string>('W6');
-
-  // Active cores scores
-  const findProfileScore = (skillArea: SkillProfile['skillArea']) => {
-    const profile = persistedSkillProfiles
-      .filter((item) => item.skillArea === skillArea)
-      .sort((left, right) => right.lastUpdatedAt.localeCompare(left.lastUpdatedAt))[0];
-    return profile?.score;
-  };
-
-  const listeningScore = findProfileScore('listening') ?? 0;
-  const readingScore = findProfileScore('reading') ?? 0;
-  const writingScore = findProfileScore('writing') ?? 0;
-  const translationScore = findProfileScore('translation') ?? 0;
-  const speakingScore = scoreChange ? scoreChange.to : findProfileScore('speaking') ?? 0;
-  const hasEvidence = persistedSkillProfiles.length > 0 || Boolean(scoreChange);
-  const averageScore = hasEvidence
-    ? Math.round([listeningScore, readingScore, writingScore, translationScore].filter((score) => score > 0).reduce((sum, score) => sum + score, 0) / Math.max(1, [listeningScore, readingScore, writingScore, translationScore].filter((score) => score > 0).length))
-    : 0;
-  const forecastScore = hasEvidence ? Math.max(300, Math.min(710, Math.round(300 + averageScore * 4.1))) : null;
-  const evidenceCount = persistedSkillProfiles.reduce((sum, profile) => sum + profile.evidenceCount, 0);
-  const trainingStability = hasEvidence ? Math.max(12, Math.min(100, Math.round((evidenceCount / 12) * 100))) : null;
+  const abilitySummary = buildAbilityEvidenceSummary(persistedSkillProfiles, scoreChange);
+  const evidenceKnowledgeTabs = buildEvidenceKnowledgeTabs(persistedSkillProfiles);
+  const stageProgress = buildStageProgressSummary(persistedSkillProfiles);
+  const weeklyBars = buildAbilityTimelineBars(persistedSkillProfiles);
   const radarScale = 0.8;
+  const { listening, reading, writing, speaking } = abilitySummary.scores;
 
-  const triggerToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 4000);
+  const triggerToast = (message: string) => {
+    setToastMessage(message);
+    setTimeout(() => setToastMessage(null), 4000);
   };
-
-  // Switchable Tab databases for Image 1 (知识点检测图谱)
-  const tabData: Record<'reading' | 'listening' | 'grammar', KnowledgeNode[]> = {
-    reading: [
-      { name: "仔细阅读练习证据", percent: readingScore, type: readingScore >= 80 ? "success" : readingScore >= 60 ? "primary" : "error", icon: Check },
-      { name: "主旨大意", percent: hasEvidence ? Math.max(45, Math.min(95, readingScore + 4)) : 0, type: readingScore >= 70 ? "primary" : "error", icon: Zap },
-      { name: "长难句解析", percent: hasEvidence ? Math.max(30, readingScore - 18) : 0, type: readingScore >= 75 ? "primary" : "error", icon: AlertCircle },
-      { name: "词汇连贯性 (Conjunctions)", percent: hasEvidence ? Math.max(35, Math.min(90, averageScore + 5)) : 0, type: averageScore >= 75 ? "normal" : "warning", icon: FileText },
-      { name: "段落翻译", percent: translationScore, type: translationScore >= 80 ? "success" : translationScore >= 60 ? "warning" : "error", icon: Globe }
-    ],
-    listening: [
-      { name: "长对话练习证据", percent: listeningScore, type: listeningScore >= 80 ? "success" : listeningScore >= 60 ? "primary" : "error", icon: AlertCircle },
-      { name: "新闻听力主旨", percent: hasEvidence ? Math.max(40, Math.min(95, listeningScore + 5)) : 0, type: listeningScore >= 80 ? "success" : "primary", icon: Check },
-      { name: "转折逻辑辨析", percent: hasEvidence ? Math.max(35, listeningScore - 8) : 0, type: listeningScore >= 70 ? "primary" : "error", icon: Zap },
-      { name: "音同音近词干扰", percent: hasEvidence ? Math.max(25, listeningScore - 22) : 0, type: listeningScore >= 65 ? "warning" : "error", icon: AlertCircle },
-      { name: "弱读连读还原", percent: hasEvidence ? Math.max(30, listeningScore - 5) : 0, type: listeningScore >= 70 ? "normal" : "warning", icon: FileText }
-    ],
-    grammar: [
-      { name: "虚拟语气句型", percent: hasEvidence ? Math.max(35, writingScore - 8) : 0, type: writingScore >= 75 ? "primary" : "warning", icon: Globe },
-      { name: "分词作状语成分", percent: hasEvidence ? Math.max(40, writingScore + 4) : 0, type: writingScore >= 80 ? "success" : "primary", icon: Check },
-      { name: "倒装句功能识别", percent: hasEvidence ? Math.max(35, averageScore) : 0, type: averageScore >= 70 ? "primary" : "warning", icon: Zap },
-      { name: "定语从句限制修饰", percent: hasEvidence ? Math.max(35, readingScore - 5) : 0, type: readingScore >= 80 ? "success" : "primary", icon: Check },
-      { name: "主谓一致与插入语", percent: hasEvidence ? Math.max(35, writingScore) : 0, type: writingScore >= 75 ? "normal" : "warning", icon: FileText }
-    ]
-  };
-  const weeklyBars = [
-    { label: "W1", value: hasEvidence ? Math.max(18, averageScore - 34) : 0 },
-    { label: "W2", value: hasEvidence ? Math.max(22, averageScore - 25) : 0 },
-    { label: "W3", value: hasEvidence ? Math.max(28, averageScore - 18) : 0 },
-    { label: "W4", value: hasEvidence ? Math.max(32, averageScore - 12) : 0 },
-    { label: "W5", value: hasEvidence ? Math.max(38, averageScore - 6) : 0 },
-    { label: "W6", value: hasEvidence ? averageScore : 0 },
-  ];
 
   return (
-    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-[#f3faff] to-white flex flex-col min-h-[calc(100svh-9rem)] lg:h-screen justify-between relative">
-      
-      {/* Sliding Toast mechanism */}
+    <div className="flex min-h-[calc(100svh-9rem)] flex-1 flex-col overflow-y-auto overflow-x-hidden bg-gradient-to-b from-[#f3faff] to-white p-4 sm:p-6 lg:h-screen lg:p-8">
       {toastMessage && (
-        <div className="absolute top-4 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 bg-[#003178] text-white px-4 sm:px-5 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 z-50 text-xs font-bold border border-[#cfe6f2] animate-bounce">
-          <Sparkle className="h-4 w-4 text-emerald-300 fill-emerald-300 shrink-0" />
+        <div className="absolute left-4 right-4 top-4 z-50 flex items-center gap-2.5 rounded-2xl border border-[#cfe6f2] bg-[#003178] px-4 py-3 text-xs font-bold text-white shadow-xl sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:px-5">
+          <Sparkle className="h-4 w-4 shrink-0 fill-emerald-300 text-emerald-300" />
           <span>{toastMessage}</span>
         </div>
       )}
-      
-      {/* Header Info */}
-      <div className="shrink-0 mb-6">
-        <header className="pb-4 border-b border-[#cfe6f2]">
-          <h2 className="text-2xl font-black text-[#003178] tracking-tight">
-            能力地图
-          </h2>
-          <p className="text-xs text-gray-400 mt-1">
-            全面解析您的各项英语能力指标与掌握程度。
-          </p>
-        </header>
-      </div>
 
-      <div className="flex-1 overflow-y-auto space-y-5 lg:space-y-8 lg:pr-2">
-        
-        {/* Radar & Knowledge Map Row (Exactly like top level Image 1) */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 lg:gap-8">
-          
-          {/* Card: 综合能力雷达 (Span 2) */}
-          <div className="lg:col-span-2 bg-white border border-[#c3c6d4] hover:border-[#003178] rounded-3xl p-4 sm:p-6 shadow-2xs flex flex-col justify-between transition-colors">
-            <div>
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-sm font-bold text-[#071e27] uppercase tracking-wider">
-                  综合能力雷达
-                </h3>
-                {/* SVG radar icon */}
-                <div className="text-[#003178] p-1.5 bg-[#e6f6ff] rounded-lg">
-                  <Award className="h-4 w-4" />
-                </div>
-              </div>
+      <header className="mb-6 border-b border-[#cfe6f2] pb-4">
+        <h2 className="text-2xl font-black tracking-tight text-[#003178]">能力地图</h2>
+        <p className="mt-1 text-xs font-semibold text-slate-500">
+          只展示已写入本地学习记录的能力证据；暂无证据的维度保持待诊断状态。
+        </p>
+      </header>
 
-              {/* Circular SVG Radar with dynamic polygon */}
-              <div className="flex justify-center items-center py-4 relative">
-                <svg viewBox="0 0 200 200" className="w-[185px] h-[185px]">
-                  {/* Grid Lines */}
-                  <circle cx="100" cy="100" r="30" fill="none" stroke="#e2e8f0" strokeWidth="1" strokeDasharray="3,3" />
-                  <circle cx="100" cy="100" r="60" fill="none" stroke="#e2e8f0" strokeWidth="1" strokeDasharray="3,3" />
-                  <circle cx="100" cy="100" r="80" fill="none" stroke="#cbd5e1" strokeWidth="1.2" />
-                  
-                  {/* Axes */}
-                  <line x1="100" y1="20" x2="100" y2="180" stroke="#cbd5e1" strokeWidth="1" />
-                  <line x1="20" y1="100" x2="180" y2="100" stroke="#cbd5e1" strokeWidth="1" />
-
-                  {/* Calculated Polygon points (center = 100, 100, scale = 0.8)
-                      1. 听力 Listening (Up axis, value = 85 -> (100, 100 - 85*0.8) = (100, 32)
-                      2. 阅读 Reading (Right axis, value = 92 -> (100 + 92*0.8, 100) = (173.6, 100)
-                      3. 写作 Writing (Down axis, value = 65 -> (100, 100 + 65*0.8) = (100, 152)
-                      4. 口语 Speaking (Left axis, value = speakingScore -> (100 - speakingScore*0.8, 100)
-                  */}
-                  <polygon
-                    points={`100,${100 - listeningScore * radarScale} ${100 + readingScore * radarScale},100 100,${100 + writingScore * radarScale} ${100 - speakingScore * radarScale},100`}
-                    fill="rgba(0, 49, 120, 0.12)"
-                    stroke="#003178"
-                    strokeWidth="3.5"
-                  />
-
-                  {/* Vertices indicator points */}
-                  <circle cx="100" cy={100 - listeningScore * radarScale} r="4.5" fill="#003178" stroke="white" strokeWidth="1" />
-                  <circle cx={100 + readingScore * radarScale} cy="100" r="4.5" fill="#003178" stroke="white" strokeWidth="1" />
-                  <circle cx="100" cy={100 + writingScore * radarScale} r="4.5" fill="#003178" stroke="white" strokeWidth="1" />
-                  <circle cx={100 - speakingScore * radarScale} cy="100" r="4.5" fill="#003178" stroke="white" strokeWidth="1" />
-
-                  {/* Custom axis Text label positions */}
-                  <text x="100" y="14" textAnchor="middle" fontSize="9.5" fontWeight="bold" fill="#334155">听力 ({listeningScore})</text>
-                  <text x="187" y="103" textAnchor="start" fontSize="9.5" fontWeight="bold" fill="#334155">阅读 ({readingScore})</text>
-                  <text x="100" y="196" textAnchor="middle" fontSize="9.5" fontWeight="bold" fill="#334155">写作 ({writingScore})</text>
-                  <text x="13" y="103" textAnchor="end" fontSize="9.5" fontWeight="bold" fill="#334155">口语 ({speakingScore})</text>
-                </svg>
+      <div className="space-y-5 lg:space-y-8">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-5 lg:gap-8">
+          <section className="rounded-3xl border border-[#c3c6d4] bg-white p-4 shadow-2xs transition-colors hover:border-[#003178] sm:p-6 lg:col-span-2">
+            <div className="mb-6 flex items-center justify-between">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-[#071e27]">综合能力雷达</h3>
+              <div className="rounded-lg bg-[#e6f6ff] p-1.5 text-[#003178]">
+                <Award className="h-4 w-4" />
               </div>
             </div>
 
-            {/* Total forecast outputs */}
-            <div className="grid grid-cols-2 gap-3 sm:gap-4">
-              <div className="flex-1 bg-gradient-to-tr from-[#f3faff] to-[#dbf1fe]/50 border-r p-4.5 rounded-2xl border flex flex-col justify-center">
-                <span className="text-[10px] text-gray-400 font-bold block">总分预估</span>
-                <span className="text-3xl font-black text-[#003178] mt-1 font-mono">{forecastScore ?? '--'}</span>
+            <div className="flex justify-center py-4">
+              <svg viewBox="0 0 200 200" className="h-[185px] w-[185px]" aria-label="能力雷达图">
+                <circle cx="100" cy="100" r="30" fill="none" stroke="#e2e8f0" strokeWidth="1" strokeDasharray="3,3" />
+                <circle cx="100" cy="100" r="60" fill="none" stroke="#e2e8f0" strokeWidth="1" strokeDasharray="3,3" />
+                <circle cx="100" cy="100" r="80" fill="none" stroke="#cbd5e1" strokeWidth="1.2" />
+                <line x1="100" y1="20" x2="100" y2="180" stroke="#cbd5e1" strokeWidth="1" />
+                <line x1="20" y1="100" x2="180" y2="100" stroke="#cbd5e1" strokeWidth="1" />
+                <polygon
+                  points={`100,${100 - listening * radarScale} ${100 + reading * radarScale},100 100,${100 + writing * radarScale} ${100 - speaking * radarScale},100`}
+                  fill="rgba(0, 49, 120, 0.12)"
+                  stroke="#003178"
+                  strokeWidth="3.5"
+                />
+                <circle cx="100" cy={100 - listening * radarScale} r="4.5" fill="#003178" stroke="white" strokeWidth="1" />
+                <circle cx={100 + reading * radarScale} cy="100" r="4.5" fill="#003178" stroke="white" strokeWidth="1" />
+                <circle cx="100" cy={100 + writing * radarScale} r="4.5" fill="#003178" stroke="white" strokeWidth="1" />
+                <circle cx={100 - speaking * radarScale} cy="100" r="4.5" fill="#003178" stroke="white" strokeWidth="1" />
+                <text x="100" y="14" textAnchor="middle" fontSize="9.5" fontWeight="bold" fill="#334155">听力 ({listening})</text>
+                <text x="187" y="103" textAnchor="start" fontSize="9.5" fontWeight="bold" fill="#334155">阅读 ({reading})</text>
+                <text x="100" y="196" textAnchor="middle" fontSize="9.5" fontWeight="bold" fill="#334155">写作 ({writing})</text>
+                <text x="13" y="103" textAnchor="end" fontSize="9.5" fontWeight="bold" fill="#334155">口语 ({speaking})</text>
+              </svg>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-2xl border bg-gradient-to-tr from-[#f3faff] to-[#dbf1fe]/50 p-4">
+                <span className="block text-[10px] font-bold text-slate-400">总分估计</span>
+                <span className="mt-1 block font-mono text-3xl font-black text-[#003178]">{abilitySummary.forecastScore ?? '--'}</span>
               </div>
-              <div className="flex-1 bg-gradient-to-tr from-[#f3faff] to-[#dbf1fe]/50 p-4.5 rounded-2xl border flex flex-col justify-center">
-                <span className="text-[10px] text-gray-400 font-bold block">训练稳定度</span>
-                <span className="text-3xl font-black text-emerald-700 mt-1 font-mono">{trainingStability == null ? '--' : `${trainingStability}%`}</span>
+              <div className="rounded-2xl border bg-gradient-to-tr from-[#f3faff] to-[#dbf1fe]/50 p-4">
+                <span className="block text-[10px] font-bold text-slate-400">证据数</span>
+                <span className="mt-1 block font-mono text-3xl font-black text-[#003178]">{abilitySummary.evidenceCount}</span>
+              </div>
+              <div className="rounded-2xl border bg-gradient-to-tr from-[#f3faff] to-[#dbf1fe]/50 p-4">
+                <span className="block text-[10px] font-bold text-slate-400">稳定度</span>
+                <span className="mt-1 block font-mono text-3xl font-black text-emerald-700">{abilitySummary.trainingStability == null ? '--' : `${abilitySummary.trainingStability}%`}</span>
               </div>
             </div>
-            {!hasEvidence && (
+
+            {!abilitySummary.hasEvidence && (
               <p className="mt-4 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-[11px] font-bold leading-5 text-amber-800">
-                还没有真实能力证据。请先完成入门诊断或任一训练，能力地图会用本地记录重新计算。
+                还没有真实能力证据。请先完成入门诊断或任一专项训练，系统会用作答记录重新计算能力地图。
               </p>
             )}
+          </section>
 
-          </div>
-
-          {/* Card: 知识点掌握图谱 (Span 3) exactly as Image 1 */}
-          <div className="lg:col-span-3 bg-white border border-[#c3c6d4] hover:border-[#003178] rounded-3xl p-4 sm:p-6 shadow-2xs flex flex-col justify-between transition-colors">
-            
-            {/* Header with tabs */}
-            <div className="flex flex-col gap-3 pb-3 border-b mb-4 sm:flex-row sm:justify-between sm:items-center">
-              <h3 className="text-sm font-bold text-[#071e27] uppercase tracking-wider">
-                知识点掌握图谱
-              </h3>
-              
-              {/* Filter Tabs matching top right */}
-              <div className="bg-slate-100 p-0.5 rounded-xl flex items-center space-x-0.5 border text-[11px] font-bold">
-                <button
-                  onClick={() => setActiveTab('reading')}
-                  className={`px-3 py-1 rounded-lg transition-all ${
-                    activeTab === 'reading' ? 'bg-white text-[#003178] shadow-2xs' : 'text-gray-400'
-                  }`}
-                >
-                  阅读
-                </button>
-                <button
-                  onClick={() => setActiveTab('listening')}
-                  className={`px-3 py-1 rounded-lg transition-all ${
-                    activeTab === 'listening' ? 'bg-white text-[#003178] shadow-2xs' : 'text-gray-400'
-                  }`}
-                >
-                  听力
-                </button>
-                <button
-                  onClick={() => setActiveTab('grammar')}
-                  className={`px-3 py-1 rounded-lg transition-all ${
-                    activeTab === 'grammar' ? 'bg-white text-[#003178] shadow-2xs' : 'text-gray-400'
-                  }`}
-                >
-                  语法
-                </button>
+          <section className="rounded-3xl border border-[#c3c6d4] bg-white p-4 shadow-2xs transition-colors hover:border-[#003178] sm:p-6 lg:col-span-3">
+            <div className="mb-4 flex flex-col gap-3 border-b pb-3 sm:flex-row sm:items-center sm:justify-between">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-[#071e27]">证据知识点图谱</h3>
+              <div className="flex items-center space-x-0.5 rounded-xl border bg-slate-100 p-0.5 text-[11px] font-bold">
+                {(Object.keys(TAB_LABELS) as AbilityEvidenceTab[]).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`rounded-lg px-3 py-1 transition-all ${
+                      activeTab === tab ? 'bg-white text-[#003178] shadow-2xs' : 'text-slate-400'
+                    }`}
+                  >
+                    {TAB_LABELS[tab]}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Render selected list with high fidelity colors */}
-            <div className="space-y-3.5 flex-1 justify-center flex flex-col pr-1">
-              {tabData[activeTab].map((node, i) => {
-                const Icon = node.icon;
-                
-                let barColor = "bg-[#0d47a1]";
-                let iconWrapper = "bg-sky-50 text-blue-600 border border-blue-100";
-                let textContainer = "text-slate-600";
-
-                if (node.type === 'success') {
-                  barColor = "bg-emerald-600";
-                  iconWrapper = "bg-emerald-50 text-emerald-600 border border-emerald-100";
-                } else if (node.type === 'error') {
-                  barColor = "bg-rose-500";
-                  iconWrapper = "bg-rose-50 text-rose-500 border border-rose-100 animate-pulse";
-                } else if (node.type === 'warning') {
-                  barColor = "bg-amber-500";
-                  iconWrapper = "bg-amber-50 text-amber-500 border border-amber-100";
-                }
-
+            <div className="flex flex-col justify-center space-y-3.5">
+              {evidenceKnowledgeTabs[activeTab].map((node) => {
+                const Icon = KNOWLEDGE_NODE_ICONS[node.icon];
                 return (
-                  <div key={i} className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 p-2 bg-[#f8fafc]/70 hover:bg-[#f3faff] rounded-xl border border-transparent hover:border-[#cfe6f2] transition-colors">
-                    <div className="flex items-center gap-3 w-full sm:w-1/2">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${iconWrapper}`}>
-                        <Icon className="h-4 w-4" />
+                  <div key={node.id} className="rounded-xl border border-transparent bg-[#f8fafc]/70 p-2 transition-colors hover:border-[#cfe6f2] hover:bg-[#f3faff]">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                      <div className="flex w-full items-center gap-3 sm:w-1/2">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-blue-100 bg-sky-50 text-blue-600">
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-bold text-slate-800">{node.name}</p>
+                          <p className="mt-0.5 text-[10px] font-semibold text-slate-400">{node.sourceLabel}</p>
+                        </div>
                       </div>
-                      <span className="text-xs font-bold text-slate-800 truncate">{node.name}</span>
-                    </div>
-
-                    {/* Progress slider visually exact */}
-                    <div className="w-full sm:flex-1 flex items-center space-x-3.5">
-                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden border">
-                        <div
-                          className={`h-full rounded-full transition-all duration-700 ${barColor}`}
-                          style={{ width: `${node.percent}%` }}
-                        />
+                      <div className="flex w-full items-center space-x-3.5 sm:flex-1">
+                        <div className="h-2 w-full overflow-hidden rounded-full border bg-slate-100">
+                          <div className={`h-full rounded-full transition-all duration-700 ${barColor(node.type)}`} style={{ width: `${node.percent}%` }} />
+                        </div>
+                        <span className="w-10 shrink-0 text-right font-mono text-xs font-black text-slate-700">{node.percent}%</span>
                       </div>
-                      <span className="text-xs font-black text-slate-700 font-mono shrink-0 w-10 text-right">{node.percent}%</span>
                     </div>
                   </div>
                 );
               })}
             </div>
-
-          </div>
-
+          </section>
         </div>
 
-        {/* Bottom card: 能力成长曲线 bar chart over 6 weeks (Exactly like image 1 bottom) */}
-        <div className="bg-white border border-[#c3c6d4] hover:border-[#003178] rounded-3xl p-4 sm:p-6 shadow-2xs transition-colors">
-          <div className="flex flex-col gap-3 mb-6 pb-2 border-b sm:flex-row sm:justify-between sm:items-center">
-            <h3 className="text-sm font-bold text-[#071e27] uppercase tracking-wider flex items-center gap-1">
-              <Activity className="h-4 w-4 text-[#003178]" />
-              能力成长曲线
-            </h3>
-
-            <div className="bg-slate-100 p-0.5 rounded-lg text-[10px] font-bold border flex items-center space-x-1">
-              <span className="px-2 text-slate-400">目前视阈:</span>
-              <span className="bg-white text-[#003178] px-2.5 py-0.5 rounded shadow-2xs">最近 30 天</span>
+        <section className="rounded-3xl border border-[#c3c6d4] bg-white p-4 shadow-2xs transition-colors hover:border-[#003178] sm:p-6">
+          <div className="mb-5 flex flex-col gap-3 border-b pb-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-[#071e27]">
+                <Check className="h-4 w-4 text-emerald-700" />
+                阶段提分验证
+              </h3>
+              <p className="mt-2 text-sm font-black text-[#003178]">{stageProgress.title}</p>
+              <p className="mt-1 max-w-3xl text-xs font-semibold leading-5 text-slate-500">{stageProgress.description}</p>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center text-[11px] font-black sm:min-w-80">
+              <div className="rounded-2xl bg-[#eef7fc] p-3 text-[#003178]">
+                <div className="font-mono text-xl">{stageProgress.baselineAverage ?? '--'}</div>
+                <div>基线均值</div>
+              </div>
+              <div className="rounded-2xl bg-emerald-50 p-3 text-emerald-700">
+                <div className="font-mono text-xl">{stageProgress.mockAverage ?? '--'}</div>
+                <div>模考均值</div>
+              </div>
+              <div className={`rounded-2xl p-3 ${
+                (stageProgress.delta ?? 0) >= 3
+                  ? 'bg-emerald-700 text-white'
+                  : (stageProgress.delta ?? 0) <= -3
+                  ? 'bg-rose-600 text-white'
+                  : 'bg-slate-100 text-slate-600'
+              }`}>
+                <div className="font-mono text-xl">
+                  {stageProgress.delta == null ? '--' : `${stageProgress.delta > 0 ? '+' : ''}${stageProgress.delta}`}
+                </div>
+                <div>能力点变化</div>
+              </div>
             </div>
           </div>
 
-          {/* Interactive weekly column bars */}
-          <div className="grid grid-cols-6 gap-2 sm:gap-4 items-end h-44 px-1 sm:px-4 pt-4">
-            {weeklyBars.map((wk) => {
-              const isActive = selectedWeek === wk.label;
-              return (
-                <div
-                  key={wk.label}
-                  onClick={() => {
-                    setSelectedWeek(wk.label);
-                    triggerToast(hasEvidence
-                      ? `切换至 ${wk.label} 证据视图，当时能力指数约 ${wk.value}%。`
-                      : '暂无历史能力证据，请先完成诊断或训练。');
-                  }}
-                  className="flex flex-col items-center space-y-2 group cursor-pointer"
-                >
-                  {/* Height of bars simulated in % */}
-                  <div className="w-full relative bg-neutral-50 rounded-lg hover:bg-slate-50 transition border border-transparent hover:border-[#cfe6f2] flex items-end justify-center h-28 p-1">
-                    <div
-                      className={`w-full rounded-md transition-all duration-500 ease-out cursor-pointer ${
-                        isActive ? 'bg-[#003178] shadow' : 'bg-slate-400/50 group-hover:bg-slate-450'
-                      }`}
-                      style={{ height: `${wk.value}%` }}
-                    />
+          {stageProgress.sectionChanges.length > 0 ? (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {stageProgress.sectionChanges.map((item) => (
+                <div key={item.skillArea} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-black text-slate-800">{item.label}</span>
+                    <span className={`rounded-full px-2 py-1 text-[10px] font-black ${
+                      item.delta >= 3
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : item.delta <= -3
+                        ? 'bg-rose-100 text-rose-700'
+                        : 'bg-slate-200 text-slate-600'
+                    }`}>
+                      {item.delta > 0 ? '+' : ''}{item.delta}
+                    </span>
+                  </div>
+                  <div className="mt-4 flex items-end justify-between gap-2">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400">基线 {item.baselineDate}</p>
+                      <p className="font-mono text-2xl font-black text-slate-700">{item.baselineScore}</p>
+                    </div>
+                    <div className="h-px flex-1 bg-slate-200" />
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold text-slate-400">模考 {item.mockDate}</p>
+                      <p className="font-mono text-2xl font-black text-[#003178]">{item.mockScore}</p>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-[10px] font-semibold text-slate-500">模考证据 {item.mockEvidenceCount} 条</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm font-semibold leading-7 text-slate-500">
+              {stageProgress.nextAction}
+            </div>
+          )}
 
-                    {/* Active week pointer check */}
+          {stageProgress.sectionChanges.length > 0 && (
+            <div className="mt-4 rounded-2xl border border-[#cfe6f2] bg-[#eef7fc] px-4 py-3 text-xs font-bold leading-6 text-[#003178]">
+              {stageProgress.nextAction}
+              {stageProgress.estimatedCetScoreChange != null && (
+                <span className="ml-2 text-emerald-700">
+                  按当前能力均值估算，CET 分数变化约 {stageProgress.estimatedCetScoreChange > 0 ? '+' : ''}{stageProgress.estimatedCetScoreChange}。
+                </span>
+              )}
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-3xl border border-[#c3c6d4] bg-white p-4 shadow-2xs transition-colors hover:border-[#003178] sm:p-6">
+          <div className="mb-6 flex flex-col gap-3 border-b pb-2 sm:flex-row sm:items-center sm:justify-between">
+            <h3 className="flex items-center gap-1 text-sm font-bold uppercase tracking-wider text-[#071e27]">
+              <Activity className="h-4 w-4 text-[#003178]" />
+              能力证据时间线
+            </h3>
+            <span className="rounded-lg border bg-slate-100 px-3 py-1 text-[10px] font-bold text-slate-500">最近 6 周 · 仅统计有证据周</span>
+          </div>
+
+          <div className="grid h-44 grid-cols-6 items-end gap-2 px-1 pt-4 sm:gap-4 sm:px-4">
+            {weeklyBars.map((week) => {
+              const isActive = selectedWeek === week.label;
+              const hasWeekEvidence = week.value != null;
+              return (
+                <button
+                  key={week.label}
+                  type="button"
+                  onClick={() => {
+                    setSelectedWeek(week.label);
+                    triggerToast(hasWeekEvidence
+                      ? `${week.label}（${week.dateRange}）平均能力证据 ${week.value}%，证据 ${week.evidenceCount} 条。`
+                      : `${week.label}（${week.dateRange}）没有写入能力证据。`);
+                  }}
+                  className="group flex flex-col items-center space-y-2"
+                >
+                  <div className="relative flex h-28 w-full items-end justify-center rounded-lg border border-transparent bg-neutral-50 p-1 transition hover:border-[#cfe6f2] hover:bg-slate-50">
+                    <div
+                      className={`w-full rounded-md transition-all duration-500 ease-out ${
+                        isActive ? 'bg-[#003178] shadow' : hasWeekEvidence ? 'bg-slate-500/70 group-hover:bg-[#003178]/70' : 'bg-slate-200'
+                      }`}
+                      style={{ height: `${hasWeekEvidence ? week.value : 5}%` }}
+                    />
                     {isActive && (
-                      <span className="absolute -top-3 text-[8px] font-bold text-white bg-[#003178] px-1 rounded shadow-2xs scale-90">
-                        Active
-                      </span>
+                      <span className="absolute -top-3 rounded bg-[#003178] px-1 text-[8px] font-bold text-white shadow-2xs">Active</span>
                     )}
                   </div>
-                  
-                  <span className={`text-[10px] font-extrabold ${
-                    isActive ? 'text-[#003178]' : 'text-slate-400'
-                  }`}>
-                    {wk.label}
-                  </span>
-                </div>
+                  <span className={`text-[10px] font-extrabold ${isActive ? 'text-[#003178]' : 'text-slate-400'}`}>{week.label}</span>
+                </button>
               );
             })}
           </div>
-        </div>
-
+        </section>
       </div>
-
     </div>
   );
 }

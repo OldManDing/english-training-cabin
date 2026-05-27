@@ -3,7 +3,7 @@ import path from 'path';
 import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
-import { CET4_EXAM_PROFILE } from './src/exams/cet4';
+import { getExamRegistryEntry, listPublicExamProfiles, normalizeExamId } from './src/exams/registry';
 import { CET4_QUESTION_BANK_COVERAGE, CET4_MOCK_EXAM } from './src/questionBank';
 import { buildDailyPlan } from './src/domain/planner/dailyPlan';
 import { normalizePassage } from './src/domain/materials/passage';
@@ -30,6 +30,7 @@ import {
   getSessionExpiresAt,
   issueSessionToken,
   issuePasswordRecoveryCode,
+  isRegistrationInviteConfigured,
   loginSaasAccount,
   registerSaasAccount,
   resetSaasPassword,
@@ -266,13 +267,24 @@ function validateGoal(value: unknown): Pick<StudyGoal, 'id' | 'examId' | 'examDa
   const prioritySkills = Array.isArray(input.prioritySkills)
     ? input.prioritySkills.filter((skill): skill is SkillArea => typeof skill === 'string' && validSkills.includes(skill as SkillArea))
     : [];
+  const examId = normalizeExamId(typeof input.examId === 'string' ? input.examId : 'cet4');
+  const examEntry = getExamRegistryEntry(examId);
+
+  if (!examEntry) {
+    throw new SaasApiError(400, 'unsupported_exam', '目标考试暂不支持。');
+  }
+  if (examEntry.routeAvailability !== 'trainable') {
+    throw new SaasApiError(409, 'exam_not_trainable', `${examEntry.profile.name} 仍处于路线图阶段，尚未开放训练闭环。`);
+  }
 
   return {
-    id: typeof input.id === 'string' ? input.id : 'goal-cet4-primary',
-    examId: typeof input.examId === 'string' ? input.examId : 'cet4',
-    examDate: typeof input.examDate === 'string' ? input.examDate : '2026-06-15',
+    id: typeof input.id === 'string' ? input.id : `goal-${examId}-primary`,
+    examId,
+    examDate: typeof input.examDate === 'string' ? input.examDate : examEntry.defaultExamDate ?? '2026-06-13',
     dailyMinutes: Number.isFinite(dailyMinutes) ? Math.min(180, Math.max(20, dailyMinutes)) : 60,
-    prioritySkills: prioritySkills.length > 0 ? prioritySkills : ['reading', 'listening', 'speaking'],
+    prioritySkills: prioritySkills.length > 0
+      ? prioritySkills
+      : examEntry.profile.defaultPlanTemplates[0]?.prioritySkills ?? ['reading', 'listening', 'vocabulary', 'speaking'],
   };
 }
 
@@ -770,7 +782,8 @@ export function createApp(options: CreateAppOptions = {}) {
   const testLimiter = (_req: Request, _res: Response, next: NextFunction) => next();
   const disableRateLimits = process.env.NODE_ENV === 'test' || readEnvironmentValue('DISABLE_RATE_LIMITS') === 'true';
   const aiLimiter = disableRateLimits ? testLimiter : createRateLimiter(20, 60_000);
-  const authLimiter = disableRateLimits ? testLimiter : createRateLimiter(15, 60_000);
+  const authRateLimitPerMinute = Math.max(15, Math.min(240, Number(readEnvironmentValue('AUTH_RATE_LIMIT_PER_MINUTE') ?? 60)));
+  const authLimiter = disableRateLimits ? testLimiter : createRateLimiter(authRateLimitPerMinute, 60_000);
   const saasStore = options.saasStore ?? createDefaultSaasStore();
   const saasSessionSecret = options.saasSessionSecret ?? getSaasSessionSecret();
   const billingWebhookSecret = options.billingWebhookSecret ?? readEnvironmentValue('BILLING_WEBHOOK_SECRET');
@@ -846,6 +859,8 @@ export function createApp(options: CreateAppOptions = {}) {
         enabled: true,
         authConfigured: Boolean(saasSessionSecret),
         store: saasStore.kind,
+        registrationInviteRequired: true,
+        registrationInviteConfigured: isRegistrationInviteConfigured(),
       },
       collaboration: {
         invitationDelivery: 'manual-link',
@@ -856,7 +871,9 @@ export function createApp(options: CreateAppOptions = {}) {
 
   app.get('/api/exams', (_req, res) => {
     res.json({
-      exams: [CET4_EXAM_PROFILE],
+      exams: listPublicExamProfiles(),
+      activeExamIds: ['cet4'],
+      roadmapExamIds: ['cet6', 'ielts', 'toefl'],
       questionBankCoverage: CET4_QUESTION_BANK_COVERAGE,
       mockExam: {
         id: CET4_MOCK_EXAM.id,

@@ -120,6 +120,80 @@ describe('buildDailyPlan', () => {
     });
   });
 
+  it('adapts the main practice task to staged mock decline even when another skill has the lowest absolute score', () => {
+    const plan = buildDailyPlan({
+      goal: {
+        ...goal,
+        examDate: '2026-09-01',
+      },
+      date: '2026-05-24',
+      skillProfiles: [
+        {
+          id: 'cet4-reading-careful-reading',
+          skillArea: 'reading',
+          subSkillId: 'careful-reading',
+          score: 40,
+          confidence: 2,
+          evidenceCount: 5,
+          lastUpdatedAt: '2026-05-20T00:00:00.000Z',
+        },
+        {
+          id: 'cet4-listening-diagnostic-listening',
+          skillArea: 'listening',
+          subSkillId: 'diagnostic-listening',
+          score: 88,
+          confidence: 4,
+          evidenceCount: 3,
+          lastUpdatedAt: '2026-05-01T00:00:00.000Z',
+        },
+        {
+          id: 'cet4-listening-mock-listening-mixed',
+          skillArea: 'listening',
+          subSkillId: 'mock-listening-mixed',
+          score: 70,
+          confidence: 3,
+          evidenceCount: 25,
+          lastUpdatedAt: '2026-05-23T00:00:00.000Z',
+        },
+        {
+          id: 'cet4-reading-diagnostic-reading',
+          skillArea: 'reading',
+          subSkillId: 'diagnostic-reading',
+          score: 62,
+          confidence: 3,
+          evidenceCount: 3,
+          lastUpdatedAt: '2026-05-01T00:00:00.000Z',
+        },
+        {
+          id: 'cet4-reading-mock-reading-mixed',
+          skillArea: 'reading',
+          subSkillId: 'mock-reading-mixed',
+          score: 64,
+          confidence: 3,
+          evidenceCount: 30,
+          lastUpdatedAt: '2026-05-23T00:00:00.000Z',
+        },
+        {
+          id: 'cet4-vocabulary-cet4-core-vocabulary',
+          skillArea: 'vocabulary',
+          subSkillId: 'cet4-core-vocabulary',
+          score: 82,
+          confidence: 4,
+          evidenceCount: 12,
+          lastUpdatedAt: '2026-05-22T00:00:00.000Z',
+        },
+      ],
+    });
+
+    const practice = plan.tasks.find((task) => task.type === 'practice');
+    expect(practice).toMatchObject({
+      skillArea: 'listening',
+      priority: 'high',
+    });
+    expect(practice?.reason).toContain('阶段模考');
+    expect(plan.rationale).toContain('听力 阶段模考较基线下降 18 个能力点，今日主训练优先修正该回落分项。');
+  });
+
   it('adds staged mock exam when exam is near and ability evidence exists', () => {
     const plan = buildDailyPlan({
       goal,

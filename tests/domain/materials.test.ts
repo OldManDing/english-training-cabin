@@ -50,4 +50,39 @@ describe('normalizePassage', () => {
       }),
     ).toThrow('B must be a string');
   });
+
+  it('rejects imported material that claims official or real exam provenance', () => {
+    expect(() =>
+      normalizePassage({
+        ...validPassage,
+        title: '2024 年 CET-4 真题阅读',
+      }),
+    ).toThrow('content provenance cannot claim official');
+
+    expect(() =>
+      normalizePassage({
+        ...validPassage,
+        questions: [
+          {
+            ...validPassage.questions[0],
+            explanation: 'This is copied from an official CET-4 paper.',
+          },
+        ],
+      }),
+    ).toThrow('content provenance cannot claim official');
+  });
+
+  it('rejects unsupported source type labels instead of silently relabeling them', () => {
+    expect(() =>
+      normalizePassage({
+        ...validPassage,
+        questions: [
+          {
+            ...validPassage.questions[0],
+            sourceType: 'official',
+          },
+        ],
+      }),
+    ).toThrow('questions[0].sourceType must be one of original, user-imported, licensed, ai-generated');
+  });
 });
