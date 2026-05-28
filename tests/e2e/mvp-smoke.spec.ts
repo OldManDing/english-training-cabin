@@ -48,6 +48,33 @@ async function resetLocalLearningData(page: Page) {
   });
 }
 
+async function installSpeechSynthesisMock(page: Page) {
+  await page.addInitScript(() => {
+    const calls: string[] = [];
+    (window as any).__speechSynthesisCalls = calls;
+    (window as any).SpeechSynthesisUtterance = function MockSpeechSynthesisUtterance(this: any, text: string) {
+      this.text = text;
+      this.lang = '';
+      this.rate = 1;
+      this.onend = null;
+      this.onerror = null;
+    };
+    Object.defineProperty(window, 'speechSynthesis', {
+      configurable: true,
+      value: {
+        cancel() {},
+        getVoices() {
+          return [];
+        },
+        speak(utterance: any) {
+          calls.push(String(utterance.text ?? ''));
+          window.setTimeout(() => utterance.onend?.(new Event('end')), 0);
+        },
+      },
+    });
+  });
+}
+
 test('MVP critical reading flow persists local learning evidence', async ({ page }) => {
   await registerAndEnterApp(page, 'mvp-reading');
   await resetLocalLearningData(page);
@@ -215,6 +242,22 @@ test('review gate blocks new practice until the daily spaced-review minimum is c
 
   await page.getByRole('button', { name: '专项练习' }).click();
   await expect(page.getByRole('heading', { name: /专项练习/ })).toBeVisible();
+});
+
+test('listening practice starts automatic speech playback', async ({ page }) => {
+  await installSpeechSynthesisMock(page);
+  await registerAndEnterApp(page, 'mvp-listening-auto-speech');
+  await resetLocalLearningData(page);
+  await page.reload();
+
+  await page.getByRole('button', { name: '专项练习' }).click();
+  await page.getByRole('button', { name: '开始听力训练' }).click();
+
+  await expect(page.getByRole('heading', { name: /听力训练 - 长对话/ })).toBeVisible();
+  await expect(page.getByTestId('listening-auto-speech-status')).toContainText('自动播报长对话');
+  await expect.poll(async () => page.evaluate(() => (window as any).__speechSynthesisCalls?.length ?? 0)).toBeGreaterThanOrEqual(1);
+  const firstSpeechText = await page.evaluate(() => (window as any).__speechSynthesisCalls?.[0] ?? '');
+  expect(firstSpeechText).toContain(CET4_MOCK_EXAM.listening.transcript.slice(0, 48));
 });
 
 test('MVP critical speaking retell flow persists review and ability evidence', async ({ page }) => {
@@ -411,31 +454,7 @@ test('MVP critical translation flow evaluates feedback and persists learning evi
 });
 
 test('vocabulary practice plays audio controls, scores answers, and persists review evidence', async ({ page }) => {
-  await page.addInitScript(() => {
-    const calls: string[] = [];
-    (window as any).__speechSynthesisCalls = calls;
-    (window as any).SpeechSynthesisUtterance = function MockSpeechSynthesisUtterance(this: any, text: string) {
-      this.text = text;
-      this.lang = '';
-      this.rate = 1;
-      this.onend = null;
-      this.onerror = null;
-    };
-    Object.defineProperty(window, 'speechSynthesis', {
-      configurable: true,
-      value: {
-        cancel() {},
-        getVoices() {
-          return [];
-        },
-        speak(utterance: any) {
-          calls.push(String(utterance.text ?? ''));
-          window.setTimeout(() => utterance.onend?.(new Event('end')), 0);
-        },
-      },
-    });
-  });
-
+  await installSpeechSynthesisMock(page);
   await registerAndEnterApp(page, 'mvp-vocabulary');
   await resetLocalLearningData(page);
   await page.reload();
