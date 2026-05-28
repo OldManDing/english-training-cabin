@@ -139,7 +139,7 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
   };
 
   return (
-    <main className="flex-1 min-h-[100svh] overflow-y-auto overflow-x-hidden bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#f8fafc_42%,#fff7ed_100%)] p-4 sm:p-6 lg:h-screen lg:p-8">
+    <main className="app-page-surface flex-1 min-h-[100svh] overflow-y-auto overflow-x-hidden bg-[#f7fbff] p-4 sm:p-6 lg:h-screen lg:p-8">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
         <header className="rounded-[2rem] border border-sky-100 bg-white/90 p-4 shadow-sm sm:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

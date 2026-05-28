@@ -244,9 +244,9 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
   const currentFeedback = isSubmitted ? getAIBehaviorFeedback() : null;
 
   return (
-    <div className="flex-1 flex flex-col min-h-[100svh] lg:h-screen overflow-hidden bg-white">
+    <div className="app-page-surface flex-1 flex flex-col min-h-[100svh] lg:h-screen overflow-hidden bg-white">
       {/* Exercise Top Bar */}
-      <div className="min-h-16 px-4 sm:px-6 py-3 border-b border-[#cfe6f2] flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between shrink-0 bg-gradient-to-r from-[#f3faff] to-white">
+      <div className="min-h-16 px-4 sm:px-6 py-3 border-b border-[#cfe6f2] flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between shrink-0 bg-[#f7fbff]">
         <div className="flex items-center space-x-3 sm:space-x-4 min-w-0">
           <button
             onClick={onBack}

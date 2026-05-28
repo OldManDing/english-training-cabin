@@ -284,7 +284,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
   const activeQ = questions[currentQuestionIndex];
 
   return (
-    <div className="flex-1 flex flex-col min-h-[100svh] lg:h-screen bg-slate-50 relative overflow-hidden">
+    <div className="app-page-surface flex-1 flex flex-col min-h-[100svh] lg:h-screen bg-slate-50 relative overflow-hidden">
       
       {/* Toast banner */}
       {toastMessage && (

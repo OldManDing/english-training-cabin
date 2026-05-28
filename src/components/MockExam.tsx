@@ -294,7 +294,7 @@ export default function MockExam({ onBack, onComplete }: MockExamProps) {
   };
 
   return (
-    <div className="flex-1 min-h-[calc(100svh-9rem)] lg:h-screen overflow-y-auto bg-[radial-gradient(circle_at_12%_0,#dff4ff,transparent_28%),linear-gradient(180deg,#f7fbff_0%,#fffaf2_100%)] p-4 sm:p-6 lg:p-8">
+    <div className="app-page-surface flex-1 min-h-[calc(100svh-9rem)] lg:h-screen overflow-y-auto bg-[#f7fbff] p-4 sm:p-6 lg:p-8">
       <div className="mx-auto max-w-6xl space-y-5">
         <header className="rounded-[2rem] border border-[#cfe6f2] bg-white/92 p-5 shadow-sm sm:p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">

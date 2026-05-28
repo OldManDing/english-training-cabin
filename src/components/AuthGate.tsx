@@ -58,7 +58,7 @@ export default function AuthGate({ children }: AuthGateProps) {
 
   if (state === 'checking') {
     return (
-      <div className="min-h-[100svh] bg-[#f4f6f8] flex items-center justify-center p-6">
+      <div className="app-page-surface min-h-[100svh] bg-[#f4f6f8] flex items-center justify-center p-6">
         <div className="rounded-2xl border border-[#d9dee7] bg-white px-6 py-5 shadow-sm flex items-center gap-3 text-[#003178]">
           <Loader2 className="h-5 w-5 animate-spin" />
           <span className="text-sm font-black">正在校验登录状态...</span>
@@ -72,7 +72,7 @@ export default function AuthGate({ children }: AuthGateProps) {
   }
 
   return (
-    <main className="min-h-[100svh] bg-[#f4f6f8] px-4 py-8 sm:px-6">
+    <main className="app-page-surface min-h-[100svh] bg-[#f4f6f8] px-4 py-8 sm:px-6">
       <div className="mx-auto flex min-h-[calc(100svh-4rem)] max-w-md flex-col justify-center gap-5">
         <header className="space-y-3 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#d9dee7] bg-white text-[#003178] shadow-sm">

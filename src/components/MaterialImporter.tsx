@@ -145,7 +145,7 @@ export default function MaterialImporter({ onLoadCustomPassage }: MaterialImport
   };
 
   return (
-    <div className="flex-1 min-h-[calc(100svh-9rem)] lg:h-screen overflow-y-auto overflow-x-hidden bg-[radial-gradient(circle_at_top_left,#e2f4ff,transparent_34%),linear-gradient(180deg,#f7fbff_0%,#ffffff_55%)] p-4 sm:p-6 lg:p-8">
+    <div className="app-page-surface flex-1 min-h-[calc(100svh-9rem)] lg:h-screen overflow-y-auto overflow-x-hidden bg-[#f7fbff] p-4 sm:p-6 lg:p-8">
       <header className="mb-6 flex flex-col gap-4 border-b border-[#cfe6f2] pb-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.25em] text-[#0d47a1]">Material Studio</p>

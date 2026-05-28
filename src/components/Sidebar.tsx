@@ -21,7 +21,7 @@ export default function Sidebar({ activeTab, setActiveTab, examCountdown, onTrig
   ] as const;
 
   return (
-    <aside className="w-full lg:w-64 bg-[#ebf4f9] border-b lg:border-b-0 lg:border-r border-[#c3c6d4] flex flex-col lg:justify-between h-auto lg:h-screen sticky top-0 z-40 shrink-0 select-none">
+    <aside className="app-page-surface w-full lg:w-64 bg-[#ebf4f9] border-b lg:border-b-0 lg:border-r border-[#c3c6d4] flex flex-col lg:justify-between h-auto lg:h-screen sticky top-0 z-40 shrink-0 select-none">
       <div className="flex flex-col">
         {/* Profile Branding Header as shown in the screenshot */}
         <div className="p-3 lg:p-6 lg:pb-5 flex items-center space-x-3">

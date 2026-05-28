@@ -110,7 +110,7 @@ export default function SubjectiveTraining({ mode, onBack, onComplete }: Subject
   const Icon = mode === 'translation' ? Languages : FileText;
 
   return (
-    <div className="flex-1 min-h-[100svh] lg:h-screen overflow-hidden bg-gradient-to-b from-[#f3faff] to-white flex flex-col">
+    <div className="app-page-surface flex-1 min-h-[100svh] lg:h-screen overflow-hidden bg-[#f7fbff] flex flex-col">
       <header className="min-h-16 px-4 sm:px-6 py-3 border-b border-[#cfe6f2] bg-white flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3 sm:gap-4">
           <button

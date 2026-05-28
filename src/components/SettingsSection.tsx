@@ -182,7 +182,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
   }
 
   return (
-    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-[#f3faff] to-white min-h-[calc(100svh-9rem)] lg:h-screen flex flex-col justify-between relative select-none">
+    <div className="app-page-surface flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto overflow-x-hidden bg-[#f7fbff] min-h-[calc(100svh-9rem)] lg:h-screen flex flex-col justify-between relative select-none">
       
       {/* Sliding Toast mechanism at top center */}
       {toastMessage && (

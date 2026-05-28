@@ -206,7 +206,7 @@ export default function TodayDashboard({
   };
 
   return (
-    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-[#f3faff] to-white min-h-[calc(100svh-9rem)] lg:h-screen flex flex-col justify-between select-none relative">
+    <div className="app-page-surface flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto overflow-x-hidden bg-[#f7fbff] min-h-[calc(100svh-9rem)] lg:h-screen flex flex-col justify-between select-none relative">
       
       {/* Toast notifications */}
       {showTimeEditToast && (
@@ -230,7 +230,7 @@ export default function TodayDashboard({
             {/* AI Custom Adaptive Diagnostic Trigger */}
             <button
               onClick={onStartOnboarding}
-              className="px-4 py-2 bg-gradient-to-r from-[#003178] to-[#0284c7] text-white hover:from-[#0d47a1] hover:to-[#0284c7] rounded-full text-xs font-black flex items-center gap-1.5 shadow-md hover:scale-[1.03] active:scale-[0.97] transition-all cursor-pointer pointer-events-auto border border-[#cfe6f2]"
+              className="px-4 py-2 bg-[#003178] text-white hover:bg-[#0d47a1] rounded-full text-xs font-black flex items-center gap-1.5 shadow-md hover:scale-[1.03] active:scale-[0.97] transition-all cursor-pointer pointer-events-auto border border-[#cfe6f2]"
             >
               <Sparkles className="h-4 w-4 text-emerald-300 fill-emerald-300 animate-pulse" />
               <span>入门能力诊断</span>
@@ -250,7 +250,7 @@ export default function TodayDashboard({
         {reviewGateStatus?.locked && (
           <section
             data-testid="review-gate-banner"
-            className="overflow-hidden rounded-[2rem] border border-rose-100 bg-gradient-to-r from-rose-50 via-white to-[#eef7fc] p-4 shadow-sm sm:p-5"
+            className="overflow-hidden rounded-[2rem] border border-rose-100 bg-rose-50 p-4 shadow-sm sm:p-5"
           >
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="min-w-0">
@@ -501,7 +501,7 @@ export default function TodayDashboard({
               className="bg-white border border-[#c3c6d4]/60 hover:border-[#003178] rounded-3xl p-5.5 shadow-xs space-y-4.5 cursor-pointer hover:shadow-2xs transition-all group pointer-events-auto relative overflow-hidden"
             >
               {/* Highlight subtle corner flash glow on hover */}
-              <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-[#dbf1fe]/30 to-transparent rounded-bl-full opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="absolute top-0 right-0 w-16 h-16 bg-[#dbf1fe]/30 rounded-bl-full opacity-0 group-hover:opacity-100 transition-opacity" />
               
               <div className="flex justify-between items-center pb-2.5 border-b border-gray-100">
                 <span className="text-sm font-black text-[#003178] flex items-center gap-2">

@@ -544,7 +544,7 @@ function StudyApp() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row font-sans antialiased text-[#1e333c]">
+    <div className="app-page-surface min-h-screen bg-slate-50 flex flex-col lg:flex-row font-sans antialiased text-[#1e333c]">
       {showOnboarding ? (
         <OnboardingDiagnostic
           onDismiss={() => setShowOnboarding(false)}
@@ -600,7 +600,7 @@ function StudyApp() {
             examCountdown={examCountdown}
             onTriggerModal={handleTriggerModal}
           />
-          <main className="flex-1 min-w-0 flex flex-col min-h-0 lg:h-screen lg:overflow-hidden relative">
+          <main className="app-page-surface flex-1 min-w-0 flex flex-col min-h-0 lg:h-screen lg:overflow-hidden relative">
             {renderTabContent()}
           </main>
         </>

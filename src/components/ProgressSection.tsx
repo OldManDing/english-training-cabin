@@ -53,7 +53,7 @@ export default function ProgressSection({ scoreChange, persistedSkillProfiles = 
   };
 
   return (
-    <div className="flex min-h-[calc(100svh-9rem)] flex-1 flex-col overflow-y-auto overflow-x-hidden bg-gradient-to-b from-[#f3faff] to-white p-4 sm:p-6 lg:h-screen lg:p-8">
+    <div className="app-page-surface flex min-h-[calc(100svh-9rem)] flex-1 flex-col overflow-y-auto overflow-x-hidden bg-[#f7fbff] p-4 sm:p-6 lg:h-screen lg:p-8">
       {toastMessage && (
         <div className="absolute left-4 right-4 top-4 z-50 flex items-center gap-2.5 rounded-2xl border border-[#cfe6f2] bg-[#003178] px-4 py-3 text-xs font-bold text-white shadow-xl sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:px-5">
           <Sparkle className="h-4 w-4 shrink-0 fill-emerald-300 text-emerald-300" />
@@ -103,15 +103,15 @@ export default function ProgressSection({ scoreChange, persistedSkillProfiles = 
             </div>
 
             <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-2xl border bg-gradient-to-tr from-[#f3faff] to-[#dbf1fe]/50 p-4">
+              <div className="rounded-2xl border bg-[#f3faff] p-4">
                 <span className="block text-[10px] font-bold text-slate-400">总分估计</span>
                 <span className="mt-1 block font-mono text-3xl font-black text-[#003178]">{abilitySummary.forecastScore ?? '--'}</span>
               </div>
-              <div className="rounded-2xl border bg-gradient-to-tr from-[#f3faff] to-[#dbf1fe]/50 p-4">
+              <div className="rounded-2xl border bg-[#f3faff] p-4">
                 <span className="block text-[10px] font-bold text-slate-400">证据数</span>
                 <span className="mt-1 block font-mono text-3xl font-black text-[#003178]">{abilitySummary.evidenceCount}</span>
               </div>
-              <div className="rounded-2xl border bg-gradient-to-tr from-[#f3faff] to-[#dbf1fe]/50 p-4">
+              <div className="rounded-2xl border bg-[#f3faff] p-4">
                 <span className="block text-[10px] font-bold text-slate-400">稳定度</span>
                 <span className="mt-1 block font-mono text-3xl font-black text-emerald-700">{abilitySummary.trainingStability == null ? '--' : `${abilitySummary.trainingStability}%`}</span>
               </div>

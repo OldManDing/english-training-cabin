@@ -200,7 +200,7 @@ export default function PracticeHub({
   const visibleReadingPassages = readingPassages.slice(0, visibleReadingCount);
 
   return (
-    <div className="flex-1 overflow-y-auto overflow-x-hidden bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#f8fafc_38%,#fff7ed_100%)] p-4 sm:p-6 lg:h-screen lg:p-8">
+    <div className="app-page-surface flex-1 overflow-y-auto overflow-x-hidden bg-[#f7fbff] p-4 sm:p-6 lg:h-screen lg:p-8">
       <div className="mx-auto w-full max-w-6xl space-y-5">
         <header className="overflow-hidden rounded-[2rem] border border-sky-100 bg-white/92 p-5 shadow-sm sm:p-6">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">

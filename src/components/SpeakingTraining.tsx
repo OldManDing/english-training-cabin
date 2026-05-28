@@ -168,13 +168,7 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.lineWidth = 3;
       
-      // Draw standard double sine waves with gradient
-      const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
-      gradient.addColorStop(0, '#10b981'); // green-500
-      gradient.addColorStop(0.5, '#059669'); // green-600
-      gradient.addColorStop(1, '#34d399'); // green-400
-
-      ctx.strokeStyle = gradient;
+      ctx.strokeStyle = '#10b981';
       ctx.beginPath();
       
       for (let x = 0; x < canvas.width; x++) {
@@ -434,7 +428,7 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
   ];
 
   return (
-    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto overflow-x-hidden bg-slate-50 flex flex-col justify-between min-h-[calc(100svh-9rem)] lg:h-screen relative selection:bg-[#003178]/10 selection:text-[#003178]">
+    <div className="app-page-surface flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto overflow-x-hidden bg-slate-50 flex flex-col justify-between min-h-[calc(100svh-9rem)] lg:h-screen relative selection:bg-[#003178]/10 selection:text-[#003178]">
       
       {/* Floating high fidelity custom premium Toast */}
       {toast && (
@@ -562,25 +556,10 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
                 {/* Rotating wind fields / clean energy beautiful SVG Mockup */}
                 <div className="h-56 w-full rounded-2xl border border-slate-200/60 overflow-hidden relative shadow-inner bg-slate-100 flex items-center justify-center">
                   <svg className="w-full h-full object-cover" viewBox="0 0 800 450" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <defs>
-                      <linearGradient id="skyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                        <stop offset="0%" stopColor="#bae6fd" />
-                        <stop offset="60%" stopColor="#e0f2fe" />
-                        <stop offset="100%" stopColor="#f0f9ff" />
-                      </linearGradient>
-                      <linearGradient id="hillGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                        <stop offset="0%" stopColor="#10b981" />
-                        <stop offset="100%" stopColor="#047857" />
-                      </linearGradient>
-                      <linearGradient id="solarGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#1e40af" />
-                        <stop offset="100%" stopColor="#1e3a8a" />
-                      </linearGradient>
-                    </defs>
-                    <rect width="800" height="450" fill="url(#skyGrad)" />
+                    <rect width="800" height="450" fill="#e0f2fe" />
                     <circle cx="650" cy="120" r="50" fill="#f59e0b" opacity="0.8" />
                     <circle cx="650" cy="120" r="65" fill="#f59e0b" opacity="0.15" />
-                    <path d="M 0 350 Q 200 280 400 350 T 800 320 L 800 450 L 0 450 Z" fill="url(#hillGrad)" />
+                    <path d="M 0 350 Q 200 280 400 350 T 800 320 L 800 450 L 0 450 Z" fill="#10b981" />
                     <path d="M 0 380 Q 300 330 600 390 T 800 370 L 800 450 L 0 450 Z" fill="#065f46" opacity="0.9" />
                     
                     {/* Turbine 1 */}
@@ -691,7 +670,7 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
                     {micVolume.map((vol, index) => (
                       <div
                         key={index}
-                        className="bg-gradient-to-t from-emerald-500 to-[#0284c7] hover:to-emerald-400 w-1.5 rounded-md transition-all duration-100 shadow-3xs"
+                        className="bg-emerald-500 hover:bg-emerald-400 w-1.5 rounded-md transition-all duration-100 shadow-3xs"
                         style={{ height: `${vol}%` }}
                       />
                     ))}
@@ -943,10 +922,10 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
 
                 <div className="space-y-3.5">
                   {[
-                    { label: '流利度 (Fluency)', score: 70, color: 'bg-gradient-to-r from-teal-400 to-[#003178]' },
-                    { label: '发音 (Pronunciation)', score: 75, color: 'bg-gradient-to-r from-teal-400 to-[#003178]' },
+                    { label: '流利度 (Fluency)', score: 70, color: 'bg-[#003178]' },
+                    { label: '发音 (Pronunciation)', score: 75, color: 'bg-[#003178]' },
                     { label: '语法 (Grammar)', score: 55, color: 'bg-rose-500', isErr: true },
-                    { label: '词汇 (Vocabulary)', score: 70, color: 'bg-gradient-to-r from-teal-400 to-[#003178]' },
+                    { label: '词汇 (Vocabulary)', score: 70, color: 'bg-[#003178]' },
                   ].map((sl, index) => (
                     <div key={index} className="space-y-1">
                       <div className="flex justify-between text-[11px] font-bold">

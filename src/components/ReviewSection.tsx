@@ -164,7 +164,7 @@ export default function ReviewSection({
 
   if (view === 'practice' && activeReview && activeTask) {
     return (
-      <div className="flex-1 min-h-[calc(100svh-9rem)] lg:min-h-screen overflow-y-auto overflow-x-hidden bg-[#f4f8fb] p-4 sm:p-8">
+      <div className="app-page-surface flex-1 min-h-[calc(100svh-9rem)] lg:min-h-screen overflow-y-auto overflow-x-hidden bg-[#f4f8fb] p-4 sm:p-8">
         {toastMessage && (
           <div className="fixed top-4 left-4 right-4 z-50 rounded-2xl border border-[#cfe6f2] bg-[#003178] px-4 py-3 text-xs font-bold text-white shadow-xl sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:px-5">
             {toastMessage}
@@ -320,7 +320,7 @@ export default function ReviewSection({
   }
 
   return (
-    <div className="flex-1 min-h-[calc(100svh-9rem)] lg:min-h-screen overflow-y-auto overflow-x-hidden bg-gradient-to-b from-[#f3faff] to-white p-4 sm:p-8">
+    <div className="app-page-surface flex-1 min-h-[calc(100svh-9rem)] lg:min-h-screen overflow-y-auto overflow-x-hidden bg-[#f7fbff] p-4 sm:p-8">
       {toastMessage && (
         <div className="fixed top-4 left-4 right-4 z-50 rounded-2xl border border-[#cfe6f2] bg-[#003178] px-4 py-3 text-xs font-bold text-white shadow-xl sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:px-5">
           {toastMessage}
