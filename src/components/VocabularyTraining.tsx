@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, CheckCircle2, ChevronRight, Headphones, Volume2, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ChevronRight, Headphones, PauseCircle, Volume2, XCircle } from 'lucide-react';
 import { VocabularyPracticeItem, VOCABULARY_SESSION_SIZE } from '../data';
 import { PracticeCompletionReport } from '../types';
 import { buildChoicePracticeReport } from '../domain/practice/reports';
@@ -20,6 +20,8 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
   const [confidence, setConfidence] = useState<Confidence | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [autoSpeakEnabled, setAutoSpeakEnabled] = useState(true);
+  const [speechNotice, setSpeechNotice] = useState('自动播报已开启：进入新单词后会自动朗读单词和例句。');
   const [answers, setAnswers] = useState<({ selected: Choice; correct: boolean; confidence: Confidence })[]>([]);
   const [startedAt] = useState(() => new Date().toISOString());
 
@@ -40,6 +42,30 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
     setIsSubmitted(false);
   };
 
+  const speak = (text: string, rate = 0.82, source: 'auto' | 'manual' = 'manual') => {
+    if (!('speechSynthesis' in window)) {
+      setSpeechNotice('当前浏览器不支持语音播报，请直接阅读单词和例句完成训练。');
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    utterance.rate = rate;
+    utterance.onend = () => {
+      setIsSpeaking(false);
+      setSpeechNotice(autoSpeakEnabled ? '自动播报已开启：进入新单词后会自动朗读单词和例句。' : '自动播报已关闭，可手动播放单词或例句。');
+    };
+    utterance.onerror = () => {
+      setIsSpeaking(false);
+      setSpeechNotice(source === 'auto'
+        ? '自动播报被浏览器拦截，请点击“播放单词”完成本题听音。'
+        : '浏览器语音播放失败，请直接阅读单词和例句完成训练。');
+    };
+    setIsSpeaking(true);
+    setSpeechNotice(source === 'auto' ? '正在自动播报单词和例句...' : '正在播报...');
+    window.speechSynthesis.speak(utterance);
+  };
+
   useEffect(() => {
     setSelectedOpt(null);
     setConfidence(null);
@@ -49,22 +75,19 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
   }, [currentIdx]);
 
   useEffect(() => {
+    if (!autoSpeakEnabled || !currentItem) return;
+    setSpeechNotice('自动播报已开启：进入新单词后会自动朗读单词和例句。');
+    const timer = window.setTimeout(() => {
+      speak(`${currentItem.word}. ${currentItem.example}`, 0.84, 'auto');
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [autoSpeakEnabled, currentItem?.id]);
+
+  useEffect(() => {
     return () => {
       window.speechSynthesis?.cancel();
     };
   }, []);
-
-  const speak = (text: string, rate = 0.82) => {
-    if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'en-US';
-    utterance.rate = rate;
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-    setIsSpeaking(true);
-    window.speechSynthesis.speak(utterance);
-  };
 
   const handleSubmit = () => {
     if (!selectedOpt || !confidence) return;
@@ -174,7 +197,7 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
             <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
               <button
                 type="button"
-                onClick={() => speak(currentItem.word, 0.78)}
+                onClick={() => speak(currentItem.word, 0.78, 'manual')}
                 className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[#003178] px-4 text-sm font-black text-white shadow-sm transition hover:bg-[#0d47a1]"
               >
                 <Volume2 className="h-4 w-4" />
@@ -182,13 +205,39 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
               </button>
               <button
                 type="button"
-                onClick={() => speak(currentItem.example, 0.86)}
+                onClick={() => speak(currentItem.example, 0.86, 'manual')}
                 className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-[#003178]/20 bg-white px-4 text-sm font-black text-[#003178] transition hover:border-[#003178]"
               >
                 <Volume2 className="h-4 w-4" />
                 播放例句
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAutoSpeakEnabled((enabled) => {
+                    const nextEnabled = !enabled;
+                    if (!nextEnabled) {
+                      window.speechSynthesis?.cancel();
+                      setIsSpeaking(false);
+                      setSpeechNotice('自动播报已关闭，可手动播放单词或例句。');
+                    } else {
+                      setSpeechNotice('自动播报已开启：进入新单词后会自动朗读单词和例句。');
+                    }
+                    return nextEnabled;
+                  });
+                }}
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-black text-slate-600 transition hover:border-[#003178] hover:text-[#003178] sm:col-span-2 lg:col-span-1"
+              >
+                {autoSpeakEnabled ? <Volume2 className="h-4 w-4" /> : <PauseCircle className="h-4 w-4" />}
+                {autoSpeakEnabled ? '自动播报已开启' : '自动播报已关闭'}
+              </button>
             </div>
+            <p
+              data-testid="vocabulary-auto-speech-status"
+              className="mt-3 rounded-2xl bg-sky-50 px-4 py-3 text-xs font-bold leading-5 text-[#003178]"
+            >
+              {speechNotice}
+            </p>
 
             <div className="mt-6 rounded-2xl border border-slate-100 bg-slate-50 p-4">
               <div className="text-xs font-black uppercase tracking-widest text-slate-400">Collocation</div>

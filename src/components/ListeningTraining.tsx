@@ -50,6 +50,8 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(15); // Start at 15s like in screenshot
   const [audioSpeed, setAudioSpeed] = useState<number>(1.0);
+  const [autoPlaybackEnabled, setAutoPlaybackEnabled] = useState(true);
+  const [autoPlaybackAttempted, setAutoPlaybackAttempted] = useState(false);
   const totalDuration = 165; // 2 minutes 45 seconds (165s)
   const [activeTab, setActiveTab] = useState<'ref' | 'focus' | 'shadow' | 'write' | 'listen'>('focus'); // "精听" mode is active
   
@@ -66,6 +68,13 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
   const [questions, setQuestions] = useState<QuestionItem[]>(LONG_CONVERSATION_PRACTICE_QUESTIONS);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const triggerToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 4000);
+  };
 
   // Audio simulation timer
   useEffect(() => {
@@ -112,16 +121,12 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
     });
   };
 
-  const toggleAudioPlayback = () => {
+  const startAudioPlayback = (source: 'auto' | 'manual' = 'manual') => {
     if (!('speechSynthesis' in window)) {
-      triggerToast('当前浏览器不支持语音播放，请直接阅读听力原文完成训练。');
-      return;
-    }
-
-    if (isPlaying) {
-      window.speechSynthesis.cancel();
-      setIsPlaying(false);
-      return;
+      triggerToast(source === 'auto'
+        ? '当前浏览器不支持自动语音播报，请直接阅读听力原文完成训练。'
+        : '当前浏览器不支持语音播放，请直接阅读听力原文完成训练。');
+      return false;
     }
 
     const utterance = new SpeechSynthesisUtterance(LISTENING_TRANSCRIPT_TEXT);
@@ -134,12 +139,55 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
     utterance.onerror = () => {
       setIsPlaying(false);
       utteranceRef.current = null;
-      triggerToast('浏览器语音播放失败，请改用听力原文训练。');
+      triggerToast(source === 'auto'
+        ? '自动播报被浏览器拦截，请点击播放按钮开始听力。'
+        : '浏览器语音播放失败，请改用听力原文训练。');
     };
     utteranceRef.current = utterance;
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
     setIsPlaying(true);
+    if (source === 'auto') {
+      triggerToast('已自动开始语音播报；可随时暂停或调整速度。');
+    }
+    return true;
+  };
+
+  useEffect(() => {
+    if (!autoPlaybackEnabled || autoPlaybackAttempted) return;
+    const timer = window.setTimeout(() => {
+      setAutoPlaybackAttempted(true);
+      startAudioPlayback('auto');
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [autoPlaybackEnabled, autoPlaybackAttempted]);
+
+  const toggleAudioPlayback = () => {
+    if (!('speechSynthesis' in window)) {
+      triggerToast('当前浏览器不支持语音播放，请直接阅读听力原文完成训练。');
+      return;
+    }
+
+    if (isPlaying) {
+      window.speechSynthesis.cancel();
+      setIsPlaying(false);
+      return;
+    }
+
+    startAudioPlayback('manual');
+  };
+
+  const toggleAutoPlayback = () => {
+    const nextEnabled = !autoPlaybackEnabled;
+    setAutoPlaybackEnabled(nextEnabled);
+    setAutoPlaybackAttempted(!nextEnabled);
+    if (!nextEnabled) {
+      window.speechSynthesis?.cancel();
+      setIsPlaying(false);
+      triggerToast('自动播报已关闭，可点击播放按钮手动开始。');
+    } else {
+      triggerToast('自动播报已开启，将自动开始播放长对话。');
+    }
   };
 
   const handleSelectOption = (opt: 'A' | 'B' | 'C' | 'D') => {
@@ -158,13 +206,6 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
       copy[currentQuestionIndex] = { ...copy[currentQuestionIndex], confidence: level };
       return copy;
     });
-  };
-
-  const triggerToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 4000);
   };
 
   const handleSubmitAnswer = () => {
@@ -415,12 +456,22 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
                 </div>
 
                 {/* Simulated Volume */}
-                <div className="flex items-center space-x-1 text-xs font-semibold text-gray-400">
-                  <span>浏览器语音播放</span>
-                </div>
+                <button
+                  type="button"
+                  onClick={toggleAutoPlayback}
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-black text-[#003178] transition hover:border-[#003178]"
+                >
+                  {autoPlaybackEnabled ? '自动播报已开启' : '自动播报已关闭'}
+                </button>
               </div>
 
             </div>
+            <p
+              data-testid="listening-auto-speech-status"
+              className="mt-3 rounded-2xl bg-white px-4 py-3 text-center text-xs font-bold leading-5 text-slate-500"
+            >
+              {autoPlaybackEnabled ? '进入听力专项后自动播报长对话，可暂停、调速或重听。' : '自动播报已关闭，可点击播放按钮手动开始。'}
+            </p>
 
           </div>
 

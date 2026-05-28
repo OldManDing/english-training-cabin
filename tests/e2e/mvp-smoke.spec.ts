@@ -411,6 +411,31 @@ test('MVP critical translation flow evaluates feedback and persists learning evi
 });
 
 test('vocabulary practice plays audio controls, scores answers, and persists review evidence', async ({ page }) => {
+  await page.addInitScript(() => {
+    const calls: string[] = [];
+    (window as any).__speechSynthesisCalls = calls;
+    (window as any).SpeechSynthesisUtterance = function MockSpeechSynthesisUtterance(this: any, text: string) {
+      this.text = text;
+      this.lang = '';
+      this.rate = 1;
+      this.onend = null;
+      this.onerror = null;
+    };
+    Object.defineProperty(window, 'speechSynthesis', {
+      configurable: true,
+      value: {
+        cancel() {},
+        getVoices() {
+          return [];
+        },
+        speak(utterance: any) {
+          calls.push(String(utterance.text ?? ''));
+          window.setTimeout(() => utterance.onend?.(new Event('end')), 0);
+        },
+      },
+    });
+  });
+
   await registerAndEnterApp(page, 'mvp-vocabulary');
   await resetLocalLearningData(page);
   await page.reload();
@@ -421,7 +446,11 @@ test('vocabulary practice plays audio controls, scores answers, and persists rev
   await page.getByRole('button', { name: '开始单词练习' }).click();
 
   await expect(page.getByRole('heading', { name: CET4_VOCABULARY_BANK[0].word })).toBeVisible();
-  await page.getByRole('button', { name: '播放单词' }).click();
+  await expect(page.getByTestId('vocabulary-auto-speech-status')).toContainText('自动播报');
+  await expect.poll(async () => page.evaluate(() => (window as any).__speechSynthesisCalls?.length ?? 0)).toBeGreaterThanOrEqual(1);
+  const firstSpeechText = await page.evaluate(() => (window as any).__speechSynthesisCalls?.[0] ?? '');
+  expect(firstSpeechText).toContain(CET4_VOCABULARY_BANK[0].word);
+  await page.getByRole('button', { name: '播放例句' }).click();
 
   const vocabularySessionItems = CET4_VOCABULARY_BANK.slice(0, VOCABULARY_SESSION_SIZE);
 
