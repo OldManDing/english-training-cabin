@@ -14,7 +14,7 @@ import {
   Sparkles,
   Volume2,
 } from 'lucide-react';
-import { CET4_MOCK_EXAM } from '../questionBank';
+import { CET4_MOCK_EXAM_BANK, type Cet4MockChoiceQuestion } from '../questionBank';
 import { buildMockExamReport, MockExamReportResult } from '../domain/practice/mockExam';
 import { PracticeCompletionReport } from '../types';
 
@@ -34,14 +34,16 @@ export default function MockExam({ onBack, onComplete }: MockExamProps) {
   const [translationAnswer, setTranslationAnswer] = useState('');
   const [result, setResult] = useState<MockExamReportResult | null>(null);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [selectedPaperId, setSelectedPaperId] = useState(CET4_MOCK_EXAM_BANK[0].id);
+  const paper = CET4_MOCK_EXAM_BANK.find((item) => item.id === selectedPaperId) ?? CET4_MOCK_EXAM_BANK[0];
 
-  const listeningAnsweredCount = CET4_MOCK_EXAM.listening.questions.filter((question) => choices[question.id]).length;
-  const readingAnsweredCount = CET4_MOCK_EXAM.reading.questions.filter((question) => choices[question.id]).length;
+  const listeningAnsweredCount = paper.listening.questions.filter((question) => choices[question.id]).length;
+  const readingAnsweredCount = paper.reading.questions.filter((question) => choices[question.id]).length;
   const writingCharCount = writingAnswer.trim().length;
   const translationCharCount = translationAnswer.trim().length;
   const writingReady = writingCharCount >= 40;
-  const listeningReady = listeningAnsweredCount === CET4_MOCK_EXAM.listening.questions.length;
-  const readingReady = readingAnsweredCount === CET4_MOCK_EXAM.reading.questions.length;
+  const listeningReady = listeningAnsweredCount === paper.listening.questions.length;
+  const readingReady = readingAnsweredCount === paper.reading.questions.length;
   const translationReady = translationCharCount >= 20;
   const canSubmit = writingReady && listeningReady && readingReady && translationReady;
 
@@ -66,7 +68,7 @@ export default function MockExam({ onBack, onComplete }: MockExamProps) {
       label: '听力',
       shortLabel: '听力',
       time: '25m',
-      status: `${listeningAnsweredCount}/${CET4_MOCK_EXAM.listening.questions.length} 题`,
+      status: `${listeningAnsweredCount}/${paper.listening.questions.length} 题`,
       ready: listeningReady,
     },
     {
@@ -74,7 +76,7 @@ export default function MockExam({ onBack, onComplete }: MockExamProps) {
       label: '阅读',
       shortLabel: '阅读',
       time: '40m',
-      status: `${readingAnsweredCount}/${CET4_MOCK_EXAM.reading.questions.length} 题`,
+      status: `${readingAnsweredCount}/${paper.reading.questions.length} 题`,
       ready: readingReady,
     },
     {
@@ -102,10 +104,20 @@ export default function MockExam({ onBack, onComplete }: MockExamProps) {
   const speakListening = () => {
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(CET4_MOCK_EXAM.listening.transcript);
+    const utterance = new SpeechSynthesisUtterance(paper.listening.transcript);
     utterance.lang = 'en-US';
     utterance.rate = 0.88;
     window.speechSynthesis.speak(utterance);
+  };
+
+  const selectPaper = (paperId: string) => {
+    setSelectedPaperId(paperId);
+    setActiveSection('writing');
+    setChoices({});
+    setWritingAnswer('');
+    setTranslationAnswer('');
+    setResult(null);
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
   };
 
   const submitMockExam = () => {
@@ -115,6 +127,7 @@ export default function MockExam({ onBack, onComplete }: MockExamProps) {
     }
 
     const nextResult = buildMockExamReport({
+      paper,
       answers: {
         choices,
         writingAnswer,
@@ -152,7 +165,7 @@ export default function MockExam({ onBack, onComplete }: MockExamProps) {
               detail="建议先写作，避免被后续客观题打断表达结构。"
             />
             <p className="mt-4 rounded-3xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold leading-7 text-slate-700">
-              {CET4_MOCK_EXAM.writing.prompt}
+              {paper.writing.prompt}
             </p>
             <textarea
               data-testid="mock-writing-answer"
@@ -190,10 +203,10 @@ export default function MockExam({ onBack, onComplete }: MockExamProps) {
             </div>
             <details className="mt-4 rounded-3xl border border-slate-100 bg-slate-50 p-4 text-xs font-semibold leading-6 text-slate-500">
               <summary className="cursor-pointer text-sm font-black text-[#003178]">查看听力转写兜底</summary>
-              <p className="mt-3 whitespace-pre-line">{CET4_MOCK_EXAM.listening.transcript}</p>
+              <p className="mt-3 whitespace-pre-line">{paper.listening.transcript}</p>
             </details>
             <QuestionList
-              questions={CET4_MOCK_EXAM.listening.questions}
+              questions={paper.listening.questions}
               choices={choices}
               onSelect={(questionId, choice) => setChoices((current) => ({ ...current, [questionId]: choice }))}
             />
@@ -209,10 +222,10 @@ export default function MockExam({ onBack, onComplete }: MockExamProps) {
               detail="阅读题和听力题分开推进，避免长页面混答造成漏题。"
             />
             <p className="mt-4 rounded-3xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold leading-7 text-slate-700">
-              {CET4_MOCK_EXAM.reading.passage}
+              {paper.reading.passage}
             </p>
             <QuestionList
-              questions={CET4_MOCK_EXAM.reading.questions}
+              questions={paper.reading.questions}
               choices={choices}
               onSelect={(questionId, choice) => setChoices((current) => ({ ...current, [questionId]: choice }))}
             />
@@ -228,7 +241,7 @@ export default function MockExam({ onBack, onComplete }: MockExamProps) {
               detail="提交前保留翻译编辑区，便于对照写作输出和词汇选择。"
             />
             <p className="mt-4 rounded-3xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold leading-7 text-slate-700">
-              {CET4_MOCK_EXAM.translation.prompt}
+              {paper.translation.prompt}
             </p>
             <textarea
               data-testid="mock-translation-answer"
@@ -299,18 +312,18 @@ export default function MockExam({ onBack, onComplete }: MockExamProps) {
                 阶段模考
               </div>
               <h2 className="mt-3 text-2xl font-black leading-tight text-[#003178] sm:text-3xl">
-                {CET4_MOCK_EXAM.title}
+                {paper.title}
               </h2>
               <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
                 覆盖写作、听力、阅读、翻译四个 CET-4 笔试模块。提交后会生成分项分数、错因复习项和能力图谱证据。
               </p>
               <p className="mt-2 text-xs font-bold leading-5 text-amber-700">
-                {CET4_MOCK_EXAM.sourceNotice}
+                {paper.sourceNotice}
               </p>
             </div>
             <div className="grid grid-cols-3 gap-2 text-center text-xs font-black sm:min-w-[320px]">
               <div className="rounded-2xl bg-[#eef7fc] p-3 text-[#003178]">
-                <div className="text-2xl">{CET4_MOCK_EXAM.plannedMinutes}</div>
+                <div className="text-2xl">{paper.plannedMinutes}</div>
                 <div>分钟</div>
               </div>
               <div className="rounded-2xl bg-emerald-50 p-3 text-emerald-700">
@@ -334,6 +347,20 @@ export default function MockExam({ onBack, onComplete }: MockExamProps) {
                   单项练习可以随时返回修改；阶段模考报告只在写作、听力、阅读、翻译全部完成后生成，避免半套卷污染提分证据。
                 </p>
               </div>
+              <label className="flex min-w-[220px] flex-col gap-1 text-xs font-black text-[#003178]">
+                选择模拟卷
+                <select
+                  value={selectedPaperId}
+                  onChange={(event) => selectPaper(event.target.value)}
+                  className="min-h-11 rounded-2xl border border-[#cfe6f2] bg-white px-3 text-sm font-black text-[#071e27] outline-none focus:ring-2 focus:ring-[#003178]/20"
+                >
+                  {CET4_MOCK_EXAM_BANK.map((item, index) => (
+                    <option key={item.id} value={item.id}>
+                      {`第 ${index + 1} 套：${item.title}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <div className="grid grid-cols-4 gap-1 text-center text-[10px] font-black text-slate-500 sm:min-w-[360px]">
                 {sections.filter((section) => section.id !== 'review').map((section, index) => (
                   <button
@@ -498,7 +525,7 @@ function QuestionList({
   choices,
   onSelect,
 }: {
-  questions: typeof CET4_MOCK_EXAM.listening.questions;
+  questions: Cet4MockChoiceQuestion[];
   choices: Record<string, Choice | undefined>;
   onSelect: (questionId: string, choice: Choice) => void;
 }) {

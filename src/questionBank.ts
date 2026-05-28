@@ -1,4 +1,4 @@
-import { INITIAL_PASSAGE, CET4_VOCABULARY_BANK } from './data';
+import { INITIAL_PASSAGE, CET4_VOCABULARY_BANK, type VocabularyPracticeItem } from './data';
 import { Passage, Question } from './types';
 
 type Choice = 'A' | 'B' | 'C' | 'D';
@@ -1111,6 +1111,72 @@ A more practical solution is to ${config.action}. With this balanced approach, $
   };
 }
 
+const READING_EXPANSION_ANGLES = [
+  {
+    slug: 'case-study',
+    title: 'Case Study',
+    keyword: 'application',
+    topic: (topic: Cet4ScaleTopicConfig) => `${topic.topic} in a local case`,
+    benefit: (topic: Cet4ScaleTopicConfig) => `a local example can show how ${topic.topic.toLowerCase()} works in real life`,
+    concern: (topic: Cet4ScaleTopicConfig) => topic.concern,
+    action: (topic: Cet4ScaleTopicConfig) => `compare one local case with the expected benefit of ${topic.topic.toLowerCase()}`,
+  },
+  {
+    slug: 'data-feedback',
+    title: 'Data and Feedback',
+    keyword: 'evidence',
+    topic: (topic: Cet4ScaleTopicConfig) => `${topic.topic} and feedback`,
+    benefit: (topic: Cet4ScaleTopicConfig) => `feedback data can help people judge whether ${topic.topic.toLowerCase()} is improving`,
+    concern: (topic: Cet4ScaleTopicConfig) => 'Numbers may be misleading if people collect them without understanding the real situation',
+    action: (topic: Cet4ScaleTopicConfig) => `collect simple feedback and connect it with practical changes in ${topic.topic.toLowerCase()}`,
+  },
+  {
+    slug: 'student-role',
+    title: 'The Student Role',
+    keyword: 'responsibility',
+    topic: (topic: Cet4ScaleTopicConfig) => `students and ${topic.topic.toLowerCase()}`,
+    benefit: (topic: Cet4ScaleTopicConfig) => `students can turn ${topic.topic.toLowerCase()} into a chance to practice communication and responsibility`,
+    concern: (topic: Cet4ScaleTopicConfig) => 'Participation may become shallow if students only complete the task for a record',
+    action: (topic: Cet4ScaleTopicConfig) => `ask students to explain what they learned from ${topic.topic.toLowerCase()} after practice`,
+  },
+  {
+    slug: 'policy-balance',
+    title: 'Policy and Balance',
+    keyword: 'policy',
+    topic: (topic: Cet4ScaleTopicConfig) => `${topic.topic} policy`,
+    benefit: (topic: Cet4ScaleTopicConfig) => `a balanced policy can make ${topic.topic.toLowerCase()} fairer and more reliable`,
+    concern: (topic: Cet4ScaleTopicConfig) => topic.concern,
+    action: (topic: Cet4ScaleTopicConfig) => `adjust rules for ${topic.topic.toLowerCase()} after listening to different groups`,
+  },
+  {
+    slug: 'long-term-impact',
+    title: 'Long-Term Impact',
+    keyword: 'impact',
+    topic: (topic: Cet4ScaleTopicConfig) => `the long-term impact of ${topic.topic.toLowerCase()}`,
+    benefit: (topic: Cet4ScaleTopicConfig) => `${topic.topic} can create lasting value when its results are reviewed regularly`,
+    concern: (topic: Cet4ScaleTopicConfig) => 'Short-term success may hide costs that appear later',
+    action: (topic: Cet4ScaleTopicConfig) => `review the long-term impact of ${topic.topic.toLowerCase()} instead of judging only quick results`,
+  },
+  {
+    slug: 'community-access',
+    title: 'Community Access',
+    keyword: 'accessible',
+    topic: (topic: Cet4ScaleTopicConfig) => `community access to ${topic.topic.toLowerCase()}`,
+    benefit: (topic: Cet4ScaleTopicConfig) => `${topic.topic} becomes more useful when different groups can access it easily`,
+    concern: (topic: Cet4ScaleTopicConfig) => 'Older residents and busy learners may be left behind if access is too complicated',
+    action: (topic: Cet4ScaleTopicConfig) => `make ${topic.topic.toLowerCase()} easier to reach through clear guidance and offline support`,
+  },
+  {
+    slug: 'exam-relevance',
+    title: 'Exam Relevance',
+    keyword: 'context',
+    topic: (topic: Cet4ScaleTopicConfig) => `${topic.topic} in exam contexts`,
+    benefit: (topic: Cet4ScaleTopicConfig) => `the topic helps learners practice common CET-4 ideas about ${topic.themeTag}`,
+    concern: (topic: Cet4ScaleTopicConfig) => 'Learners may know the topic in Chinese but lack English expressions for it',
+    action: (topic: Cet4ScaleTopicConfig) => `learn key phrases about ${topic.topic.toLowerCase()} through reading, listening, writing, and translation`,
+  },
+] as const;
+
 const EXTENDED_READING_PASSAGES: Passage[] = [
   {
     id: 'cet-campus-health',
@@ -1223,6 +1289,16 @@ const EXTENDED_READING_PASSAGES: Passage[] = [
       keyword: topicIndex % 2 === 0 ? 'visible' : 'reliable',
       themeTag: topic.themeTag,
     },
+    ...READING_EXPANSION_ANGLES.map((angle) => ({
+      id: `cet-scale-${topic.slug}-${angle.slug}`,
+      title: `${topic.title}: ${angle.title}`,
+      topic: angle.topic(topic),
+      benefit: angle.benefit(topic),
+      concern: angle.concern(topic),
+      action: angle.action(topic),
+      keyword: angle.keyword,
+      themeTag: topic.themeTag,
+    })),
   ])),
 ].map(makeExtendedReadingPassage);
 
@@ -1849,6 +1925,259 @@ const CET4_STANDARD_LISTENING_QUESTIONS: Cet4MockChoiceQuestion[] = [
   })),
 ];
 
+const LISTENING_EXPANSION_SCENARIOS = [
+  {
+    slug: 'benefit-detail',
+    questionTypeId: 'short-news' as const,
+    title: '短篇新闻补充',
+    prompt: (topic: Cet4ScaleTopicConfig) => `What benefit of ${topic.topic.toLowerCase()} is mentioned?`,
+    correctOption: (topic: Cet4ScaleTopicConfig) => topic.benefit,
+    correctSentence: (topic: Cet4ScaleTopicConfig) => `The speaker says that ${topic.benefit}.`,
+    explanation: (topic: Cet4ScaleTopicConfig) => `听到 says that 后定位积极作用：${topic.benefit}`,
+    trapType: '关键信息漏听',
+  },
+  {
+    slug: 'concern-detail',
+    questionTypeId: 'short-news' as const,
+    title: '短篇新闻补充',
+    prompt: (topic: Cet4ScaleTopicConfig) => `What concern is reported about ${topic.topic.toLowerCase()}?`,
+    correctOption: (topic: Cet4ScaleTopicConfig) => topic.concern,
+    correctSentence: (topic: Cet4ScaleTopicConfig) => `The report also notes that ${topic.concern}.`,
+    explanation: (topic: Cet4ScaleTopicConfig) => `also notes that 后面是限制信息：${topic.concern}`,
+    trapType: '转折信息漏听',
+  },
+  {
+    slug: 'recommended-action',
+    questionTypeId: 'short-news' as const,
+    title: '短篇新闻补充',
+    prompt: (topic: Cet4ScaleTopicConfig) => 'What action is recommended?',
+    correctOption: (topic: Cet4ScaleTopicConfig) => topic.action,
+    correctSentence: (topic: Cet4ScaleTopicConfig) => `The recommended action is to ${topic.action}.`,
+    explanation: (topic: Cet4ScaleTopicConfig) => `recommended action 对应：${topic.action}`,
+    trapType: '关键词漏听',
+  },
+  {
+    slug: 'student-concern',
+    questionTypeId: 'long-conversation' as const,
+    title: '长对话补充',
+    prompt: (topic: Cet4ScaleTopicConfig) => `What does the student worry about in relation to ${topic.topic.toLowerCase()}?`,
+    correctOption: (topic: Cet4ScaleTopicConfig) => topic.concern,
+    correctSentence: (topic: Cet4ScaleTopicConfig) => `The student says, "I am worried that ${topic.concern}."`,
+    explanation: (topic: Cet4ScaleTopicConfig) => `学生的 worry 直接对应：${topic.concern}`,
+    trapType: '低信心',
+  },
+  {
+    slug: 'advisor-suggestion',
+    questionTypeId: 'long-conversation' as const,
+    title: '长对话补充',
+    prompt: () => 'What does the advisor suggest doing first?',
+    correctOption: (topic: Cet4ScaleTopicConfig) => topic.action,
+    correctSentence: (topic: Cet4ScaleTopicConfig) => `The advisor suggests that they should first ${topic.action}.`,
+    explanation: (topic: Cet4ScaleTopicConfig) => `advisor suggests 后面给出建议：${topic.action}`,
+    trapType: '关键词漏听',
+  },
+  {
+    slug: 'meeting-purpose',
+    questionTypeId: 'long-conversation' as const,
+    title: '长对话补充',
+    prompt: (topic: Cet4ScaleTopicConfig) => `Why are the speakers discussing ${topic.topic.toLowerCase()}?`,
+    correctOption: (topic: Cet4ScaleTopicConfig) => `They want to make it more useful through planning and feedback.`,
+    correctSentence: (topic: Cet4ScaleTopicConfig) => `They are discussing ${topic.topic.toLowerCase()} because planning and feedback may make it more useful.`,
+    explanation: () => '对话目的题需要综合 concern 和 suggestion，而不是只抓单词。',
+    trapType: '主旨定位失败',
+  },
+  {
+    slug: 'next-step',
+    questionTypeId: 'long-conversation' as const,
+    title: '长对话补充',
+    prompt: () => 'What will the speakers probably do next?',
+    correctOption: (topic: Cet4ScaleTopicConfig) => `Collect feedback and test whether the suggested action works.`,
+    correctSentence: (topic: Cet4ScaleTopicConfig) => `They decide to collect feedback and test whether the suggested action works.`,
+    explanation: () => 'next step 常出现在对话结尾，需要听最后的决定。',
+    trapType: '结尾信息漏听',
+  },
+  {
+    slug: 'passage-main',
+    questionTypeId: 'listening-passage' as const,
+    title: '听力篇章补充',
+    prompt: (topic: Cet4ScaleTopicConfig) => `What is the passage mainly about?`,
+    correctOption: (topic: Cet4ScaleTopicConfig) => `The value and limits of ${topic.topic.toLowerCase()}.`,
+    correctSentence: (topic: Cet4ScaleTopicConfig) => `The passage discusses the value and limits of ${topic.topic.toLowerCase()}.`,
+    explanation: () => '篇章主旨需要同时覆盖 benefit 和 concern。',
+    trapType: '主旨定位失败',
+  },
+  {
+    slug: 'passage-risk',
+    questionTypeId: 'listening-passage' as const,
+    title: '听力篇章补充',
+    prompt: () => 'What risk does the speaker mention?',
+    correctOption: (topic: Cet4ScaleTopicConfig) => topic.concern,
+    correctSentence: (topic: Cet4ScaleTopicConfig) => `The speaker warns that ${topic.concern}.`,
+    explanation: (topic: Cet4ScaleTopicConfig) => `warns that 后面是风险：${topic.concern}`,
+    trapType: '细节偷换',
+  },
+  {
+    slug: 'passage-solution',
+    questionTypeId: 'listening-passage' as const,
+    title: '听力篇章补充',
+    prompt: () => 'What solution does the speaker support?',
+    correctOption: (topic: Cet4ScaleTopicConfig) => topic.action,
+    correctSentence: (topic: Cet4ScaleTopicConfig) => `The speaker supports a solution: to ${topic.action}.`,
+    explanation: (topic: Cet4ScaleTopicConfig) => `solution 后的动作是：${topic.action}`,
+    trapType: '关键词漏听',
+  },
+  {
+    slug: 'evidence-purpose',
+    questionTypeId: 'listening-passage' as const,
+    title: '听力篇章补充',
+    prompt: () => 'Why does the speaker mention evidence?',
+    correctOption: () => 'To show that improvement should be checked with real results.',
+    correctSentence: () => 'The speaker says improvement should be checked with real results rather than assumptions.',
+    explanation: () => 'evidence 指向可验证的真实结果。',
+    trapType: '同义替换未识别',
+  },
+  {
+    slug: 'fairness-point',
+    questionTypeId: 'listening-passage' as const,
+    title: '听力篇章补充',
+    prompt: () => 'What does the speaker say about fairness?',
+    correctOption: (topic: Cet4ScaleTopicConfig) => `${topic.topic} should consider the needs of different groups.`,
+    correctSentence: (topic: Cet4ScaleTopicConfig) => `The speaker says ${topic.topic.toLowerCase()} should consider the needs of different groups.`,
+    explanation: () => 'fairness 常与 different groups 和 equal access 同义替换。',
+    trapType: '同义替换未识别',
+  },
+  {
+    slug: 'time-number',
+    questionTypeId: 'short-news' as const,
+    title: '短篇新闻补充',
+    prompt: () => 'When will the pilot activity be reviewed?',
+    correctOption: () => 'After three weeks of practice.',
+    correctSentence: () => 'The pilot activity will be reviewed after three weeks of practice.',
+    explanation: () => 'three weeks 是数字时间信息，容易与选项中的 three days 混淆。',
+    trapType: '数字时间混淆',
+  },
+  {
+    slug: 'speaker-attitude',
+    questionTypeId: 'listening-passage' as const,
+    title: '听力篇章补充',
+    prompt: (topic: Cet4ScaleTopicConfig) => `What is the speaker's attitude toward ${topic.topic.toLowerCase()}?`,
+    correctOption: () => 'Cautiously positive.',
+    correctSentence: (topic: Cet4ScaleTopicConfig) => `The speaker is positive about the value of ${topic.topic.toLowerCase()}, but also points out its limits.`,
+    explanation: () => '态度题中 positive 和 limits 组合为 cautiously positive。',
+    trapType: '作者态度误判',
+  },
+  {
+    slug: 'example-function',
+    questionTypeId: 'long-conversation' as const,
+    title: '长对话补充',
+    prompt: () => 'Why does the speaker give an example?',
+    correctOption: () => 'To make the suggestion easier to understand.',
+    correctSentence: () => 'The speaker gives an example to make the suggestion easier to understand.',
+    explanation: () => 'example 常用于解释建议或说明抽象观点。',
+    trapType: '目的推断失败',
+  },
+  {
+    slug: 'problem-cause',
+    questionTypeId: 'long-conversation' as const,
+    title: '长对话补充',
+    prompt: () => 'What is one cause of the problem?',
+    correctOption: () => 'People do not receive clear guidance or feedback.',
+    correctSentence: () => 'One cause is that people do not receive clear guidance or feedback.',
+    explanation: () => 'cause 定位原因，不要误选结果。',
+    trapType: '因果定位失败',
+  },
+  {
+    slug: 'result-detail',
+    questionTypeId: 'short-news' as const,
+    title: '短篇新闻补充',
+    prompt: () => 'What result was reported after the trial?',
+    correctOption: () => 'More users completed the task and understood the next step.',
+    correctSentence: () => 'After the trial, more users completed the task and understood the next step.',
+    explanation: () => 'result 后的 completed 和 understood 是两个并列结果。',
+    trapType: '并列信息漏听',
+  },
+  {
+    slug: 'contrast',
+    questionTypeId: 'listening-passage' as const,
+    title: '听力篇章补充',
+    prompt: () => 'What contrast does the speaker make?',
+    correctOption: () => 'Quick action is less useful than steady action with feedback.',
+    correctSentence: () => 'The speaker contrasts quick action with steady action supported by feedback.',
+    explanation: () => 'contrast 题要抓 A 与 B 的对比关系。',
+    trapType: '转折信息漏听',
+  },
+  {
+    slug: 'audience',
+    questionTypeId: 'short-news' as const,
+    title: '短篇新闻补充',
+    prompt: () => 'Who is the activity mainly designed for?',
+    correctOption: () => 'Students and residents who need practical support.',
+    correctSentence: () => 'The activity is mainly designed for students and residents who need practical support.',
+    explanation: () => 'audience 题定位 mainly designed for 后的人群。',
+    trapType: '关键词漏听',
+  },
+  {
+    slug: 'location',
+    questionTypeId: 'short-news' as const,
+    title: '短篇新闻补充',
+    prompt: () => 'Where will the first session take place?',
+    correctOption: () => 'In the community learning center.',
+    correctSentence: () => 'The first session will take place in the community learning center.',
+    explanation: () => 'location 题定位 take place in 后面的地点。',
+    trapType: '地点信息漏听',
+  },
+  {
+    slug: 'condition',
+    questionTypeId: 'long-conversation' as const,
+    title: '长对话补充',
+    prompt: () => 'Under what condition will the plan continue?',
+    correctOption: () => 'If feedback shows that the plan solves a real problem.',
+    correctSentence: () => 'The plan will continue if feedback shows that it solves a real problem.',
+    explanation: () => 'condition 题定位 if 从句。',
+    trapType: '条件关系误判',
+  },
+  {
+    slug: 'reservation',
+    questionTypeId: 'long-conversation' as const,
+    title: '长对话补充',
+    prompt: () => 'What reservation does the speaker have?',
+    correctOption: () => 'The plan may take more time than expected.',
+    correctSentence: () => 'The speaker adds that the plan may take more time than expected.',
+    explanation: () => 'reservation 表示保留意见，通常跟在 adds/however 后。',
+    trapType: '转折信息漏听',
+  },
+  {
+    slug: 'summary',
+    questionTypeId: 'listening-passage' as const,
+    title: '听力篇章补充',
+    prompt: () => 'Which statement best summarizes the passage?',
+    correctOption: () => 'Useful change requires clear goals, feedback, and regular review.',
+    correctSentence: () => 'In summary, useful change requires clear goals, feedback, and regular review.',
+    explanation: () => 'summary 题需要抓结尾概括句。',
+    trapType: '主旨定位失败',
+  },
+  {
+    slug: 'speaker-purpose',
+    questionTypeId: 'listening-passage' as const,
+    title: '听力篇章补充',
+    prompt: () => "What is the speaker's main purpose?",
+    correctOption: () => 'To explain how a familiar topic can be improved through evidence-based action.',
+    correctSentence: () => 'The speaker aims to explain how a familiar topic can be improved through evidence-based action.',
+    explanation: () => 'purpose 题关注 explain/argue/suggest 等表达目的的动词。',
+    trapType: '目的推断失败',
+  },
+  {
+    slug: 'follow-up',
+    questionTypeId: 'short-news' as const,
+    title: '短篇新闻补充',
+    prompt: () => 'What follow-up will be arranged?',
+    correctOption: () => 'A short survey and a review meeting.',
+    correctSentence: () => 'A short survey and a review meeting will be arranged as follow-up.',
+    explanation: () => 'follow-up 指后续安排，常与 survey、meeting 搭配。',
+    trapType: '并列信息漏听',
+  },
+] as const;
+
 const EXTENDED_LISTENING_ITEMS: Array<{
   id: string;
   questionTypeId: Cet4MockChoiceQuestion['questionTypeId'];
@@ -2124,6 +2453,20 @@ const EXTENDED_LISTENING_ITEMS: Array<{
       },
     ];
   }),
+  ...CET4_SCALE_TOPIC_CONFIGS.flatMap((topic, topicIndex) => {
+    const answerCycle: Choice[] = ['A', 'B', 'C', 'D'];
+    return LISTENING_EXPANSION_SCENARIOS.map((scenario, scenarioIndex) => ({
+      id: `scale-${scenario.questionTypeId}-${topic.slug}-${scenario.slug}`,
+      questionTypeId: scenario.questionTypeId,
+      title: `${scenario.title} ${topicIndex + 1}-${scenarioIndex + 1}`,
+      prompt: scenario.prompt(topic),
+      correctAnswer: answerCycle[(topicIndex + scenarioIndex) % answerCycle.length],
+      correctOption: scenario.correctOption(topic),
+      correctSentence: scenario.correctSentence(topic),
+      explanation: scenario.explanation(topic),
+      trapType: scenario.trapType,
+    }));
+  }),
 ];
 
 export const CET4_LISTENING_PRACTICE_QUESTIONS: Cet4MockChoiceQuestion[] = [
@@ -2236,6 +2579,128 @@ const CET4_STANDARD_READING_QUESTIONS: Cet4MockChoiceQuestion[] = [
     explanation: `仔细阅读需要用原文定位并排除偷换信息。定位段落 ${paragraph}：${sentence}`,
     trapType,
   })),
+];
+
+const WORD_BANK_EXPANSION_FRAMES = [
+  {
+    slug: 'meaning-clue',
+    title: '选词填空释义线索',
+    prompt: (item: VocabularyPracticeItem) =>
+      `Choose the word or phrase that best matches this meaning: ${item.options[item.correctAnswer]}. Sentence clue: ${item.example}`,
+    correctSentence: (item: VocabularyPracticeItem) => item.example,
+    explanation: (item: VocabularyPracticeItem) =>
+      `${item.word} 的核心释义是 ${item.options[item.correctAnswer]}，需要结合句内语义线索判断。`,
+    trapType: '同义替换未识别',
+  },
+  {
+    slug: 'collocation-clue',
+    title: '选词填空搭配线索',
+    prompt: (item: VocabularyPracticeItem) =>
+      `Choose the best word or phrase for the collocation "${item.collocation}". Use the context to avoid a meaning-only guess.`,
+    correctSentence: (item: VocabularyPracticeItem) => item.example,
+    explanation: (item: VocabularyPracticeItem) =>
+      `${item.collocation} 是本题搭配线索；不要只看中文意思，要判断词性和上下文是否匹配。`,
+    trapType: '搭配错误',
+  },
+] as const;
+
+export const CET4_WORD_BANK_PRACTICE_QUESTIONS: Cet4MockChoiceQuestion[] =
+  CET4_VOCABULARY_BANK.slice(0, 1000).flatMap((item, itemIndex) => WORD_BANK_EXPANSION_FRAMES.map((frame, frameIndex) => makeMockChoiceQuestion({
+    id: `practice-word-bank-${item.id.replace(/^vocab-/, '')}-${frame.slug}`,
+    moduleId: 'reading',
+    questionTypeId: 'word-bank',
+    title: `${frame.title} ${itemIndex + 1}-${frameIndex + 1}`,
+    prompt: frame.prompt(item),
+    correctAnswer: (['A', 'B', 'C', 'D'] as Choice[])[(itemIndex + frameIndex) % 4],
+    correctOption: item.word,
+    correctSentence: frame.correctSentence(item),
+    explanation: frame.explanation(item),
+    trapType: frame.trapType,
+  })));
+
+const LONG_MATCHING_EXPANSION_FRAMES = [
+  {
+    slug: 'main-idea',
+    title: '长篇匹配主旨',
+    paragraphOffset: 0,
+    prompt: (passage: Passage) => `introduces the main topic of "${passage.title}"`,
+    explanation: '主旨匹配先看标题和段首总述，再排除只复现个别词的干扰项。',
+  },
+  {
+    slug: 'contrast',
+    title: '长篇匹配转折',
+    paragraphOffset: 1,
+    prompt: (passage: Passage) => `mentions a limitation, contrast, or problem in "${passage.title}"`,
+    explanation: '转折题重点定位 however、still、risk、problem 等限制信息。',
+  },
+  {
+    slug: 'action',
+    title: '长篇匹配措施',
+    paragraphOffset: 2,
+    prompt: (passage: Passage) => `suggests an action, solution, or result for "${passage.title}"`,
+    explanation: '措施题通常对应 should、need to、solution、action、therefore 等表达。',
+  },
+  {
+    slug: 'detail',
+    title: '长篇匹配细节',
+    paragraphOffset: 3,
+    prompt: (passage: Passage) => `contains a concrete detail or example from "${passage.title}"`,
+    explanation: '细节匹配要回到段落内部找例子或具体说明，不能只凭主题词判断。',
+  },
+] as const;
+
+function getPassageParagraphs(passage: Passage) {
+  const paragraphs = passage.content
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+
+  return paragraphs.length > 0 ? paragraphs : [passage.content.replace(/\s+/g, ' ').trim()];
+}
+
+export const CET4_LONG_MATCHING_PRACTICE_QUESTIONS: Cet4MockChoiceQuestion[] =
+  CET4_READING_BANK.flatMap((passage, passageIndex) => {
+    const paragraphs = getPassageParagraphs(passage);
+
+    return LONG_MATCHING_EXPANSION_FRAMES.map((frame, frameIndex) => {
+      const paragraphIndex = Math.min(frame.paragraphOffset, paragraphs.length - 1);
+      const paragraphLabel = String.fromCharCode(65 + paragraphIndex);
+      const paragraphText = paragraphs[paragraphIndex];
+
+      return makeMockChoiceQuestion({
+        id: `practice-long-matching-${passage.id}-${frame.slug}`,
+        moduleId: 'reading',
+        questionTypeId: 'long-matching',
+        title: `${frame.title} ${passageIndex + 1}-${frameIndex + 1}`,
+        prompt: `Which paragraph best ${frame.prompt(passage)}?`,
+        correctAnswer: (['A', 'B', 'C', 'D'] as Choice[])[(passageIndex + frameIndex) % 4],
+        correctOption: `Paragraph ${paragraphLabel}`,
+        correctSentence: `${paragraphLabel}. ${paragraphText.slice(0, 220)}`,
+        explanation: `${frame.explanation} 定位段落 ${paragraphLabel}：${paragraphText.slice(0, 160)}`,
+        trapType: frame.slug === 'contrast' ? '转折信息漏听' : '定位失准',
+      });
+    });
+  });
+
+export const CET4_CAREFUL_READING_PRACTICE_QUESTIONS: Cet4MockChoiceQuestion[] =
+  CET4_READING_BANK.flatMap((passage, passageIndex) => passage.questions.map((question, questionIndex) => makeMockChoiceQuestion({
+    id: `practice-careful-${passage.id}-${question.id}`,
+    moduleId: 'reading',
+    questionTypeId: 'careful-reading',
+    title: `仔细阅读专项 ${passageIndex + 1}-${questionIndex + 1}`,
+    prompt: question.question,
+    correctAnswer: question.correctAnswer,
+    correctOption: question.options[question.correctAnswer],
+    correctSentence: question.correctSentence ?? passage.content.split(/[.!?。！？]/)[0] ?? passage.title,
+    explanation: question.explanation,
+    trapType: question.type,
+  })));
+
+export const CET4_READING_PRACTICE_QUESTIONS: Cet4MockChoiceQuestion[] = [
+  ...CET4_STANDARD_READING_QUESTIONS,
+  ...CET4_WORD_BANK_PRACTICE_QUESTIONS,
+  ...CET4_LONG_MATCHING_PRACTICE_QUESTIONS,
+  ...CET4_CAREFUL_READING_PRACTICE_QUESTIONS,
 ];
 
 const DEGREE_PRACTICAL_WRITING_CONFIGS = [
@@ -2474,6 +2939,81 @@ export const DEGREE_ENGLISH_WRITING_PROMPT_BANK: Cet4SubjectivePrompt[] = [
     sampleAnswer: item.sample,
   })),
 ];
+
+const WRITING_EXPANSION_FRAMES = [
+  {
+    slug: 'advantages-limits',
+    title: 'Advantages and Limits',
+    focus: '利弊分析',
+    prompt: (topic: Cet4ScaleTopicConfig) => `the advantages and possible limits of ${topic.topic.toLowerCase()}`,
+    instruction: 'You should discuss one benefit, one possible problem, and your own suggestion.',
+    sample: (topic: Cet4ScaleTopicConfig) =>
+      `${topic.topic} has clear advantages because ${topic.benefit}. However, we should also notice that ${topic.concern}. In my view, a practical way forward is to ${topic.action}. Only when benefits and limits are both considered can this topic create lasting value.`,
+  },
+  {
+    slug: 'personal-action',
+    title: 'Personal Action',
+    focus: '个人行动',
+    prompt: (topic: Cet4ScaleTopicConfig) => `what college students can do about ${topic.topic.toLowerCase()}`,
+    instruction: 'You should give two practical actions and explain their value.',
+    sample: (topic: Cet4ScaleTopicConfig) =>
+      `College students can take practical action in relation to ${topic.topic.toLowerCase()}. First, they can learn key information and explain it clearly to others. Second, they can ${topic.action}. These actions matter because ${topic.benefit}, and they also help students build responsibility.`,
+  },
+  {
+    slug: 'public-awareness',
+    title: 'Public Awareness',
+    focus: '社会意识',
+    prompt: (topic: Cet4ScaleTopicConfig) => `the importance of public awareness in ${topic.topic.toLowerCase()}`,
+    instruction: 'You should explain why awareness matters and how it can be improved.',
+    sample: (topic: Cet4ScaleTopicConfig) =>
+      `Public awareness is important in ${topic.topic.toLowerCase()} because people make better choices when they understand the reason behind an action. Without awareness, ${topic.concern}. Therefore, schools and communities should use clear examples and feedback to help people take part.`,
+  },
+  {
+    slug: 'technology-role',
+    title: 'The Role of Technology',
+    focus: '科技应用',
+    prompt: (topic: Cet4ScaleTopicConfig) => `how technology can support ${topic.topic.toLowerCase()}`,
+    instruction: 'You should mention one useful function and one risk.',
+    sample: (topic: Cet4ScaleTopicConfig) =>
+      `Technology can support ${topic.topic.toLowerCase()} by making information easier to collect, share, and review. For example, digital tools can show whether ${topic.benefit}. The risk is that users may focus only on speed and ignore real needs. Technology should serve thinking, not replace it.`,
+  },
+  {
+    slug: 'problem-solution-extended',
+    title: 'A Realistic Solution',
+    focus: '问题解决',
+    prompt: (topic: Cet4ScaleTopicConfig) => `a realistic solution to a problem in ${topic.topic.toLowerCase()}`,
+    instruction: 'You should describe the problem, propose a solution, and explain how to check the result.',
+    sample: (topic: Cet4ScaleTopicConfig) =>
+      `A realistic problem in ${topic.topic.toLowerCase()} is that ${topic.concern}. This problem cannot be solved by slogans alone. A better solution is to ${topic.action}. After that, the result should be checked with feedback so that the solution can be adjusted in time.`,
+  },
+  {
+    slug: 'community-benefit',
+    title: 'Community Benefit',
+    focus: '公共利益',
+    prompt: (topic: Cet4ScaleTopicConfig) => `how ${topic.topic.toLowerCase()} can benefit a community`,
+    instruction: 'You should explain the benefit and give an example.',
+    sample: (topic: Cet4ScaleTopicConfig) =>
+      `${topic.topic} can benefit a community when it is planned according to real needs. The main benefit is that ${topic.benefit}. For example, a local project can invite residents to give feedback and then improve the service step by step. This makes the benefit visible and reliable.`,
+  },
+  {
+    slug: 'student-example',
+    title: 'A Student Example',
+    focus: '举例说明',
+    prompt: (topic: Cet4ScaleTopicConfig) => `a student example related to ${topic.topic.toLowerCase()}`,
+    instruction: 'You should describe one example and explain what it shows.',
+    sample: (topic: Cet4ScaleTopicConfig) =>
+      `A student example can show the value of ${topic.topic.toLowerCase()}. If a student joins a project and helps to ${topic.action}, he or she can connect classroom knowledge with real practice. This example shows that learning becomes deeper when students test ideas in real situations.`,
+  },
+  {
+    slug: 'balanced-view',
+    title: 'A Balanced View',
+    focus: '平衡观点',
+    prompt: (topic: Cet4ScaleTopicConfig) => `a balanced view of ${topic.topic.toLowerCase()}`,
+    instruction: 'You should avoid a one-sided answer and support your opinion with reasons.',
+    sample: (topic: Cet4ScaleTopicConfig) =>
+      `A balanced view of ${topic.topic.toLowerCase()} should include both value and risk. On the one hand, ${topic.benefit}. On the other hand, ${topic.concern}. I believe the key is to ${topic.action}, because careful action can turn a familiar idea into real improvement.`,
+  },
+] as const;
 
 export const CET4_WRITING_PROMPT_BANK: Cet4SubjectivePrompt[] = [
   {
@@ -2750,9 +3290,87 @@ export const CET4_WRITING_PROMPT_BANK: Cet4SubjectivePrompt[] = [
       sampleAnswer:
         `${topic.topic} can influence students and local communities in a practical way. For example, when people ${topic.action}, they can see whether the activity really helps. The main benefit is that ${topic.benefit}. This example shows that careful planning is more useful than a temporary slogan.`,
     },
+    ...WRITING_EXPANSION_FRAMES.map((frame) => ({
+      id: `writing-scale-${topic.slug}-${frame.slug}`,
+      moduleId: 'writing' as const,
+      questionTypeId: 'short-essay' as const,
+      title: `${topic.title}: ${frame.title}`,
+      prompt: `Directions: For this part, you are allowed 30 minutes to write a short essay on ${frame.prompt(topic)}. ${frame.instruction}`,
+      plannedMinutes: 30,
+      minWords: 120,
+      keywords: topic.keywords,
+      syllabusFocus: [topic.themeTag, frame.focus, '不少于120词'],
+      sampleAnswer: frame.sample(topic),
+    })),
   ])),
   ...DEGREE_ENGLISH_WRITING_PROMPT_BANK,
 ];
+
+const TRANSLATION_EXPANSION_FRAMES = [
+  {
+    slug: 'public-service',
+    suffix: '公共服务',
+    focus: '公共服务',
+    prompt: (topic: Cet4ScaleTopicConfig) =>
+      `请将下面这段中文翻译成英文：${topic.cnTitle}正在成为公共服务和日常生活中的重要话题。它可以帮助人们更方便地获得资源，也能促进不同群体之间的交流。为了发挥长期作用，相关服务需要清晰的规则和持续的反馈。`,
+    sample: (topic: Cet4ScaleTopicConfig) =>
+      `${topic.topic} is becoming an important topic in public services and daily life. It can help people obtain resources more conveniently and promote communication among different groups. To play a long-term role, related services need clear rules and continuous feedback.`,
+  },
+  {
+    slug: 'campus-practice',
+    suffix: '校园实践',
+    focus: '校园生活',
+    prompt: (topic: Cet4ScaleTopicConfig) =>
+      `请将下面这段中文翻译成英文：在大学校园里，${topic.cnTitle}不仅是一个学习话题，也是一种可以实践的能力。学生可以通过小组活动、调查和反思记录，把课堂知识转化为真实经验。`,
+    sample: (topic: Cet4ScaleTopicConfig) =>
+      `On a college campus, ${topic.topic.toLowerCase()} is not only a learning topic, but also an ability that can be practiced. Through group activities, surveys, and reflection records, students can turn classroom knowledge into real experience.`,
+  },
+  {
+    slug: 'culture-society',
+    suffix: '文化与社会',
+    focus: '中国文化与社会发展',
+    prompt: (topic: Cet4ScaleTopicConfig) =>
+      `请将下面这段中文翻译成英文：${topic.cnTitle}的发展反映了社会生活的变化。人们越来越重视效率、公平和文化价值之间的平衡。只有尊重真实需求，新的做法才能被更多人理解和接受。`,
+    sample: (topic: Cet4ScaleTopicConfig) =>
+      `The development of ${topic.topic.toLowerCase()} reflects changes in social life. People are paying more attention to the balance among efficiency, fairness, and cultural value. Only by respecting real needs can new practices be understood and accepted by more people.`,
+  },
+  {
+    slug: 'technology-feedback',
+    suffix: '科技与反馈',
+    focus: '科技应用',
+    prompt: (topic: Cet4ScaleTopicConfig) =>
+      `请将下面这段中文翻译成英文：数字技术为${topic.cnTitle}提供了新的工具。通过收集数据和用户反馈，管理者可以更快地发现问题并改进服务。但技术的使用必须保护个人信息。`,
+    sample: (topic: Cet4ScaleTopicConfig) =>
+      `Digital technology provides new tools for ${topic.topic.toLowerCase()}. By collecting data and user feedback, managers can find problems and improve services more quickly. However, the use of technology must protect personal information.`,
+  },
+  {
+    slug: 'long-term-development',
+    suffix: '长期发展',
+    focus: '社会发展',
+    prompt: (topic: Cet4ScaleTopicConfig) =>
+      `请将下面这段中文翻译成英文：推进${topic.cnTitle}不能只看短期效果。更重要的是，要建立长期机制，定期评估结果，并根据实际情况调整措施。这样才能让发展更加稳定和可靠。`,
+    sample: (topic: Cet4ScaleTopicConfig) =>
+      `Promoting ${topic.topic.toLowerCase()} should not focus only on short-term effects. More importantly, a long-term mechanism should be established, results should be evaluated regularly, and measures should be adjusted according to real situations. In this way, development can become more stable and reliable.`,
+  },
+  {
+    slug: 'youth-role',
+    suffix: '青年作用',
+    focus: '青年与社会',
+    prompt: (topic: Cet4ScaleTopicConfig) =>
+      `请将下面这段中文翻译成英文：青年人在${topic.cnTitle}中可以发挥积极作用。他们熟悉新技术，也愿意参与社区活动。如果能够把热情和专业知识结合起来，他们就能为社会带来实际改变。`,
+    sample: (topic: Cet4ScaleTopicConfig) =>
+      `Young people can play an active role in ${topic.topic.toLowerCase()}. They are familiar with new technology and are willing to take part in community activities. If they combine enthusiasm with professional knowledge, they can bring practical changes to society.`,
+  },
+  {
+    slug: 'problem-and-action',
+    suffix: '问题与行动',
+    focus: '问题解决',
+    prompt: (topic: Cet4ScaleTopicConfig) =>
+      `请将下面这段中文翻译成英文：虽然${topic.cnTitle}有明显价值，但在实践中仍然存在一些问题。例如，${topic.concern}。因此，人们需要采取具体行动，而不是停留在口号上。`,
+    sample: (topic: Cet4ScaleTopicConfig) =>
+      `Although ${topic.topic.toLowerCase()} has clear value, there are still some problems in practice. For example, ${topic.concern}. Therefore, people need to take specific action instead of staying at the level of slogans.`,
+  },
+] as const;
 
 export const CET4_TRANSLATION_PROMPT_BANK: Cet4SubjectivePrompt[] = [
   {
@@ -3008,6 +3626,17 @@ export const CET4_TRANSLATION_PROMPT_BANK: Cet4SubjectivePrompt[] = [
       sampleAnswer:
         `The development of ${topic.topic.toLowerCase()} should not focus only on speed, but should also value fairness and long-term influence. People should pay attention to this issue: ${topic.concern}. Only by evaluating results continuously during development can public benefit truly be improved.`,
     },
+    ...TRANSLATION_EXPANSION_FRAMES.map((frame) => ({
+      id: `translation-scale-${topic.slug}-${frame.slug}`,
+      moduleId: 'translation' as const,
+      questionTypeId: 'paragraph-translation' as const,
+      title: `${topic.cnTitle}${frame.suffix}`,
+      prompt: frame.prompt(topic),
+      plannedMinutes: 30,
+      keywords: topic.keywords,
+      syllabusFocus: [topic.themeTag, frame.focus, '语篇连贯'],
+      sampleAnswer: frame.sample(topic),
+    })),
   ])),
 ];
 
@@ -3036,6 +3665,56 @@ export const CET4_MOCK_EXAM: Cet4MockExamPaper = {
     sampleAnswer: CET4_TRANSLATION_PROMPT_BANK[0].sampleAnswer,
   },
 };
+
+function takeCyclic<T>(items: T[], startIndex: number, count: number): T[] {
+  if (items.length === 0) return [];
+  return Array.from({ length: count }, (_, index) => items[(startIndex + index) % items.length]);
+}
+
+function buildCET4MockExamVariant(paperIndex: number): Cet4MockExamPaper {
+  const paperNo = String(paperIndex + 1).padStart(3, '0');
+  const writingPrompt = CET4_WRITING_PROMPT_BANK[paperIndex % CET4_WRITING_PROMPT_BANK.length];
+  const translationPrompt = CET4_TRANSLATION_PROMPT_BANK[paperIndex % CET4_TRANSLATION_PROMPT_BANK.length];
+  const shortNewsQuestions = CET4_LISTENING_PRACTICE_QUESTIONS.filter((question) => question.questionTypeId === 'short-news');
+  const longConversationQuestions = CET4_LISTENING_PRACTICE_QUESTIONS.filter((question) => question.questionTypeId === 'long-conversation');
+  const listeningPassageQuestions = CET4_LISTENING_PRACTICE_QUESTIONS.filter((question) => question.questionTypeId === 'listening-passage');
+  const listeningQuestions = [
+    ...takeCyclic(shortNewsQuestions, paperIndex * 7, 7),
+    ...takeCyclic(longConversationQuestions, paperIndex * 8, 8),
+    ...takeCyclic(listeningPassageQuestions, paperIndex * 10, 10),
+  ];
+
+  return {
+    id: `cet4-standard-mock-${paperNo}`,
+    title: `CET-4 标准结构模拟卷 ${String.fromCharCode(64 + paperIndex + 1)}`,
+    sourceNotice: '由内置原创题池自动组卷，保持 CET-4 笔试 57 题结构；阅读 Part III 仍使用标准结构卷，听力和写译任务按题池轮换。',
+    plannedMinutes: 125,
+    writing: {
+      prompt: writingPrompt.prompt,
+      minWords: writingPrompt.minWords ?? 120,
+      keywords: writingPrompt.keywords,
+      sampleAnswer: writingPrompt.sampleAnswer,
+    },
+    listening: {
+      transcript: listeningQuestions.map((question) => question.correctSentence).join(' '),
+      questions: listeningQuestions,
+    },
+    reading: {
+      passage: CET4_STANDARD_READING_PASSAGE,
+      questions: CET4_STANDARD_READING_QUESTIONS,
+    },
+    translation: {
+      prompt: translationPrompt.prompt,
+      keywords: translationPrompt.keywords,
+      sampleAnswer: translationPrompt.sampleAnswer,
+    },
+  };
+}
+
+export const CET4_MOCK_EXAM_BANK: Cet4MockExamPaper[] = [
+  CET4_MOCK_EXAM,
+  ...Array.from({ length: 11 }, (_, index) => buildCET4MockExamVariant(index + 1)),
+];
 
 export const CET4_QUESTION_BANK_COVERAGE: QuestionBankCoverageItem[] = [
   {
@@ -3079,26 +3758,25 @@ export const CET4_QUESTION_BANK_COVERAGE: QuestionBankCoverageItem[] = [
     questionTypeId: 'word-bank',
     name: '选词填空',
     officialCount: '10 空',
-    builtInCount: CET4_STANDARD_READING_QUESTIONS.filter((question) => question.questionTypeId === 'word-bank').length,
+    builtInCount: CET4_READING_PRACTICE_QUESTIONS.filter((question) => question.questionTypeId === 'word-bank').length,
     durationMinutes: 10,
-    trainingRoute: '阶段模考 + 词汇语块',
+    trainingRoute: '选词填空专项 + 词汇语块 + 阶段模考',
   },
   {
     moduleId: 'reading',
     questionTypeId: 'long-matching',
     name: '长篇匹配',
     officialCount: '10 题',
-    builtInCount: CET4_STANDARD_READING_QUESTIONS.filter((question) => question.questionTypeId === 'long-matching').length,
+    builtInCount: CET4_READING_PRACTICE_QUESTIONS.filter((question) => question.questionTypeId === 'long-matching').length,
     durationMinutes: 15,
-    trainingRoute: '阶段模考',
+    trainingRoute: '长篇匹配专项 + 段落定位 + 阶段模考',
   },
   {
     moduleId: 'reading',
     questionTypeId: 'careful-reading',
     name: '仔细阅读',
     officialCount: '10 题',
-    builtInCount: CET4_READING_BANK.reduce((sum, passage) => sum + passage.questions.length, 0)
-      + CET4_STANDARD_READING_QUESTIONS.filter((question) => question.questionTypeId === 'careful-reading').length,
+    builtInCount: CET4_READING_PRACTICE_QUESTIONS.filter((question) => question.questionTypeId === 'careful-reading').length,
     durationMinutes: 15,
     trainingRoute: '专项阅读 + 阶段模考',
   },

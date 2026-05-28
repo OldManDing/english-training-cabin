@@ -191,10 +191,132 @@ const DEGREE_ENGLISH_SYLLABUS_EXTENSION_ROWS: VocabularyExtensionRow[] = [
   ['distractor', '/dɪˈstræktər/', 'noun', '干扰项', 'an option designed to look possible but be wrong', 'a useful example', 'a final paragraph', 'a writing task', 'remove distractors', 'In the 7-option task, students remove two distractors.', 'distractor 对应 7 选 5 阅读要求。'],
 ];
 
+const PRODUCTIVE_PHRASE_PATTERNS = [
+  {
+    suffix: 'strategy',
+    cn: '策略',
+    definition: (meaning: string) => `a practical plan for using or improving ${meaning}`,
+    distractors: ['a random answer without evidence', 'a place for a public event', 'a sound made by a machine'],
+    example: (word: string) => `A clear ${word} strategy helps learners choose the next task instead of reviewing blindly.`,
+  },
+  {
+    suffix: 'evidence',
+    cn: '证据',
+    definition: (meaning: string) => `information showing whether ${meaning} is real or useful`,
+    distractors: ['a private feeling that cannot be checked', 'a short break after class', 'a rule about room numbers'],
+    example: (word: string) => `The platform records ${word} evidence after each exercise so progress can be verified.`,
+  },
+  {
+    suffix: 'context',
+    cn: '语境',
+    definition: (meaning: string) => `the situation in which ${meaning} is used or understood`,
+    distractors: ['a fixed exam score', 'a list of unrelated names', 'a tool for repairing a device'],
+    example: (word: string) => `Students remember ${word} context better when they meet the expression in a sentence.`,
+  },
+  {
+    suffix: 'awareness',
+    cn: '意识',
+    definition: (meaning: string) => `understanding of why ${meaning} matters`,
+    distractors: ['a written permission form only', 'a repeated sound in a recording', 'a number without explanation'],
+    example: (word: string) => `Improving ${word} awareness can make students notice details that were ignored before.`,
+  },
+  {
+    suffix: 'practice',
+    cn: '练习',
+    definition: (meaning: string) => `regular training connected with ${meaning}`,
+    distractors: ['a result that cannot be changed', 'a building near the library', 'an opinion with no action'],
+    example: (word: string) => `${word} practice should include recall, feedback, and a short follow-up review.`,
+  },
+  {
+    suffix: 'challenge',
+    cn: '挑战',
+    definition: (meaning: string) => `a problem learners may meet when dealing with ${meaning}`,
+    distractors: ['a complete solution that needs no review', 'a piece of furniture in a classroom', 'a festival with no cultural meaning'],
+    example: (word: string) => `A common ${word} challenge is knowing the expression but failing to use it under time pressure.`,
+  },
+  {
+    suffix: 'signal',
+    cn: '信号',
+    definition: (meaning: string) => `a word or clue that helps readers notice ${meaning}`,
+    distractors: ['a score that is guessed randomly', 'a building used for sports', 'a private opinion with no text clue'],
+    example: (word: string) => `The ${word} signal helps readers find the key sentence before comparing options.`,
+  },
+  {
+    suffix: 'comparison',
+    cn: '比较',
+    definition: (meaning: string) => `a way to compare ${meaning} with another idea or choice`,
+    distractors: ['a sound that cannot be heard clearly', 'a form with no information', 'a habit unrelated to learning'],
+    example: (word: string) => `A ${word} comparison can show why one option is closer to the passage than another.`,
+  },
+  {
+    suffix: 'application',
+    cn: '应用',
+    definition: (meaning: string) => `the practical use of ${meaning} in a sentence, passage, or task`,
+    distractors: ['a place where no one studies', 'a number without a unit', 'a copy of an unrelated answer'],
+    example: (word: string) => `${word} application matters because exam questions test use in context, not isolated memory.`,
+  },
+  {
+    suffix: 'method',
+    cn: '方法',
+    definition: (meaning: string) => `a reliable method for learning, checking, or using ${meaning}`,
+    distractors: ['a temporary feeling after class', 'a road sign near a school', 'a person who refuses feedback'],
+    example: (word: string) => `A ${word} method should include examples, retrieval, and a short review task.`,
+  },
+  {
+    suffix: 'review',
+    cn: '复习',
+    definition: (meaning: string) => `planned review that helps learners remember and reuse ${meaning}`,
+    distractors: ['a public event without learning goals', 'a wrong option copied from the text', 'a tool for measuring weather'],
+    example: (word: string) => `${word} review should return after one day, several days, and a later mixed exercise.`,
+  },
+  {
+    suffix: 'response',
+    cn: '回应',
+    definition: (meaning: string) => `a written or spoken response connected with ${meaning}`,
+    distractors: ['an empty room used for storage', 'a rule that prevents all questions', 'a trip that has no destination'],
+    example: (word: string) => `A strong ${word} response uses the expression accurately and explains the reason.`,
+  },
+  {
+    suffix: 'accuracy',
+    cn: '准确性',
+    definition: (meaning: string) => `accuracy in understanding or expressing ${meaning}`,
+    distractors: ['a fast answer with no evidence', 'a festival held in winter', 'a device that only stores photos'],
+    example: (word: string) => `${word} accuracy improves when students compare the source sentence with their answer.`,
+  },
+  {
+    suffix: 'output',
+    cn: '输出',
+    definition: (meaning: string) => `language output that uses ${meaning} in a meaningful context`,
+    distractors: ['a hidden cost in a contract', 'a silent reading room only', 'a random list of names'],
+    example: (word: string) => `${word} output turns recognition into writing, speaking, or translation ability.`,
+  },
+] as const;
+
+const CET4_PRODUCTIVE_PHRASE_ROWS: VocabularyExtensionRow[] = [
+  ...CET4_SYLLABUS_EXTENSION_ROWS,
+  ...DEGREE_ENGLISH_SYLLABUS_EXTENSION_ROWS,
+].slice(0, 100).flatMap(([word, , , meaning]) => PRODUCTIVE_PHRASE_PATTERNS.map((pattern): VocabularyExtensionRow => {
+  const phrase = `${word} ${pattern.suffix}`;
+  return [
+    phrase,
+    '/phrase/',
+    'phrase',
+    `${meaning}${pattern.cn}`,
+    pattern.definition(meaning),
+    pattern.distractors[0],
+    pattern.distractors[1],
+    pattern.distractors[2],
+    phrase,
+    pattern.example(word),
+    `${phrase} 是围绕 ${word} 扩展的 CET-4 输出语块，用于阅读同义替换、写作论证和翻译表达。`,
+  ];
+}));
+
 const CET4_SYLLABUS_EXTENSION_VOCABULARY: VocabularyPracticeItem[] =
   [
     ...CET4_SYLLABUS_EXTENSION_ROWS,
     ...DEGREE_ENGLISH_SYLLABUS_EXTENSION_ROWS,
+    ...CET4_PRODUCTIVE_PHRASE_ROWS,
   ].map(buildVocabularyItem);
 
 export const CET4_VOCABULARY_BANK: VocabularyPracticeItem[] = [

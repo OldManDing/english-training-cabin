@@ -18,8 +18,11 @@ import {
 } from 'lucide-react';
 import { CET4_VOCABULARY_BANK } from '../data';
 import {
+  CET4_LISTENING_PRACTICE_QUESTIONS,
+  CET4_MOCK_EXAM_BANK,
   CET4_QUESTION_BANK_COVERAGE,
   CET4_READING_BANK,
+  CET4_READING_PRACTICE_QUESTIONS,
   CET4_TRANSLATION_PROMPT_BANK,
   CET4_WRITING_PROMPT_BANK,
   DEGREE_ENGLISH_MOCK_EXAM,
@@ -129,7 +132,7 @@ export default function PracticeHub({
       Icon: BookOpen,
       label: '仔细阅读',
       subtitle: '选择材料后进入定位、作答、错因反馈',
-      count: `${readingPassages.length} 组材料`,
+      count: `${readingPassages.length} 组材料 / ${CET4_READING_PRACTICE_QUESTIONS.length} 题`,
       duration: '12-18m',
       actionLabel: '开始仔细阅读训练',
       outcome: '每题保留定位线索、作答、把握度和阅读能力画像。',
@@ -144,7 +147,7 @@ export default function PracticeHub({
       Icon: Headphones,
       label: '长对话精听',
       subtitle: '进入后自动语音播报，可暂停、调速、重听',
-      count: '250+ 听力题',
+      count: `${CET4_LISTENING_PRACTICE_QUESTIONS.length} 道听力题`,
       duration: '15m',
       actionLabel: '开始听力训练',
       outcome: '听力作答会记录关键词漏听、转折漏听和低信心证据。',
@@ -183,7 +186,7 @@ export default function PracticeHub({
       Icon: ClipboardCheck,
       label: '阶段模考',
       subtitle: '完整 CET-4 四模块提交后才计入阶段证据',
-      count: '1 套标准结构',
+      count: `${CET4_MOCK_EXAM_BANK.length} 套组卷容量`,
       duration: '125m',
       actionLabel: '开始阶段模考',
       outcome: '一次生成写作、听力、阅读、翻译四项分数和阶段验证证据。',
@@ -226,9 +229,9 @@ export default function PracticeHub({
           <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[
               ['阅读材料', readingPassages.length],
-              ['核心词汇', CET4_VOCABULARY_BANK.length],
+              ['词汇语块', CET4_VOCABULARY_BANK.length],
+              ['阅读题池', CET4_READING_PRACTICE_QUESTIONS.length],
               ['写译题', CET4_WRITING_PROMPT_BANK.length + CET4_TRANSLATION_PROMPT_BANK.length],
-              ['题型结构', CET4_QUESTION_BANK_COVERAGE.length],
             ].map(([label, value]) => (
               <div key={label} className="rounded-2xl bg-slate-50 p-3 text-center">
                 <div className="text-2xl font-black text-[#003178]">{value}</div>

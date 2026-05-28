@@ -3,9 +3,13 @@ import { CET4_VOCABULARY_BANK } from '../../src/data';
 import {
   CET4_LISTENING_PRACTICE_QUESTIONS,
   CET4_MOCK_EXAM,
+  CET4_MOCK_EXAM_BANK,
   CET4_QUESTION_BANK_COVERAGE,
+  CET4_READING_PRACTICE_QUESTIONS,
   CET4_READING_BANK,
   CET4_TRANSLATION_PROMPT_BANK,
+  CET4_WORD_BANK_PRACTICE_QUESTIONS,
+  CET4_LONG_MATCHING_PRACTICE_QUESTIONS,
   CET4_WRITING_PROMPT_BANK,
   DEGREE_ENGLISH_MOCK_EXAM,
   DEGREE_ENGLISH_OUTLINE_2025,
@@ -41,13 +45,23 @@ describe('CET-4 syllabus-aligned question bank coverage', () => {
       CET4_QUESTION_BANK_COVERAGE.map((item) => [item.questionTypeId, item.builtInCount]),
     );
 
-    expect(CET4_VOCABULARY_BANK.length).toBeGreaterThanOrEqual(140);
-    expect(CET4_LISTENING_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(250);
-    expect(CET4_READING_BANK.length).toBeGreaterThanOrEqual(100);
-    expect(carefulReadingQuestionCount).toBeGreaterThanOrEqual(400);
-    expect(CET4_WRITING_PROMPT_BANK.length).toBeGreaterThanOrEqual(100);
-    expect(CET4_TRANSLATION_PROMPT_BANK.length).toBeGreaterThanOrEqual(100);
+    expect(CET4_VOCABULARY_BANK.length).toBeGreaterThanOrEqual(1_500);
+    expect(CET4_LISTENING_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(1_000);
+    expect(CET4_WORD_BANK_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(1_500);
+    expect(CET4_LONG_MATCHING_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(1_000);
+    expect(CET4_READING_BANK.length).toBeGreaterThanOrEqual(300);
+    expect(CET4_READING_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(4_000);
+    expect(carefulReadingQuestionCount).toBeGreaterThanOrEqual(1_200);
+    expect(CET4_WRITING_PROMPT_BANK.length).toBeGreaterThanOrEqual(350);
+    expect(CET4_TRANSLATION_PROMPT_BANK.length).toBeGreaterThanOrEqual(300);
+    expect(CET4_MOCK_EXAM_BANK.length).toBeGreaterThanOrEqual(10);
     expect(coverageByType['cet4-core-vocabulary']).toBe(CET4_VOCABULARY_BANK.length);
+    expect(coverageByType['word-bank']).toBe(
+      CET4_READING_PRACTICE_QUESTIONS.filter((question) => question.questionTypeId === 'word-bank').length,
+    );
+    expect(coverageByType['long-matching']).toBe(
+      CET4_READING_PRACTICE_QUESTIONS.filter((question) => question.questionTypeId === 'long-matching').length,
+    );
     expect(coverageByType['short-essay']).toBe(CET4_WRITING_PROMPT_BANK.length);
     expect(coverageByType['paragraph-translation']).toBe(CET4_TRANSLATION_PROMPT_BANK.length);
   });
@@ -84,9 +98,10 @@ describe('CET-4 syllabus-aligned question bank coverage', () => {
     const passageIds = CET4_READING_BANK.map((passage) => passage.id);
     const readingQuestionIds = CET4_READING_BANK.flatMap((passage) => passage.questions.map((question) => question.id));
     const mockQuestionIds = [
-      ...CET4_MOCK_EXAM.listening.questions.map((question) => question.id),
-      ...CET4_MOCK_EXAM.reading.questions.map((question) => question.id),
+      ...CET4_MOCK_EXAM_BANK.flatMap((paper) => paper.listening.questions.map((question) => `${paper.id}-${question.id}`)),
+      ...CET4_MOCK_EXAM_BANK.flatMap((paper) => paper.reading.questions.map((question) => `${paper.id}-${question.id}`)),
     ];
+    const readingPracticeQuestionIds = CET4_READING_PRACTICE_QUESTIONS.map((question) => question.id);
     const listeningPracticeQuestionIds = CET4_LISTENING_PRACTICE_QUESTIONS.map((question) => question.id);
     const degreeQuestionIds = [
       ...DEGREE_ENGLISH_MOCK_EXAM.vocabularyStructure.map((question) => question.id),
@@ -100,6 +115,7 @@ describe('CET-4 syllabus-aligned question bank coverage', () => {
     expect(new Set(passageIds).size).toBe(passageIds.length);
     expect(new Set(readingQuestionIds).size).toBe(readingQuestionIds.length);
     expect(new Set(mockQuestionIds).size).toBe(mockQuestionIds.length);
+    expect(new Set(readingPracticeQuestionIds).size).toBe(readingPracticeQuestionIds.length);
     expect(new Set(listeningPracticeQuestionIds).size).toBe(listeningPracticeQuestionIds.length);
     expect(new Set(degreeQuestionIds).size).toBe(degreeQuestionIds.length);
   });
