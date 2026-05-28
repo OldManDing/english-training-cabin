@@ -525,12 +525,19 @@ test('staged mock exam covers CET-4 modules and persists score evidence', async 
   await page.getByTestId('mock-writing-answer').fill(
     'Consistent practice is useful because students can receive feedback and improve step by step. For example, I write a short paragraph every day and review grammar mistakes after class.',
   );
-  for (const question of [...CET4_MOCK_EXAM.listening.questions, ...CET4_MOCK_EXAM.reading.questions]) {
+  await page.getByTestId('mock-section-listening').click();
+  for (const question of CET4_MOCK_EXAM.listening.questions) {
     await page.getByTestId(`mock-choice-${question.id}-${question.correctAnswer}`).click();
   }
+  await page.getByTestId('mock-section-reading').click();
+  for (const question of CET4_MOCK_EXAM.reading.questions) {
+    await page.getByTestId(`mock-choice-${question.id}-${question.correctAnswer}`).click();
+  }
+  await page.getByTestId('mock-section-translation').click();
   await page.getByTestId('mock-translation-answer').fill(
     'More and more college students use digital tools to learn English. Effective tools should not only give answers, but also help students find mistakes, actively recall knowledge and review at the right time.',
   );
+  await page.getByTestId('mock-section-review').click();
   await page.getByTestId('mock-exam-submit').click();
   await expect(page.getByTestId('mock-exam-result')).toBeVisible();
   await page.getByTestId('mock-exam-persist').click();
