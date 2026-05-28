@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
@@ -340,28 +341,31 @@ export default function MockExam({ onBack, onComplete }: MockExamProps) {
 
         {!result && (
           <section className="rounded-[2rem] border border-[#cfe6f2] bg-white/85 p-4 shadow-sm sm:p-5">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div>
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px_360px] xl:items-center">
+              <div className="min-w-0">
                 <div className="text-sm font-black text-[#003178]">模考规则：按正式卷顺序推进，最后统一提交评分</div>
                 <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
                   单项练习可以随时返回修改；阶段模考报告只在写作、听力、阅读、翻译全部完成后生成，避免半套卷污染提分证据。
                 </p>
               </div>
-              <label className="flex min-w-[220px] flex-col gap-1 text-xs font-black text-[#003178]">
+              <label className="flex min-w-0 flex-col gap-1 text-xs font-black text-[#003178]">
                 选择模拟卷
-                <select
-                  value={selectedPaperId}
-                  onChange={(event) => selectPaper(event.target.value)}
-                  className="min-h-11 rounded-2xl border border-[#cfe6f2] bg-white px-3 text-sm font-black text-[#071e27] outline-none focus:ring-2 focus:ring-[#003178]/20"
-                >
-                  {CET4_MOCK_EXAM_BANK.map((item, index) => (
-                    <option key={item.id} value={item.id}>
-                      {`第 ${index + 1} 套：${item.title}`}
-                    </option>
-                  ))}
-                </select>
+                <div className="ui-select-shell">
+                  <select
+                    value={selectedPaperId}
+                    onChange={(event) => selectPaper(event.target.value)}
+                    className="ui-select"
+                  >
+                    {CET4_MOCK_EXAM_BANK.map((item, index) => (
+                      <option key={item.id} value={item.id}>
+                        {`第 ${index + 1} 套：${item.title}`}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="ui-select-icon" />
+                </div>
               </label>
-              <div className="grid grid-cols-4 gap-1 text-center text-[10px] font-black text-slate-500 sm:min-w-[360px]">
+              <div className="grid grid-cols-4 gap-1 text-center text-[10px] font-black text-slate-500">
                 {sections.filter((section) => section.id !== 'review').map((section, index) => (
                   <button
                     key={`flow-${section.id}`}
@@ -477,11 +481,15 @@ export default function MockExam({ onBack, onComplete }: MockExamProps) {
                   type="button"
                   data-testid="mock-exam-submit"
                   onClick={submitMockExam}
-                  disabled={!canSubmit}
-                  className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#003178] px-5 text-sm font-black text-white hover:bg-[#0d47a1] disabled:bg-slate-300 lg:w-auto"
+                  data-incomplete={canSubmit ? undefined : 'true'}
+                  className={`inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-5 text-sm font-black transition lg:w-auto ${
+                    canSubmit
+                      ? 'bg-[#003178] text-white hover:bg-[#0d47a1]'
+                      : 'border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
+                  }`}
                 >
                   <ClipboardCheck className="h-4 w-4" />
-                  提交阶段模考并生成评分
+                  {canSubmit ? '提交阶段模考并生成评分' : '定位未完成模块'}
                 </button>
               </div>
               {!canSubmit && (

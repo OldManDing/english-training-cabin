@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { CET4_VOCABULARY_BANK, VOCABULARY_SESSION_SIZE } from '../../src/data';
-import { CET4_MOCK_EXAM } from '../../src/questionBank';
+import { CET4_MOCK_EXAM, CET4_MOCK_EXAM_BANK } from '../../src/questionBank';
 import { registerAndEnterApp, registerApiAccount } from './helpers/auth';
 
 async function answerOnboardingDiagnostic(page: Page) {
@@ -335,8 +335,11 @@ test('onboarding diagnostic persists the initial ability portrait before enterin
   await page.reload();
 
   await page.getByRole('button', { name: '入门能力诊断' }).click();
+  await expect(page.getByText('诊断、训练计划和题库都会按目标考试过滤')).toBeVisible();
+  await expect(page.getByTestId('diagnostic-exam-select')).toHaveValue('cet4');
   await page.getByRole('button', { name: '开始诊断' }).click();
   await expect(page.getByRole('heading', { name: '学习目标设置' })).toBeVisible();
+  await expect(page.getByText('当前题库：大学英语四级')).toBeVisible();
   await page.getByRole('button', { name: '上一步' }).click();
   await expect(page.getByRole('heading', { name: /入门诊断/ })).toBeVisible();
   await page.getByRole('button', { name: '开始诊断' }).click();
@@ -378,6 +381,7 @@ test('onboarding diagnostic persists the initial ability portrait before enterin
   });
 
   expect(result.goal).toMatchObject({
+    examId: 'cet4',
     targetScore: 550,
     dailyMinutes: 45,
   });
@@ -389,6 +393,34 @@ test('onboarding diagnostic persists the initial ability portrait before enterin
     score: 42,
     evidenceCount: 1,
   });
+});
+
+test('target exam filters visible question bank and mock exam guides incomplete submissions', async ({ page }) => {
+  await registerAndEnterApp(page, 'mvp-ui-logic');
+  await resetLocalLearningData(page);
+  await page.reload();
+
+  await page.getByRole('button', { name: '专项练习' }).click();
+  await expect(page.getByText('大学英语四级 专项训练工作台')).toBeVisible();
+  await expect(page.getByText('当前只显示 大学英语四级 题目')).toBeVisible();
+  await expect(page.getByText('学位英语结构')).toHaveCount(0);
+
+  await page.getByRole('button', { name: '设置' }).click();
+  await expect(page.getByRole('combobox', { name: '目标考试' })).toHaveValue('cet4');
+  await expect(page.getByRole('combobox', { name: '每日投入时长' })).toHaveValue('60');
+
+  await page.getByRole('button', { name: '阶段模考', exact: true }).click();
+  const paperSelect = page.getByRole('combobox', { name: '选择模拟卷' });
+  await expect(paperSelect).toHaveValue(CET4_MOCK_EXAM_BANK[0].id);
+  await paperSelect.selectOption(CET4_MOCK_EXAM_BANK[1].id);
+  await expect(page.getByRole('heading', { name: CET4_MOCK_EXAM_BANK[1].title })).toBeVisible();
+
+  await page.getByTestId('mock-section-review').click();
+  await expect(page.getByRole('heading', { name: '提交前检查' })).toBeVisible();
+  await expect(page.getByTestId('mock-exam-submit')).toBeEnabled();
+  await expect(page.getByTestId('mock-exam-submit')).toContainText('定位未完成模块');
+  await page.getByTestId('mock-exam-submit').click();
+  await expect(page.getByTestId('mock-writing-answer')).toBeVisible();
 });
 
 test('MVP critical translation flow evaluates feedback and persists learning evidence', async ({ page }) => {

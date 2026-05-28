@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Flag, LayoutGrid, Target, Calendar, Check, Lock, Sparkles, Sliders, ChevronDown, Save, Sparkle, RefreshCw, Database, Download, Upload } from 'lucide-react';
 import { exportLearningData, importLearningData } from '../lib/storage/db';
 import SaasAccountPanel from './SaasAccountPanel';
+import { listPublicExamProfiles } from '../exams/registry';
 
 interface SettingsSectionProps {
   onSave?: (settings: {
@@ -18,6 +19,7 @@ interface SettingsSectionProps {
     whisperNoiseReduction: boolean;
   }) => void | Promise<void>;
   targetScoreLimit?: number;
+  initialExamId?: string;
   initialExamDate?: string;
   initialDailyMinutes?: number;
   onSetScoreLimit?: (score: number) => void;
@@ -25,9 +27,18 @@ interface SettingsSectionProps {
   onDataRestored?: () => Promise<void>;
 }
 
-export default function SettingsSection({ onSave, targetScoreLimit = 550, initialExamDate, initialDailyMinutes, onSetScoreLimit, onTriggerModal, onDataRestored }: SettingsSectionProps) {
+const examOptions = listPublicExamProfiles();
+
+function toSettingsExamType(examId?: string): string {
+  if (examId === 'cet6') return 'cet6';
+  if (examId === 'ielts') return 'ielts';
+  if (examId === 'toefl') return 'toefl';
+  return 'cet4';
+}
+
+export default function SettingsSection({ onSave, targetScoreLimit = 550, initialExamId, initialExamDate, initialDailyMinutes, onSetScoreLimit, onTriggerModal, onDataRestored }: SettingsSectionProps) {
   // Local Settings States matching the screenshot
-  const [examType, setExamType] = useState<string>("CET-4");
+  const [examType, setExamType] = useState<string>(toSettingsExamType(initialExamId));
   const [examDate, setExamDate] = useState<string>(initialExamDate ?? "2026-06-13");
   const [prepareSpeaking, setPrepareSpeaking] = useState<boolean>(true);
   
@@ -50,6 +61,10 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
   useEffect(() => {
     if (initialExamDate) setExamDate(initialExamDate);
   }, [initialExamDate]);
+
+  useEffect(() => {
+    setExamType(toSettingsExamType(initialExamId));
+  }, [initialExamId]);
 
   useEffect(() => {
     if (initialDailyMinutes) setDailyTargetMinutes(initialDailyMinutes);
@@ -235,12 +250,21 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                     <select
                       value={examType}
                       onChange={(e) => setExamType(e.target.value)}
-                      className="w-full text-xs font-bold rounded-xl border border-[#c3c6d4] px-4 py-3 bg-[#f8fafc] text-[#003178] appearance-none focus:outline-none focus:ring-1 focus:ring-[#003178] cursor-pointer"
+                      className="ui-select"
+                      aria-label="目标考试"
                     >
-                      <option value="CET-4">CET-4 (四级核心能力训练)</option>
-                      <option value="CET-6" disabled>CET-6 (规划中，当前版本暂未开放)</option>
+                      {examOptions.map((exam) => (
+                        <option
+                          key={exam.id}
+                          value={exam.id}
+                          disabled={exam.routeAvailability !== 'trainable'}
+                        >
+                          {exam.name}
+                          {exam.routeAvailability === 'trainable' ? ' · 已开放训练闭环' : ' · 规划中'}
+                        </option>
+                      ))}
                     </select>
-                    <ChevronDown className="h-4 w-4 absolute right-3.5 top-3.5 text-[#434652] pointer-events-none" />
+                    <ChevronDown className="ui-select-icon" />
                   </div>
                 </div>
 
@@ -375,14 +399,15 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                     <select
                       value={dailyTargetMinutes}
                       onChange={(e) => setDailyTargetMinutes(parseInt(e.target.value))}
-                      className="w-full text-xs font-bold rounded-xl border border-[#c3c6d4] px-4 py-3 bg-[#f8fafc] text-[#003178] appearance-none focus:outline-none focus:ring-1 focus:ring-[#003178] cursor-pointer"
+                      className="ui-select"
+                      aria-label="每日投入时长"
                     >
                       <option value="30">30 分钟 (轻量保持)</option>
                       <option value="45">45 分钟 (主力冲刺流)</option>
                       <option value="60">60 分钟 (稳定提升)</option>
                       <option value="90">90 分钟 (高强度冲刺)</option>
                     </select>
-                    <ChevronDown className="h-4 w-4 absolute right-3.5 top-3.5 text-[#434652] pointer-events-none" />
+                    <ChevronDown className="ui-select-icon" />
                   </div>
                 </div>
 

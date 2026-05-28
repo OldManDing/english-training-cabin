@@ -236,9 +236,9 @@ export function scoreDiagnosticAnswers(answers: DiagnosticAnswerMap): Diagnostic
   });
 }
 
-function buildSkillProfiles(details: DiagnosticScoreDetail[], completedAt: string): SkillProfile[] {
+function buildSkillProfiles(details: DiagnosticScoreDetail[], completedAt: string, examId: string): SkillProfile[] {
   return details.map((detail) => ({
-    id: `cet4-${detail.skillArea}-diagnostic`,
+    id: `${examId}-${detail.skillArea}-diagnostic`,
     skillArea: detail.skillArea,
     subSkillId: detail.subSkillId,
     score: detail.score,
@@ -253,6 +253,7 @@ function buildAttempt(params: {
   item: DiagnosticItem;
   detail: DiagnosticScoreDetail;
   answer: string;
+  examId: string;
   elapsedSeconds: number;
   createdAt: string;
 }): Attempt {
@@ -268,7 +269,7 @@ function buildAttempt(params: {
     id: makeId(`attempt-${params.item.skillArea}`),
     sessionId: params.sessionId,
     questionId: params.item.id,
-    examId: 'cet4',
+    examId: params.examId,
     moduleId: params.item.skillArea,
     questionTypeId: params.item.subSkillId,
     answer: params.answer,
@@ -285,6 +286,7 @@ function buildReviewItem(params: {
   item: DiagnosticItem;
   attempt: Attempt;
   detail: DiagnosticScoreDetail;
+  examId: string;
   createdAt: string;
 }): ReviewItem | null {
   if (params.detail.score >= 70 && params.detail.mistakeReasons.length === 0) return null;
@@ -300,7 +302,7 @@ function buildReviewItem(params: {
     daysAgo: 0,
     targetType: 'question',
     targetId: params.item.id,
-    examId: 'cet4',
+    examId: params.examId,
     moduleId: params.item.skillArea,
     skillArea: params.item.skillArea,
     masteryScore: Math.max(30, params.detail.score),
@@ -315,11 +317,13 @@ function buildReviewItem(params: {
 
 export function buildOnboardingDiagnosticReport(input: {
   answers: DiagnosticAnswerMap;
+  examId?: string;
   targetScore: number;
   dailyMinutes: number;
   startedAt: string;
   completedAt?: string;
 }): OnboardingDiagnosticReport {
+  const examId = input.examId ?? 'cet4';
   const completedAt = input.completedAt ?? new Date().toISOString();
   const startedAtMs = new Date(input.startedAt).getTime();
   const elapsedSeconds = Number.isFinite(startedAtMs)
@@ -335,6 +339,7 @@ export function buildOnboardingDiagnosticReport(input: {
       item,
       detail,
       answer: input.answers[item.id] ?? '',
+      examId,
       elapsedSeconds: elapsedPerItem,
       createdAt: completedAt,
     });
@@ -342,16 +347,16 @@ export function buildOnboardingDiagnosticReport(input: {
   const reviewItems = ONBOARDING_DIAGNOSTIC_ITEMS.map((item) => {
     const detail = details.find((candidate) => candidate.itemId === item.id)!;
     const attempt = attempts.find((candidate) => candidate.questionId === item.id)!;
-    return buildReviewItem({ item, attempt, detail, createdAt: completedAt });
+    return buildReviewItem({ item, attempt, detail, examId, createdAt: completedAt });
   }).filter((item): item is ReviewItem => Boolean(item));
-  const skillProfiles = buildSkillProfiles(details, completedAt);
+  const skillProfiles = buildSkillProfiles(details, completedAt, examId);
   const averageScore = Math.round(details.reduce((sum, detail) => sum + detail.score, 0) / Math.max(1, details.length));
   const ranked = [...details].sort((left, right) => left.score - right.score);
 
   const session: PracticeSession = {
     id: sessionId,
     goalId: 'goal-cet4-primary',
-    examId: 'cet4',
+    examId,
     moduleId: 'onboarding',
     modeId: 'diagnostic',
     startedAt: input.startedAt,

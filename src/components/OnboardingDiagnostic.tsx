@@ -5,6 +5,7 @@ import {
   BookOpenCheck,
   Calendar,
   CheckCircle,
+  ChevronDown,
   ChevronRight,
   Clock,
   FilePenLine,
@@ -23,11 +24,13 @@ import {
   OnboardingDiagnosticReport,
   ONBOARDING_DIAGNOSTIC_ITEMS,
 } from '../domain/diagnostic/onboardingDiagnostic';
+import { getExamRegistryEntry, listPublicExamProfiles } from '../exams/registry';
 
 interface OnboardingDiagnosticProps {
   onDismiss: () => void;
   onSetScoreLimit?: (score: number) => void;
   onCompleteDiagnostic?: (result: {
+    examId: string;
     targetScore: number;
     examDate: string;
     dailyMinutes: number;
@@ -53,6 +56,8 @@ const skillIcons: Record<string, React.ReactNode> = {
   speaking: <Mic className="h-4 w-4" />,
 };
 
+const examOptions = listPublicExamProfiles();
+
 function getDaysRemaining(date: string): number {
   const target = new Date(`${date}T00:00:00`);
   if (Number.isNaN(target.getTime())) return 0;
@@ -73,6 +78,7 @@ export default function OnboardingDiagnostic({
   onCompleteDiagnostic,
 }: OnboardingDiagnosticProps) {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [targetExamId, setTargetExamId] = useState<string>('cet4');
   const [targetScore, setTargetScore] = useState<number>(550);
   const [countdownDate, setCountdownDate] = useState<string>('2026-06-13');
   const [dailyMinutes, setDailyMinutes] = useState<number>(45);
@@ -86,6 +92,9 @@ export default function OnboardingDiagnostic({
   const answeredCount = ONBOARDING_DIAGNOSTIC_ITEMS.filter((item) => (answers[item.id] ?? '').trim().length > 0).length;
   const canSubmitDiagnostic = answeredCount === ONBOARDING_DIAGNOSTIC_ITEMS.length && !isSaving;
   const daysRemaining = getDaysRemaining(countdownDate);
+  const selectedExam = getExamRegistryEntry(targetExamId) ?? getExamRegistryEntry('cet4')!;
+  const selectedExamName = selectedExam.profile.name;
+  const selectedExamIsTrainable = selectedExam.routeAvailability === 'trainable';
   const diagnosticMinutes = Math.max(8, Math.round(dailyMinutes * 0.25));
   const practiceMinutes = Math.max(12, Math.round(dailyMinutes * 0.45));
   const reviewMinutes = Math.max(6, dailyMinutes - diagnosticMinutes - practiceMinutes);
@@ -99,6 +108,11 @@ export default function OnboardingDiagnostic({
       window.speechSynthesis?.cancel();
     };
   }, []);
+
+  useEffect(() => {
+    const defaultDate = selectedExam.defaultExamDate;
+    if (defaultDate) setCountdownDate(defaultDate);
+  }, [selectedExam.defaultExamDate]);
 
   const speakDiagnosticContext = (itemId: string, text: string) => {
     if (!('speechSynthesis' in window)) {
@@ -127,6 +141,10 @@ export default function OnboardingDiagnostic({
   };
 
   const beginQuestions = () => {
+    if (!selectedExamIsTrainable) {
+      setSaveError('当前目标考试还没有开放诊断题库，请先选择 CET-4。');
+      return;
+    }
     setStartedAt(new Date().toISOString());
     setStep(3);
   };
@@ -135,6 +153,7 @@ export default function OnboardingDiagnostic({
     if (!canSubmitDiagnostic) return;
     const diagnosticReport = buildOnboardingDiagnosticReport({
       answers,
+      examId: targetExamId,
       targetScore,
       dailyMinutes,
       startedAt,
@@ -146,6 +165,7 @@ export default function OnboardingDiagnostic({
     try {
       if (onCompleteDiagnostic) {
         await onCompleteDiagnostic({
+          examId: targetExamId,
           targetScore,
           examDate: countdownDate,
           dailyMinutes,
@@ -210,14 +230,43 @@ export default function OnboardingDiagnostic({
                 这一步不再用自评冒充诊断。系统会让你完成阅读、听力转写、翻译、写作、口语表达初筛 5 个小任务，
                 根据答案规则评分，并把 session、attempt、review item 和 skill profile 写入本地学习证据。
               </p>
+              <div className="mt-6 rounded-3xl border border-[#cfe6f2] bg-[#f7fbff] p-4">
+                <label className="block text-sm font-black text-[#003178]" htmlFor="diagnostic-exam-select">
+                  先选择目标考试
+                </label>
+                <p className="mt-1 text-xs font-bold leading-5 text-slate-500">
+                  诊断、训练计划和题库都会按目标考试过滤。当前完整训练闭环只开放 CET-4，其他考试保留为扩展路线。
+                </p>
+                <div className="ui-select-shell mt-3">
+                  <select
+                    id="diagnostic-exam-select"
+                    data-testid="diagnostic-exam-select"
+                    value={targetExamId}
+                    onChange={(event) => setTargetExamId(event.target.value)}
+                    className="ui-select"
+                  >
+                    {examOptions.map((exam) => (
+                      <option
+                        key={exam.id}
+                        value={exam.id}
+                        disabled={exam.routeAvailability !== 'trainable'}
+                      >
+                        {exam.name}
+                        {exam.routeAvailability === 'trainable' ? ' · 已开放诊断题库' : ' · 题库建设中'}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="ui-select-icon" />
+                </div>
+              </div>
               <div className="mt-6 grid gap-3 sm:grid-cols-3">
                 {[
+                  [selectedExamName, '当前目标'],
                   ['5 项', '真实任务'],
                   ['规则评分', '可解释弱项'],
-                  ['自动写入', '今日计划依据'],
                 ].map(([value, label]) => (
                   <div key={label} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                    <div className="text-2xl font-black text-[#003178]">{value}</div>
+                    <div className="text-xl font-black text-[#003178] sm:text-2xl">{value}</div>
                     <div className="mt-1 text-xs font-bold text-slate-500">{label}</div>
                   </div>
                 ))}
@@ -225,7 +274,8 @@ export default function OnboardingDiagnostic({
               <button
                 type="button"
                 onClick={() => setStep(2)}
-                className="mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#1b6d24] px-6 text-sm font-black text-white shadow-md transition hover:bg-emerald-700 sm:w-auto"
+                disabled={!selectedExamIsTrainable}
+                className="mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#1b6d24] px-6 text-sm font-black text-white shadow-md transition enabled:hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
               >
                 <Play className="h-4 w-4 fill-white" />
                 开始诊断
@@ -236,10 +286,10 @@ export default function OnboardingDiagnostic({
               <h2 className="mb-4 text-lg font-black text-[#003178]">验收口径</h2>
               <div className="space-y-3">
                 {[
+                  `目标考试先锁定为 ${selectedExamName}，诊断题和后续题库只取对应考试范围。`,
                   '必须有可作答题目，不能只点“生成”。',
                   '必须按答案产生不同分数和弱项排序。',
                   '必须能返回上一步修改目标或答案。',
-                  '必须留下 attempts 与复习项，今日任务才有真实依据。',
                 ].map((item) => (
                   <div key={item} className="flex gap-3 rounded-2xl bg-white p-3 text-sm font-bold text-slate-700">
                     <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
@@ -263,6 +313,14 @@ export default function OnboardingDiagnostic({
               </p>
 
               <div className="mt-7 space-y-7">
+                <div className="rounded-3xl border border-[#cfe6f2] bg-[#f7fbff] p-4">
+                  <div className="text-xs font-black text-[#003178]">目标考试已锁定</div>
+                  <div className="mt-1 text-2xl font-black text-[#003178]">{selectedExamName}</div>
+                  <p className="mt-2 text-xs font-bold leading-5 text-slate-500">
+                    本次诊断会使用 {selectedExamName} 的题型权重与内置原创模拟题。切换考试需要回到上一步重新确认。
+                  </p>
+                </div>
+
                 <div>
                   <label className="mb-3 block text-sm font-black text-slate-700">目标分数</label>
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -332,6 +390,9 @@ export default function OnboardingDiagnostic({
 
             <aside className="rounded-[2rem] border border-[#cfe6f2] bg-white p-5 shadow-sm">
               <h3 className="text-lg font-black text-[#071e27]">今日预算预览</h3>
+              <div className="mt-3 rounded-2xl bg-[#eef7fc] px-4 py-3 text-sm font-black text-[#003178]">
+                当前题库：{selectedExamName}
+              </div>
               <div className="mt-5 space-y-3">
                 {[
                   ['入门诊断', diagnosticMinutes, 'bg-blue-600'],
@@ -367,7 +428,7 @@ export default function OnboardingDiagnostic({
                   <div>
                     <h2 className="text-2xl font-black text-[#003178]">真实小题诊断</h2>
                     <p className="mt-1 text-sm font-semibold text-slate-500">
-                      请先完成作答。提交后会按答案生成分数、弱项和复习项。
+                      当前目标：{selectedExamName}。请先完成作答，提交后会按答案生成分数、弱项和复习项。
                     </p>
                   </div>
                   <div className="rounded-2xl bg-[#003178]/10 px-4 py-2 text-sm font-black text-[#003178]">
@@ -493,7 +554,7 @@ export default function OnboardingDiagnostic({
                 </div>
                 <h2 className="text-3xl font-black text-[#003178]">您的能力画像已生成</h2>
                 <p className="mt-2 text-sm font-semibold text-slate-500">
-                  已写入 {report.attempts.length} 条作答证据、{report.skillProfiles.length} 条能力画像、
+                  当前目标考试：{selectedExamName}。已写入 {report.attempts.length} 条作答证据、{report.skillProfiles.length} 条能力画像、
                   {report.reviewItems.length} 条复习项。今日任务会优先处理最低分弱项。
                 </p>
               </div>

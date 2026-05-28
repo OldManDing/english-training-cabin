@@ -413,18 +413,22 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
               {/* Player control buttons */}
               <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center px-0 sm:px-4 pt-2">
                 {/* Speed dropdown control */}
-                <div className="flex items-center space-x-1.5 bg-white border border-gray-200 px-2.5 py-1 rounded-lg text-[11px] font-bold text-[#434652] shadow-2xs">
-                  <span>速度:</span>
-                  <select
-                    value={audioSpeed}
-                    onChange={(e) => setAudioSpeed(parseFloat(e.target.value))}
-                    className="bg-transparent border-none focus:outline-none text-[#003178] font-bold"
-                  >
-                    <option value="0.8">0.8x</option>
-                    <option value="1.0">1.0x</option>
-                    <option value="1.2">1.2x</option>
-                    <option value="1.5">1.5x</option>
-                  </select>
+                <div className="flex items-center gap-2 text-[11px] font-bold text-[#434652]">
+                  <span className="shrink-0">速度</span>
+                  <div className="ui-select-shell w-28">
+                    <select
+                      value={audioSpeed}
+                      onChange={(e) => setAudioSpeed(parseFloat(e.target.value))}
+                      className="ui-select min-h-9 rounded-xl py-1.5 pl-3 pr-9 text-xs"
+                      aria-label="听力播放速度"
+                    >
+                      <option value="0.8">0.8x</option>
+                      <option value="1.0">1.0x</option>
+                      <option value="1.2">1.2x</option>
+                      <option value="1.5">1.5x</option>
+                    </select>
+                    <ChevronDown className="ui-select-icon right-3" />
+                  </div>
                 </div>
 
                 <div className="flex items-center space-x-4">

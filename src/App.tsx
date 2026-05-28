@@ -35,6 +35,7 @@ import { buildDailyPlan } from './domain/planner/dailyPlan';
 import { buildReviewGateStatus } from './domain/review/reviewGate';
 import { trackTelemetry } from './lib/telemetry';
 import { OnboardingDiagnosticReport } from './domain/diagnostic/onboardingDiagnostic';
+import { getExamRegistryEntry } from './exams/registry';
 
 function getDaysRemaining(examDate?: string): number {
   if (!examDate) return 0;
@@ -135,6 +136,8 @@ function StudyApp() {
   });
   const [speakingScoreChange, setSpeakingScoreChange] = useState<{ from: number; to: number } | undefined>(undefined);
   const examCountdown = getDaysRemaining(activeGoal?.examDate);
+  const activeExamId = activeGoal?.examId ?? 'cet4';
+  const activeExamName = getExamRegistryEntry(activeExamId)?.profile.name ?? 'CET-4';
   const estimatedScore = estimateCetScore(persistedSkillProfiles);
   const abilityEvidenceCount = persistedSkillProfiles.reduce((sum, profile) => sum + profile.evidenceCount, 0);
   const reviewGateStatus = buildReviewGateStatus(persistedReviewItems);
@@ -296,6 +299,7 @@ function StudyApp() {
   };
 
   const handleCompleteDiagnostic = async (result: {
+    examId: string;
     targetScore: number;
     examDate: string;
     dailyMinutes: number;
@@ -305,6 +309,7 @@ function StudyApp() {
   }) => {
     try {
       const goal = await upsertActiveGoal({
+        examId: result.examId,
         targetScore: result.targetScore,
         examDate: result.examDate,
         dailyMinutes: result.dailyMinutes,
@@ -451,6 +456,7 @@ function StudyApp() {
             reviewItemCount={reviewItemCount}
             reviewGateStatus={reviewGateStatus}
             skillProfiles={persistedSkillProfiles}
+            targetExamName={activeExamName}
             strategy={dailyStrategy}
             onStrategyChange={setDailyStrategy}
           />
@@ -465,6 +471,8 @@ function StudyApp() {
             onStartWriting={() => startLearningIfUnlocked('写作训练', () => setSubjectivePracticeMode('writing'))}
             onStartTranslation={() => startLearningIfUnlocked('翻译训练', () => setSubjectivePracticeMode('translation'))}
             onStartMockExam={() => startLearningIfUnlocked('阶段模考', () => setActiveTab('mock'))}
+            examId={activeExamId}
+            examName={activeExamName}
           />
         );
       case 'mock':
@@ -506,6 +514,7 @@ function StudyApp() {
         return (
           <SettingsSection
             targetScoreLimit={targetScoreLimit || 550}
+            initialExamId={activeExamId}
             initialExamDate={activeGoal?.examDate}
             initialDailyMinutes={activeGoal?.dailyMinutes}
             onSave={handleSaveSettings}
@@ -536,6 +545,7 @@ function StudyApp() {
             reviewItemCount={reviewItemCount}
             reviewGateStatus={reviewGateStatus}
             skillProfiles={persistedSkillProfiles}
+            targetExamName={activeExamName}
             strategy={dailyStrategy}
             onStrategyChange={setDailyStrategy}
           />

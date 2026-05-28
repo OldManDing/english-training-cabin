@@ -22,6 +22,7 @@ interface TodayDashboardProps {
   readingProgress: { completed: boolean; score?: number };
   examCountdown?: number;
   targetScore?: number;
+  targetExamName?: string;
   estimatedScore?: number;
   abilityEvidenceCount?: number;
   dailyPlan?: DailyPlan | null;
@@ -46,6 +47,7 @@ export default function TodayDashboard({
   readingProgress,
   examCountdown = 0,
   targetScore = 550,
+  targetExamName = '大学英语四级',
   estimatedScore,
   abilityEvidenceCount = 0,
   dailyPlan,
@@ -303,7 +305,7 @@ export default function TodayDashboard({
                 目标考试
               </span>
               <span className="text-[10px] bg-[#ebf4f9] text-[#003178] border border-[#cfe6f2] px-2 py-0.5 rounded font-black">
-                CET-4
+                {targetExamName}
               </span>
             </div>
             <div className="pt-4 flex items-baseline gap-1">

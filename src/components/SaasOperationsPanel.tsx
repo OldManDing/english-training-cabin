@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Activity,
   CheckCircle2,
+  ChevronDown,
   FileCheck2,
   KeyRound,
   RefreshCw,
@@ -375,15 +376,24 @@ export default function SaasOperationsPanel({ token, account, onStatus }: SaasOp
           </h5>
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-2">
             <input value={contentTitle} onChange={(event) => setContentTitle(event.target.value)} data-testid="saas-content-title" className="lg:col-span-2 rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-3 py-2 text-[10px] font-bold text-[#003178]" placeholder="内容标题" />
-            <select value={contentAssetType} onChange={(event) => setContentAssetType(event.target.value as ContentAsset['assetType'])} className="rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-3 py-2 text-[10px] font-bold text-[#003178]">
-              {Object.entries(assetTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
-            <select value={contentSourceType} onChange={(event) => setContentSourceType(event.target.value as ContentAsset['sourceType'])} className="rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-3 py-2 text-[10px] font-bold text-[#003178]">
-              {Object.entries(sourceTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
-            <select value={contentLicenseStatus} onChange={(event) => setContentLicenseStatus(event.target.value as ContentAsset['licenseStatus'])} className="rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-3 py-2 text-[10px] font-bold text-[#003178]">
-              {Object.entries(licenseStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
+            <div className="ui-select-shell">
+              <select value={contentAssetType} onChange={(event) => setContentAssetType(event.target.value as ContentAsset['assetType'])} className="ui-select min-h-9 rounded-xl py-2 pl-3 pr-8 text-[10px]">
+                {Object.entries(assetTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+              <ChevronDown className="ui-select-icon right-3" />
+            </div>
+            <div className="ui-select-shell">
+              <select value={contentSourceType} onChange={(event) => setContentSourceType(event.target.value as ContentAsset['sourceType'])} className="ui-select min-h-9 rounded-xl py-2 pl-3 pr-8 text-[10px]">
+                {Object.entries(sourceTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+              <ChevronDown className="ui-select-icon right-3" />
+            </div>
+            <div className="ui-select-shell">
+              <select value={contentLicenseStatus} onChange={(event) => setContentLicenseStatus(event.target.value as ContentAsset['licenseStatus'])} className="ui-select min-h-9 rounded-xl py-2 pl-3 pr-8 text-[10px]">
+                {Object.entries(licenseStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+              <ChevronDown className="ui-select-icon right-3" />
+            </div>
           </div>
           <textarea value={contentNotes} onChange={(event) => setContentNotes(event.target.value)} className="w-full rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-3 py-2 text-[10px] font-bold text-[#003178]" rows={2} placeholder="授权说明、来源证据或下架原因" />
           <button type="button" onClick={createContentAsset} disabled={isBusy || contentTitle.length < 2} className="rounded-xl bg-[#003178] px-3 py-2 text-[10px] font-black text-white disabled:bg-gray-400">
@@ -396,9 +406,12 @@ export default function SaasOperationsPanel({ token, account, onStatus }: SaasOp
                   <p className="text-[10px] font-black text-[#003178]">{asset.title}</p>
                   <p className="text-[9.5px] font-bold text-[#434652]">{assetTypeLabels[asset.assetType]} · {sourceTypeLabels[asset.sourceType]} · {licenseStatusLabels[asset.licenseStatus]}</p>
                 </div>
-                <select value={asset.licenseStatus} onChange={(event) => updateContentAsset(asset, event.target.value as ContentAsset['licenseStatus'])} className="rounded-xl border border-[#c3c6d4] bg-white px-3 py-2 text-[10px] font-black text-[#003178]">
-                  {Object.entries(licenseStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                </select>
+                <div className="ui-select-shell sm:w-40">
+                  <select value={asset.licenseStatus} onChange={(event) => updateContentAsset(asset, event.target.value as ContentAsset['licenseStatus'])} className="ui-select min-h-9 rounded-xl py-2 pl-3 pr-8 text-[10px]">
+                    {Object.entries(licenseStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
+                  <ChevronDown className="ui-select-icon right-3" />
+                </div>
               </div>
             ))}
           </div>

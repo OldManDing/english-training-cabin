@@ -25,14 +25,14 @@ import {
   CET4_READING_PRACTICE_QUESTIONS,
   CET4_TRANSLATION_PROMPT_BANK,
   CET4_WRITING_PROMPT_BANK,
-  DEGREE_ENGLISH_MOCK_EXAM,
-  DEGREE_ENGLISH_QUESTION_BANK_COVERAGE,
 } from '../questionBank';
 import { Passage } from '../types';
 
 type PracticeModuleId = 'vocabulary' | 'reading' | 'listening' | 'writing' | 'translation' | 'mock';
 
 interface PracticeHubProps {
+  examId: string;
+  examName: string;
   onStartOnboarding: () => void;
   onStartVocabulary: () => void;
   onStartReading: (passage: Passage) => void;
@@ -91,6 +91,8 @@ const TONES: Record<'blue' | 'green' | 'amber' | 'rose', PracticeTone> = {
 };
 
 export default function PracticeHub({
+  examId,
+  examName,
   onStartOnboarding,
   onStartVocabulary,
   onStartReading,
@@ -101,6 +103,7 @@ export default function PracticeHub({
 }: PracticeHubProps) {
   const [selectedModuleId, setSelectedModuleId] = useState<PracticeModuleId>('vocabulary');
   const [visibleReadingCount, setVisibleReadingCount] = useState(8);
+  const isCet4 = examId === 'cet4';
 
   const readingPassages = useMemo(() => CET4_READING_BANK.map((passage) => ({
     id: passage.id,
@@ -207,13 +210,13 @@ export default function PracticeHub({
             <div className="min-w-0">
               <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-[#003178]/10 px-3 py-1 text-xs font-black text-[#003178]">
                 <LibraryBig className="h-4 w-4" />
-                专项训练工作台
+                {examName} 专项训练工作台
               </div>
               <h2 className="text-2xl font-black leading-tight text-[#003178] sm:text-3xl">
                 专项练习：先选训练目标，再进入可评分练习
               </h2>
               <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
-                专项练习不再把题库、说明和入口混成一屏长列表。先选择要训练的能力，再进入作答、反馈、错因入库和能力画像更新。
+                专项练习只展示当前目标考试题库。先选择要训练的能力，再进入作答、反馈、错因入库和能力画像更新。
               </p>
             </div>
             <button
@@ -241,6 +244,13 @@ export default function PracticeHub({
           </div>
         </header>
 
+        {!isCet4 && (
+          <section className="rounded-[2rem] border border-amber-200 bg-amber-50 p-5 text-sm font-bold leading-6 text-amber-900 shadow-sm">
+            当前目标考试「{examName}」还处于题库建设阶段，暂不开放专项练习。请在设置或入门诊断中切回 CET-4 后继续训练。
+          </section>
+        )}
+
+        {isCet4 && (
         <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3" aria-label="专项练习模块">
           {modules.map((module, index) => {
             const Icon = module.Icon;
@@ -255,7 +265,8 @@ export default function PracticeHub({
                 <button
                   type="button"
                   onClick={() => setSelectedModuleId(module.id)}
-                  className="w-full text-left"
+                  aria-pressed={isActive}
+                  className="w-full rounded-2xl text-left focus:outline-none focus:ring-2 focus:ring-white/70"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-black ${
@@ -265,7 +276,7 @@ export default function PracticeHub({
                       Step {index + 1}
                     </span>
                     <span className={`text-[11px] font-black ${isActive ? 'text-white/80' : 'text-slate-400'}`}>
-                      {module.duration}
+                      {isActive ? '已选择' : module.duration}
                     </span>
                   </div>
                   <h3 className={`mt-3 text-lg font-black ${isActive ? 'text-white' : 'text-[#071e27]'}`}>{module.label}</h3>
@@ -293,7 +304,9 @@ export default function PracticeHub({
             );
           })}
         </section>
+        )}
 
+        {isCet4 && (
         <section className="grid grid-cols-1 gap-4 lg:grid-cols-[1.15fr_0.85fr]">
           <div className="rounded-[2rem] border border-[#cfe6f2] bg-white p-5 shadow-sm sm:p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -352,8 +365,9 @@ export default function PracticeHub({
             </div>
           </aside>
         </section>
+        )}
 
-        {selectedModule.id === 'reading' && (
+        {isCet4 && selectedModule.id === 'reading' && (
           <section className="rounded-[2rem] border border-[#cfe6f2] bg-white p-5 shadow-sm sm:p-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
@@ -406,6 +420,7 @@ export default function PracticeHub({
           </section>
         )}
 
+        {isCet4 && (
         <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -432,23 +447,29 @@ export default function PracticeHub({
               <div>
                 <span className="inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">
                   <ShieldCheck className="h-3.5 w-3.5" />
-                  学位英语结构
+                  题库过滤规则
                 </span>
-                <h3 className="mt-3 text-lg font-black text-[#071e27]">去年大纲已转成可验证结构</h3>
+                <h3 className="mt-3 text-lg font-black text-[#071e27]">当前只显示 {examName} 题目</h3>
               </div>
               <p className="text-xs font-bold leading-5 text-slate-500">
-                不考听力 · {DEGREE_ENGLISH_MOCK_EXAM.totalQuestionCount} 题 · 120 分钟
+                切换考试后需要重新诊断并加载对应题库
               </p>
             </div>
-            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {DEGREE_ENGLISH_QUESTION_BANK_COVERAGE.slice(0, 6).map((item) => (
-                <div key={`degree-${item.moduleId}-${item.questionTypeId}`}>
-                  <CoverageCard item={item} tone="green" />
+            <div className="mt-4 space-y-3">
+              {[
+                ['诊断', '入门诊断先确定目标考试，后续能力画像按 examId 写入。'],
+                ['专项', '阅读、听力、写作、翻译与词汇入口只使用 CET-4 内置原创模拟题。'],
+                ['模考', '阶段模考只使用 CET-4 标准结构卷，避免跨考试污染提分证据。'],
+              ].map(([title, detail]) => (
+                <div key={title} className="rounded-2xl border border-emerald-100 bg-emerald-50/55 p-3">
+                  <div className="text-xs font-black text-emerald-800">{title}</div>
+                  <p className="mt-1 text-[11px] font-semibold leading-5 text-slate-600">{detail}</p>
                 </div>
               ))}
             </div>
           </div>
         </section>
+        )}
       </div>
     </div>
   );
