@@ -20,7 +20,14 @@ import AuthGate from './components/AuthGate';
 import MockExam from './components/MockExam';
 import { ActiveTab, DailyPlan, Passage, PracticeCompletionReport, ReviewCompletionEvidence, ReviewItem, SkillProfile, StudyGoal } from './types';
 import { CET4_VOCABULARY_BANK, INITIAL_PASSAGE } from './data';
-import { CET4_QUESTION_BANK_COVERAGE, CET4_READING_BANK } from './questionBank';
+import {
+  CET4_QUESTION_BANK_COVERAGE,
+  CET4_READING_BANK,
+  CET4_TRANSLATION_PROMPT_BANK,
+  CET4_WRITING_PROMPT_BANK,
+  DEGREE_ENGLISH_MOCK_EXAM,
+  DEGREE_ENGLISH_QUESTION_BANK_COVERAGE,
+} from './questionBank';
 import { Sparkles, BookOpen, ChevronRight, GraduationCap, X, Volume2, LibraryBig } from 'lucide-react';
 import {
   completeReviewItem,
@@ -480,7 +487,9 @@ function StudyApp() {
                     </h2>
                     <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
                       当前内置原创 CET-4 模拟材料：阅读 {practicePassages.length} 组、核心词汇 {CET4_VOCABULARY_BANK.length} 个、
-                      题型覆盖 {CET4_QUESTION_BANK_COVERAGE.length} 类，并提供阶段模考闭环。所有练习都会写入本地能力画像和复习队列。
+                      写作 {CET4_WRITING_PROMPT_BANK.length} 题、翻译 {CET4_TRANSLATION_PROMPT_BANK.length} 题、
+                      题型覆盖 {CET4_QUESTION_BANK_COVERAGE.length} 类，并提供阶段模考闭环。另按 2025 学位英语大纲补齐
+                      {' '}{DEGREE_ENGLISH_MOCK_EXAM.totalQuestionCount} 题、{DEGREE_ENGLISH_QUESTION_BANK_COVERAGE.length} 类无听力考试结构。所有练习都会写入本地能力画像和复习队列。
                     </p>
                   </div>
                   <button
@@ -500,12 +509,12 @@ function StudyApp() {
                     <Volume2 className="h-3.5 w-3.5" />
                     词汇 · 听音识别
                   </span>
-                  <h3 className="mt-3 text-lg font-black text-[#071e27]">CET-4 核心词汇听音练习</h3>
+                  <h3 className="mt-3 text-lg font-black text-[#071e27]">CET-4 / 学位英语核心词汇听音练习</h3>
                   <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-                    播放单词和例句，完成词义辨析；低信心或错误项会进入主动回忆复习。
+                    CET-4 与学位英语高频词合并训练；播放单词和例句，完成词义辨析，低信心或错误项会进入主动回忆复习。
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold text-slate-500">
-                    <span className="rounded-full bg-slate-100 px-3 py-1">{CET4_VOCABULARY_BANK.length} 个基础词</span>
+                    <span className="rounded-full bg-slate-100 px-3 py-1">{CET4_VOCABULARY_BANK.length} 个大纲词</span>
                     <span className="rounded-full bg-slate-100 px-3 py-1">语音播报</span>
                     <span className="rounded-full bg-slate-100 px-3 py-1">语块例句</span>
                   </div>
@@ -545,7 +554,7 @@ function StudyApp() {
                   </span>
                   <h3 className="mt-3 text-lg font-black text-[#071e27]">补齐应试闭环</h3>
                   <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-                    一次完成写作、听力、阅读、翻译四个模块，自动生成分项分数、错因复习和能力画像，不再只做零散专项。
+                    CET-4 模考一次完成写作、听力、阅读、翻译四个模块；学位英语结构已按“不考听力、67题、120分钟”入库，避免训练路径偏题。
                   </p>
                   <button
                     type="button"
@@ -554,6 +563,39 @@ function StudyApp() {
                   >
                     开始阶段模考
                   </button>
+                </div>
+              </section>
+
+              <section className="rounded-[2rem] border border-emerald-200 bg-white p-5 shadow-sm sm:p-6">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <span className="inline-flex rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">
+                      2025 学位英语大纲
+                    </span>
+                    <h3 className="mt-3 text-lg font-black text-[#071e27]">去年大纲已转成可验证题库结构</h3>
+                  </div>
+                  <p className="text-xs font-bold leading-5 text-slate-500">
+                    线下闭卷 · 不考听力 · 67 题 · 100 分 · 120 分钟
+                  </p>
+                </div>
+                <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+                  {DEGREE_ENGLISH_QUESTION_BANK_COVERAGE.map((item) => (
+                    <div key={`degree-${item.moduleId}-${item.questionTypeId}`} className="rounded-2xl border border-emerald-100 bg-emerald-50/55 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-black text-emerald-800">{item.name}</div>
+                          <div className="mt-1 text-[10px] font-bold text-slate-500">{item.trainingRoute}</div>
+                        </div>
+                        <span className="rounded-full bg-white px-2 py-1 text-[10px] font-black text-slate-600">
+                          {item.builtInCount}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex justify-between text-[10px] font-bold text-slate-500">
+                        <span>大纲结构 {item.officialCount}</span>
+                        <span>{item.durationMinutes}m</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </section>
 
@@ -630,10 +672,10 @@ function StudyApp() {
                       写作 · AI 结构化反馈
                     </span>
                     <h3 className="font-extrabold text-[#071e27] text-base group-hover:text-[#003178] transition-colors mt-3">
-                      短文写作：主动练习的重要性
+                      短文写作：提纲、情景与观点表达
                     </h3>
                     <p className="text-xs text-gray-400 font-semibold mt-1.5">
-                      30 分钟 · 论点结构、语法、词汇升级
+                      {CET4_WRITING_PROMPT_BANK.length} 题 · 论点结构、语法、词汇升级
                     </p>
                   </div>
                   <button
@@ -650,10 +692,10 @@ function StudyApp() {
                       翻译 · 中译英段落
                     </span>
                     <h3 className="font-extrabold text-[#071e27] text-base group-hover:text-[#003178] transition-colors mt-3">
-                      段落翻译：可再生能源与城市发展
+                      段落翻译：中国文化与社会发展
                     </h3>
                     <p className="text-xs text-gray-400 font-semibold mt-1.5">
-                      30 分钟 · 中文干扰、搭配、时态语态
+                      {CET4_TRANSLATION_PROMPT_BANK.length} 题 · 中国文化、历史、社会发展
                     </p>
                   </div>
                   <button

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { ArrowLeft, CheckCircle2, FileText, Languages, Loader2, Sparkles } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ArrowLeft, CheckCircle2, FileText, Languages, Loader2, RefreshCw, Sparkles } from 'lucide-react';
 import { PracticeCompletionReport } from '../types';
 import { buildSubjectivePracticeReport, SubjectivePracticeAnalysis } from '../domain/practice/reports';
 import { trackTelemetry } from '../lib/telemetry';
 import { apiRequest } from '../lib/api';
+import { CET4_TRANSLATION_PROMPT_BANK, CET4_WRITING_PROMPT_BANK } from '../questionBank';
 
 type SubjectiveMode = 'writing' | 'translation';
 
@@ -18,7 +19,6 @@ const TASKS: Record<SubjectiveMode, {
   label: string;
   plannedMinutes: number;
   questionTypeId: string;
-  prompt: string;
   placeholder: string;
 }> = {
   writing: {
@@ -26,7 +26,6 @@ const TASKS: Record<SubjectiveMode, {
     label: 'Writing',
     plannedMinutes: 30,
     questionTypeId: 'short-essay',
-    prompt: 'Directions: For this part, you are allowed 30 minutes to write a short essay on the importance of active practice in language learning. You should write at least 120 words but no more than 180 words.',
     placeholder: 'Write your essay here. Try to include a clear topic sentence, one example, and a conclusion.',
   },
   translation: {
@@ -34,18 +33,34 @@ const TASKS: Record<SubjectiveMode, {
     label: 'Translation',
     plannedMinutes: 30,
     questionTypeId: 'paragraph-translation',
-    prompt: '请将下面这段中文翻译成英文：近年来，可再生能源在城市发展中发挥着越来越重要的作用。它不仅有助于减少污染，也推动了绿色生活方式的普及。',
     placeholder: 'Translate the paragraph here. Focus on English sentence structure rather than word-by-word translation.',
   },
 };
 
 export default function SubjectiveTraining({ mode, onBack, onComplete }: SubjectiveTrainingProps) {
   const task = TASKS[mode];
+  const promptBank = mode === 'writing' ? CET4_WRITING_PROMPT_BANK : CET4_TRANSLATION_PROMPT_BANK;
+  const [taskIndex, setTaskIndex] = useState(0);
   const [startedAt] = useState(() => new Date().toISOString());
   const [answer, setAnswer] = useState('');
   const [analysis, setAnalysis] = useState<SubjectivePracticeAnalysis | null>(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const promptItem = promptBank[taskIndex % promptBank.length];
+
+  useEffect(() => {
+    setTaskIndex(0);
+    setAnswer('');
+    setAnalysis(null);
+    setErrorMessage(null);
+  }, [mode]);
+
+  const handleNextPrompt = () => {
+    setTaskIndex((current) => (current + 1) % promptBank.length);
+    setAnswer('');
+    setAnalysis(null);
+    setErrorMessage(null);
+  };
 
   const handleEvaluate = async () => {
     setErrorMessage(null);
@@ -57,7 +72,7 @@ export default function SubjectiveTraining({ mode, onBack, onComplete }: Subject
         method: 'POST',
         body: JSON.stringify({
           moduleId: mode,
-          prompt: task.prompt,
+          prompt: promptItem.prompt,
           answer,
         }),
       });
@@ -85,7 +100,7 @@ export default function SubjectiveTraining({ mode, onBack, onComplete }: Subject
       modeId: `${mode}-practice`,
       plannedMinutes: task.plannedMinutes,
       startedAt,
-      prompt: task.prompt,
+      prompt: promptItem.prompt,
       answer,
       analysis,
     });
@@ -113,7 +128,7 @@ export default function SubjectiveTraining({ mode, onBack, onComplete }: Subject
           </div>
         </div>
         <span className="rounded-full border border-[#cfe6f2] bg-[#eef7fc] px-3 py-1 text-xs font-black text-[#003178]">
-          {task.plannedMinutes} 分钟
+          {task.plannedMinutes} 分钟 · 题库 {taskIndex + 1}/{promptBank.length}
         </span>
       </header>
 
@@ -124,7 +139,29 @@ export default function SubjectiveTraining({ mode, onBack, onComplete }: Subject
               <Sparkles className="h-3.5 w-3.5" />
               任务说明
             </span>
-            <p className="mt-4 whitespace-pre-line text-sm font-semibold leading-relaxed text-slate-700">{task.prompt}</p>
+            <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-xs font-black text-[#003178]">{promptItem.title}</div>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {promptItem.syllabusFocus.map((focus) => (
+                      <span key={focus} className="rounded-full bg-white px-2 py-1 text-[10px] font-black text-slate-500">
+                        {focus}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleNextPrompt}
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-[#cfe6f2] bg-white px-3 text-xs font-black text-[#003178] transition hover:bg-[#eef7fc]"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  换一道题
+                </button>
+              </div>
+              <p className="whitespace-pre-line text-sm font-semibold leading-relaxed text-slate-700">{promptItem.prompt}</p>
+            </div>
           </div>
 
           <label className="flex-1 min-h-[320px] flex flex-col gap-2">

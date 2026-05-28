@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, CheckCircle2, ChevronRight, Headphones, Volume2, XCircle } from 'lucide-react';
-import { VocabularyPracticeItem } from '../data';
+import { VocabularyPracticeItem, VOCABULARY_SESSION_SIZE } from '../data';
 import { PracticeCompletionReport } from '../types';
 import { buildChoicePracticeReport } from '../domain/practice/reports';
 
@@ -14,6 +14,7 @@ type Choice = 'A' | 'B' | 'C' | 'D';
 type Confidence = 'sure' | 'not_sure' | 'guess';
 
 export default function VocabularyTraining({ items, onBack, onComplete }: VocabularyTrainingProps) {
+  const [packIndex, setPackIndex] = useState(0);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [selectedOpt, setSelectedOpt] = useState<Choice | null>(null);
   const [confidence, setConfidence] = useState<Confidence | null>(null);
@@ -22,8 +23,22 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
   const [answers, setAnswers] = useState<({ selected: Choice; correct: boolean; confidence: Confidence })[]>([]);
   const [startedAt] = useState(() => new Date().toISOString());
 
-  const currentItem = items[currentIdx];
-  const progress = Math.round(((currentIdx + (isSubmitted ? 1 : 0)) / items.length) * 100);
+  const packCount = Math.max(1, Math.ceil(items.length / VOCABULARY_SESSION_SIZE));
+  const sessionItems = items.slice(
+    packIndex * VOCABULARY_SESSION_SIZE,
+    (packIndex + 1) * VOCABULARY_SESSION_SIZE,
+  );
+  const currentItem = sessionItems[currentIdx] ?? sessionItems[0];
+  const progress = Math.round(((currentIdx + (isSubmitted ? 1 : 0)) / sessionItems.length) * 100);
+
+  const switchPack = (nextPackIndex: number) => {
+    setPackIndex(nextPackIndex);
+    setCurrentIdx(0);
+    setAnswers([]);
+    setSelectedOpt(null);
+    setConfidence(null);
+    setIsSubmitted(false);
+  };
 
   useEffect(() => {
     setSelectedOpt(null);
@@ -62,16 +77,16 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
 
   const finish = (finalAnswers: typeof answers) => {
     const correctCount = finalAnswers.filter((answer) => answer?.correct).length;
-    const score = Math.round((correctCount / Math.max(1, items.length)) * 100);
+    const score = Math.round((correctCount / Math.max(1, sessionItems.length)) * 100);
     const report = buildChoicePracticeReport({
       examId: 'cet4',
       moduleId: 'vocabulary',
       questionTypeId: 'cet4-core-vocabulary',
       modeId: 'vocabulary-audio-choice',
       skillArea: 'vocabulary',
-      plannedMinutes: 12,
+      plannedMinutes: Math.max(12, Math.ceil(sessionItems.length * 0.75)),
       startedAt,
-      questions: items.map((item) => ({
+      questions: sessionItems.map((item) => ({
         id: item.id,
         question: `${item.word} ${item.phonetic}: ${item.example}`,
         correctAnswer: item.correctAnswer,
@@ -93,7 +108,7 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
 
   const handleNext = () => {
     const finalAnswers = answers;
-    if (currentIdx < items.length - 1) {
+    if (currentIdx < sessionItems.length - 1) {
       setCurrentIdx(currentIdx + 1);
       return;
     }
@@ -114,8 +129,29 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
               返回专项练习
             </button>
             <div className="text-sm font-black text-slate-500">
-              CET-4 核心词汇听音练习 · {currentIdx + 1}/{items.length}
+              CET-4 核心词汇听音练习 · 本组 {currentIdx + 1}/{sessionItems.length} · 词库 {items.length}
             </div>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs font-black text-slate-500">
+            <span className="rounded-full bg-slate-100 px-3 py-1">
+              词库分组 {packIndex + 1}/{packCount}
+            </span>
+            <button
+              type="button"
+              disabled={packIndex === 0}
+              onClick={() => switchPack(packIndex - 1)}
+              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[#003178] disabled:cursor-not-allowed disabled:text-slate-300"
+            >
+              上一组
+            </button>
+            <button
+              type="button"
+              disabled={packIndex >= packCount - 1}
+              onClick={() => switchPack(packIndex + 1)}
+              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[#003178] disabled:cursor-not-allowed disabled:text-slate-300"
+            >
+              下一组
+            </button>
           </div>
           <div className="mt-5 h-2 overflow-hidden rounded-full bg-slate-100">
             <div className="h-full rounded-full bg-[#003178] transition-all" style={{ width: `${progress}%` }} />
@@ -250,7 +286,7 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
                   onClick={handleNext}
                   className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[#003178] px-6 text-sm font-black text-white shadow-sm transition hover:bg-[#0d47a1]"
                 >
-                  {currentIdx === items.length - 1 ? '完成词汇练习' : '进入下一个单词'}
+                  {currentIdx === sessionItems.length - 1 ? '完成词汇练习' : '进入下一个单词'}
                   <ChevronRight className="h-4 w-4" />
                 </button>
               )}

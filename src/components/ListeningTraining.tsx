@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Headphones, ArrowLeft, Play, Pause, ChevronDown, ChevronUp, CheckCircle, XCircle, Sparkles, Volume2, RotateCcw, Award, ArrowRight, Sparkle, RefreshCw } from 'lucide-react';
 import { PracticeCompletionReport } from '../types';
 import { buildChoicePracticeReport } from '../domain/practice/reports';
+import { CET4_LISTENING_PRACTICE_QUESTIONS, CET4_MOCK_EXAM } from '../questionBank';
 
 interface ListeningTrainingProps {
   onBack: () => void;
@@ -10,7 +11,7 @@ interface ListeningTrainingProps {
 }
 
 interface QuestionItem {
-  id: number;
+  id: string;
   question: string;
   options: {
     A: string;
@@ -28,9 +29,18 @@ interface QuestionItem {
   transcriptionPoint: string; // e.g., '01:22 处原句'
 }
 
-const LISTENING_TRANSCRIPT_TEXT = `Now, you've been working on this research project looking at how digital technology is used in primary schools. Can you tell us a bit about what you found?
-
-Yes, certainly. We looked at a number of different aspects. We observed lessons and interviewed teachers and pupils. One of the main things we noticed was that there was a huge variation in how teachers applied standard software from class to class. Some used smart tablets to enable individual speed runs, while others worried it was disruptive to focused student attention. A significant percentage of teachers voiced extreme concerns about student attention span and constant notifications from tablet screens.`;
+const LISTENING_TRANSCRIPT_TEXT = CET4_MOCK_EXAM.listening.transcript;
+const LONG_CONVERSATION_PRACTICE_QUESTIONS: QuestionItem[] = CET4_LISTENING_PRACTICE_QUESTIONS
+  .filter((question) => question.questionTypeId === 'long-conversation')
+  .map((question, index) => ({
+    id: `${index + 1}`,
+    question: question.prompt,
+    options: question.options,
+    correctAnswer: question.correctAnswer,
+    explanation: question.explanation,
+    trapType: question.trapType ?? '关键词漏听',
+    transcriptionPoint: question.correctSentence,
+  }));
 
 export default function ListeningTraining({ onBack, onComplete, onAddToReview }: ListeningTrainingProps) {
   const [startedAt] = useState(() => new Date().toISOString());
@@ -53,50 +63,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
 
   // Questions Database
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [questions, setQuestions] = useState<QuestionItem[]>([
-    {
-      id: 1,
-      question: "How did the woman's research team collect information for the project?",
-      options: {
-        A: "They only analyzed national exam scores.",
-        B: "They observed lessons and interviewed teachers and pupils.",
-        C: "They asked technology companies for sales data.",
-        D: "They invited students to complete online games."
-      },
-      correctAnswer: 'B',
-      explanation: "录音开头女士明确说：'We observed lessons and we interviewed teachers and pupils.' 对应选项 B。其他选项均没有在原文中出现。",
-      trapType: "关键词漏听",
-      transcriptionPoint: "00:32 处原句"
-    },
-    {
-      id: 2,
-      question: "What did the woman's research team notice about the use of technology in primary schools?",
-      options: {
-        A: "It was universally embraced by all teachers.",
-        B: "It caused significant disruption in classes.",
-        C: "There was a huge variation in its application.",
-        D: "It was mainly used for administrative tasks."
-      },
-      correctAnswer: 'C',
-      explanation: "录音 01:22 处明确指出：'One of the main things we noticed was that there was a huge variation (极大差异) in its application from class to class.' 你如果选择了 B，表示受到了女士后面提到的一小部分老师的担忧 'disruptive to student attention' 的干扰，犯了‘转折或局部信息漏听’的陷阱。",
-      trapType: "转折信息漏听",
-      transcriptionPoint: "01:22 处原句"
-    },
-    {
-      id: 3,
-      question: "What is a main concern raised by the teachers in the survey?",
-      options: {
-        A: "The lack of official training resources.",
-        B: "Exorbitant cost of upgrading smart hardware.",
-        C: "Over-reliance leading to a decline in handwriting.",
-        D: "Reduced student focus and electronic distractions."
-      },
-      correctAnswer: 'D',
-      explanation: "女士指出：'A significant percentage of teachers voiced extreme concerns about student attention span and constant notifications from tablet screens.' 对应选项 D 核心意思。",
-      trapType: "选项判断失误",
-      transcriptionPoint: "01:54 处原句"
-    }
-  ]);
+  const [questions, setQuestions] = useState<QuestionItem[]>(LONG_CONVERSATION_PRACTICE_QUESTIONS);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -298,10 +265,10 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
           <div className="min-w-0">
             <h1 className="text-base sm:text-lg font-bold text-[#003178] flex items-center gap-2">
               <Headphones className="h-5 w-5 animate-bounce" />
-              听力训练 - Section A
+              听力训练 - 长对话
             </h1>
             <p className="text-[11px] text-gray-400">
-              科技发展对教育的影响 (原创模拟长对话)
+              CET-4 原创模拟长对话 · {LONG_CONVERSATION_PRACTICE_QUESTIONS.length} 题结构化精听
             </p>
           </div>
         </div>
@@ -472,40 +439,11 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
 
             {isTranscriptionExpanded && (
               <div className="p-6 text-xs text-[#434652] leading-relaxed space-y-4 max-h-[350px] overflow-y-auto">
-                <div>
-                  <span className="font-extrabold text-[#003178] block mb-1">M: Male interviewer</span>
-                  <p className="bg-[#f8fafc] p-3 rounded-xl border border-gray-100">
-                    Now, you've been working on this research project looking at how digital technology is used in primary schools. Can you tell us a bit about what you found?
+                {LISTENING_TRANSCRIPT_TEXT.split('\n\n').map((paragraph) => (
+                  <p key={paragraph} className="bg-[#f8fafc] p-3 rounded-xl border border-gray-100 whitespace-pre-line">
+                    {paragraph}
                   </p>
-                </div>
-
-                <div>
-                  <span className="font-extrabold text-[#1b6d24] block mb-1">W: Female respondent</span>
-                  <div className="bg-[#f8fafc] p-3 rounded-xl border border-gray-100 space-y-2">
-                    <p>
-                      Yes, certainly. Well, we looked at a number of different aspects. We observed lessons and we interviewed teachers and pupils.
-                    </p>
-                    <p className="bg-[#dbf1fe]/50 border-l-2 border-[#1e3c72] pl-2 py-1 font-semibold text-[#071e27]">
-                      {/* Interactive block representing timestamp */}
-                      <span className="text-[10px] text-[#003178] font-mono mr-1.5">[01:22]</span>
-                      one of the main things we noticed was that there was a huge variation in how teachers applied standard software from class to class.
-                    </p>
-                    <p className="opacity-75">
-                      Some used smart tablets to enable individual speed runs, while others worried it was purely disruptive to focused student attention.
-                    </p>
-                    <p className="bg-rose-50/70 border-l-2 border-rose-400 pl-2 py-1 font-semibold text-[#071e27]">
-                      <span className="text-[10px] text-rose-600 font-mono mr-1.5">[01:54]</span>
-                      A significant percentage of teachers voiced extreme concerns about student attention span and constant notifications from tablet screens.
-                    </p>
-                  </div>
-                </div>
-
-                <div>
-                  <span className="font-extrabold text-[#003178] block mb-1">M: Male interviewer</span>
-                  <p className="bg-[#f8fafc] p-3 rounded-xl border border-gray-100">
-                    Interesting. Did teachers suggest any explicit policy regulations to assist their daily load?
-                  </p>
-                </div>
+                ))}
               </div>
             )}
           </div>

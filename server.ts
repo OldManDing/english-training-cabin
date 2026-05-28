@@ -4,7 +4,13 @@ import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import { getExamRegistryEntry, listPublicExamProfiles, normalizeExamId } from './src/exams/registry';
-import { CET4_QUESTION_BANK_COVERAGE, CET4_MOCK_EXAM } from './src/questionBank';
+import {
+  CET4_QUESTION_BANK_COVERAGE,
+  CET4_MOCK_EXAM,
+  DEGREE_ENGLISH_MOCK_EXAM,
+  DEGREE_ENGLISH_OUTLINE_2025,
+  DEGREE_ENGLISH_QUESTION_BANK_COVERAGE,
+} from './src/questionBank';
 import { buildDailyPlan } from './src/domain/planner/dailyPlan';
 import { normalizePassage } from './src/domain/materials/passage';
 import { buildMockExamReport, MockExamAnswers } from './src/domain/practice/mockExam';
@@ -882,6 +888,27 @@ export function createApp(options: CreateAppOptions = {}) {
         sourceNotice: CET4_MOCK_EXAM.sourceNotice,
         listeningQuestionCount: CET4_MOCK_EXAM.listening.questions.length,
         readingQuestionCount: CET4_MOCK_EXAM.reading.questions.length,
+      },
+      degreeEnglish: {
+        outline: {
+          id: DEGREE_ENGLISH_OUTLINE_2025.id,
+          title: DEGREE_ENGLISH_OUTLINE_2025.title,
+          plannedMinutes: DEGREE_ENGLISH_OUTLINE_2025.plannedMinutes,
+          totalScore: DEGREE_ENGLISH_OUTLINE_2025.totalScore,
+          totalQuestionCount: DEGREE_ENGLISH_OUTLINE_2025.totalQuestionCount,
+          hasListening: DEGREE_ENGLISH_OUTLINE_2025.hasListening,
+        },
+        questionBankCoverage: DEGREE_ENGLISH_QUESTION_BANK_COVERAGE,
+        mockExam: {
+          id: DEGREE_ENGLISH_MOCK_EXAM.id,
+          title: DEGREE_ENGLISH_MOCK_EXAM.title,
+          plannedMinutes: DEGREE_ENGLISH_MOCK_EXAM.plannedMinutes,
+          totalQuestionCount: DEGREE_ENGLISH_MOCK_EXAM.totalQuestionCount,
+          vocabularyStructureQuestionCount: DEGREE_ENGLISH_MOCK_EXAM.vocabularyStructure.length,
+          useOfEnglishQuestionCount: DEGREE_ENGLISH_MOCK_EXAM.useOfEnglish.questions.length,
+          traditionalReadingQuestionCount: DEGREE_ENGLISH_MOCK_EXAM.reading.traditionalQuestions.length,
+          paragraphMatchingQuestionCount: DEGREE_ENGLISH_MOCK_EXAM.reading.matchingQuestions.length,
+        },
       },
     });
   });

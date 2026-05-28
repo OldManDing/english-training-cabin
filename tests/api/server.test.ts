@@ -764,6 +764,22 @@ describe('server API', () => {
     });
     expect(response.body.mockExam.listeningQuestionCount).toBe(25);
     expect(response.body.mockExam.readingQuestionCount).toBe(30);
+    expect(response.body.degreeEnglish.outline).toMatchObject({
+      id: 'nanjing-tech-degree-english-2025-09',
+      plannedMinutes: 120,
+      totalQuestionCount: 67,
+      hasListening: false,
+    });
+    expect(response.body.degreeEnglish.questionBankCoverage.map((item: { questionTypeId: string }) => item.questionTypeId))
+      .toEqual(expect.arrayContaining(['vocabulary-structure', 'cloze-choice', 'paragraph-matching', 'not-tested']));
+    expect(response.body.degreeEnglish.mockExam).toMatchObject({
+      id: 'degree-english-2025-outline-mock-001',
+      totalQuestionCount: 67,
+      vocabularyStructureQuestionCount: 25,
+      useOfEnglishQuestionCount: 20,
+      traditionalReadingQuestionCount: 15,
+      paragraphMatchingQuestionCount: 5,
+    });
   });
 
   it('denies unauthenticated access to learning business APIs', async () => {

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
-import { CET4_VOCABULARY_BANK } from '../../src/data';
+import { CET4_VOCABULARY_BANK, VOCABULARY_SESSION_SIZE } from '../../src/data';
 import { CET4_MOCK_EXAM } from '../../src/questionBank';
 import { registerAndEnterApp, registerApiAccount } from './helpers/auth';
 
@@ -423,14 +423,16 @@ test('vocabulary practice plays audio controls, scores answers, and persists rev
   await expect(page.getByRole('heading', { name: CET4_VOCABULARY_BANK[0].word })).toBeVisible();
   await page.getByRole('button', { name: '播放单词' }).click();
 
-  for (const item of CET4_VOCABULARY_BANK) {
+  const vocabularySessionItems = CET4_VOCABULARY_BANK.slice(0, VOCABULARY_SESSION_SIZE);
+
+  for (const item of vocabularySessionItems) {
     await expect(page.getByRole('heading', { name: item.word })).toBeVisible();
     const answerButton = page.getByRole('button', { name: new RegExp(`^${item.correctAnswer}\\. `) });
     await answerButton.click();
     await page.getByRole('button', { name: '有把握' }).click();
     await page.getByRole('button', { name: '提交词汇答案' }).click();
     await expect(page.getByText(`正确答案：${item.correctAnswer}`)).toBeVisible();
-    await page.getByRole('button', { name: item === CET4_VOCABULARY_BANK.at(-1) ? '完成词汇练习' : '进入下一个单词' }).click();
+    await page.getByRole('button', { name: item === vocabularySessionItems.at(-1) ? '完成词汇练习' : '进入下一个单词' }).click();
   }
 
   await expect(page.getByRole('heading', { name: '能力地图' })).toBeVisible();
@@ -458,10 +460,10 @@ test('vocabulary practice plays audio controls, scores answers, and persists rev
   });
 
   expect(counts.sessions).toBe(1);
-  expect(counts.attempts).toBe(CET4_VOCABULARY_BANK.length);
+  expect(counts.attempts).toBe(vocabularySessionItems.length);
   expect(counts.skillProfiles.find((profile: { skillArea: string }) => profile.skillArea === 'vocabulary')).toMatchObject({
     score: 100,
-    evidenceCount: CET4_VOCABULARY_BANK.length,
+    evidenceCount: vocabularySessionItems.length,
   });
 });
 
