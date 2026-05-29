@@ -220,7 +220,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
           </div>
           <button
             onClick={handleSaveSettings}
-            className="w-full sm:w-auto justify-center px-5 py-2.5 bg-[#003178] hover:bg-[#0d47a1] text-white text-xs font-black rounded-2xl flex items-center gap-1.5 transition-all shadow-sm hover:scale-[1.02] cursor-pointer"
+            className="ui-button ui-button-primary ui-button-full sm:w-auto"
           >
             <Save className="h-4 w-4 text-emerald-300" />
             <span>保存设置</span>
@@ -274,6 +274,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                   <div className="relative">
                     <input
                       type="date"
+                      aria-label="考试日期"
                       value={examDate}
                       onChange={(e) => setExamDate(e.target.value)}
                       className="w-full text-xs font-bold rounded-xl border border-[#c3c6d4] px-4 py-3 bg-[#f8fafc] text-[#003178] focus:outline-none focus:ring-1 focus:ring-[#003178] cursor-pointer"
@@ -287,6 +288,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
               <div className="pt-3 border-t border-gray-100 flex items-center">
                 <button
                   type="button"
+                  aria-pressed={prepareSpeaking}
                   onClick={() => setPrepareSpeaking(!prepareSpeaking)}
                   className="flex items-center gap-2.5 text-xs text-[#003178] font-bold select-none cursor-pointer group"
                 >
@@ -327,6 +329,9 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                           {levelLabels.map((lbl, idx) => (
                             <button
                               key={lbl}
+                              type="button"
+                              aria-label={`${item.label} ${lbl}`}
+                              aria-pressed={item.level === idx}
                               onClick={() => item.setLevel(idx)}
                               className={`text-[10px] font-bold px-3 py-2 sm:py-1 rounded-md transition-all ${
                                 item.level === idx
@@ -366,6 +371,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                     <div className="space-y-1.5">
                       <input
                         type="range"
+                        aria-label="目标分数"
                         min="425"
                         max="710"
                         step="5"
@@ -417,14 +423,17 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                     <span className="text-[10px] text-gray-400 mt-0.5">开启后会在口语训练中提示尽量使用安静环境和清晰麦克风。</span>
                   </div>
                   <button
+                    type="button"
+                    aria-label="切换口语录音质量提醒"
+                    aria-pressed={whisperNoiseReduction}
                     onClick={() => setWhisperNoiseReduction(!whisperNoiseReduction)}
-                    className={`w-11 h-6 shrink-0 rounded-full transition-colors relative cursor-pointer ${
+                    className={`relative h-11 w-16 shrink-0 rounded-full p-1 transition-colors ${
                       whisperNoiseReduction ? 'bg-[#1b6d24]' : 'bg-gray-300'
                     }`}
                   >
                     <div
-                      className={`w-4.5 h-4.5 bg-white rounded-full absolute top-0.75 transition-all ${
-                        whisperNoiseReduction ? 'right-0.75' : 'left-0.75'
+                      className={`absolute top-2 h-7 w-7 rounded-full bg-white shadow-sm transition-all ${
+                        whisperNoiseReduction ? 'right-2' : 'left-2'
                       }`}
                     />
                   </button>
@@ -444,12 +453,12 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                 <button
                   type="button"
                   onClick={handleExportLearningData}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#cfe6f2] bg-[#f7fbff] px-4 py-3 text-xs font-black text-[#003178] transition hover:bg-[#eef7fc]"
+                  className="ui-button ui-button-secondary ui-button-full"
                 >
                   <Download className="h-4 w-4" />
                   导出学习数据
                 </button>
-                <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#003178] px-4 py-3 text-xs font-black text-white transition hover:bg-[#07244f]">
+                <label className="ui-button ui-button-primary ui-button-full cursor-pointer">
                   <Upload className="h-4 w-4" />
                   恢复学习数据
                   <input
@@ -532,7 +541,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                   type="button"
                   onClick={handleGeneratePlan}
                   disabled={isGeneratingPlan}
-                  className="w-full px-5 py-3.5 bg-[#003178] hover:bg-[#07244f] disabled:bg-gray-400 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2 hover:scale-[1.01] transition-all cursor-pointer shadow-xs"
+                  className="ui-button ui-button-primary ui-button-full"
                 >
                   {isGeneratingPlan ? (
                     <>

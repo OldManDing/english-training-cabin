@@ -19,12 +19,19 @@ import SettingsSection from './components/SettingsSection';
 import VocabularyTraining from './components/VocabularyTraining';
 import AuthGate from './components/AuthGate';
 import MockExam from './components/MockExam';
-import { ActiveTab, DailyPlan, Passage, PracticeCompletionReport, ReviewCompletionEvidence, ReviewItem, SkillProfile, StudyGoal } from './types';
+import { ActiveTab, Attempt, DailyPlan, Passage, PracticeCompletionReport, PracticeSession, ReviewCompletionEvidence, ReviewItem, SkillProfile, StudyGoal } from './types';
 import { CET4_VOCABULARY_BANK, INITIAL_PASSAGE } from './data';
+import {
+  CET4_CLOZE_PRACTICE_QUESTIONS,
+  CET4_GRAMMAR_PRACTICE_QUESTIONS,
+  type Cet4MockChoiceQuestion,
+} from './questionBank';
 import { Sparkles, X } from 'lucide-react';
 import {
   completeReviewItem,
   getOrCreateActiveGoal,
+  loadAttempts,
+  loadPracticeSessions,
   loadReviewItems,
   loadSkillProfiles,
   persistPracticeCompletion,
@@ -84,6 +91,11 @@ function estimateCetScore(skillProfiles: SkillProfile[]): number | undefined {
   return Math.round(Math.max(300, Math.min(710, 300 + abilityScore * 4.1)));
 }
 
+function resetViewportScroll() {
+  window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  document.querySelector('main')?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+}
+
 function buildSettingsSkillProfiles(settings: {
   readingLevel: number;
   listeningLevel: number;
@@ -109,12 +121,58 @@ function buildSettingsSkillProfiles(settings: {
   }));
 }
 
+function buildChoiceQuestionPassage(params: {
+  id: string;
+  title: string;
+  content: string;
+  questions: Cet4MockChoiceQuestion[];
+}): Passage {
+  return {
+    id: params.id,
+    examId: 'cet4',
+    moduleId: 'grammar',
+    title: params.title,
+    content: params.content,
+    questions: params.questions.slice(0, 8).map((question) => ({
+      id: question.id,
+      examId: 'cet4',
+      moduleId: question.moduleId,
+      questionTypeId: question.questionTypeId,
+      question: question.prompt,
+      options: question.options,
+      correctAnswer: question.correctAnswer,
+      explanation: question.explanation,
+      type: question.title,
+      tags: [question.trapType ?? question.questionTypeId],
+      difficulty: 3,
+      sourceType: 'original',
+      correctSentence: question.correctSentence,
+    })),
+  };
+}
+
+const CET4_GRAMMAR_STRUCTURE_PASSAGE = buildChoiceQuestionPassage({
+  id: 'cet4-grammar-structure-practice',
+  title: '语法结构与固定搭配专项',
+  content: '本组题用于训练时态、语态、非谓语、从句、连接词和固定搭配。诊断显示语法薄弱时，系统会优先推荐这一组。',
+  questions: CET4_GRAMMAR_PRACTICE_QUESTIONS,
+});
+
+const CET4_CLOZE_CONTEXT_PASSAGE = buildChoiceQuestionPassage({
+  id: 'cet4-cloze-context-practice',
+  title: '完形/选词填空语境专项',
+  content: '本组题用于训练上下文线索、词义辨析、固定搭配和句际逻辑。诊断显示词汇语境或完形薄弱时，系统会优先推荐这一组。',
+  questions: CET4_CLOZE_PRACTICE_QUESTIONS,
+});
+
 function StudyApp() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('today');
   const [activeGoal, setActiveGoal] = useState<StudyGoal | null>(null);
   const [reviewItemCount, setReviewItemCount] = useState(0);
   const [persistedReviewItems, setPersistedReviewItems] = useState<ReviewItem[]>([]);
   const [persistedSkillProfiles, setPersistedSkillProfiles] = useState<SkillProfile[]>([]);
+  const [persistedPracticeSessions, setPersistedPracticeSessions] = useState<PracticeSession[]>([]);
+  const [persistedAttempts, setPersistedAttempts] = useState<Attempt[]>([]);
   const [dailyPlan, setDailyPlan] = useState<DailyPlan | null>(null);
   const [customPassage, setCustomPassage] = useState<Passage>(INITIAL_PASSAGE);
   const [isPracticing, setIsPracticing] = useState(false);
@@ -141,6 +199,14 @@ function StudyApp() {
   const estimatedScore = estimateCetScore(persistedSkillProfiles);
   const abilityEvidenceCount = persistedSkillProfiles.reduce((sum, profile) => sum + profile.evidenceCount, 0);
   const reviewGateStatus = buildReviewGateStatus(persistedReviewItems);
+
+  useEffect(() => {
+    resetViewportScroll();
+  }, []);
+
+  useEffect(() => {
+    resetViewportScroll();
+  }, [activeTab, showOnboarding, isPracticing, isListeningPracticing, isVocabularyPracticing, subjectivePracticeMode]);
 
   const blockForReviewGate = (requestedLabel: string) => {
     if (!reviewGateStatus.locked) return false;
@@ -173,16 +239,20 @@ function StudyApp() {
   };
 
   const refreshStudyState = async () => {
-    const [goal, reviewItems, skillProfiles] = await Promise.all([
+    const [goal, reviewItems, skillProfiles, practiceSessions, attempts] = await Promise.all([
       getOrCreateActiveGoal(),
       loadReviewItems(),
       loadSkillProfiles(),
+      loadPracticeSessions(),
+      loadAttempts(),
     ]);
     setActiveGoal(goal);
     setTargetScoreLimit(goal.targetScore);
     setReviewItemCount(countDueReviews(reviewItems));
     setPersistedReviewItems(reviewItems);
     setPersistedSkillProfiles(skillProfiles);
+    setPersistedPracticeSessions(practiceSessions);
+    setPersistedAttempts(attempts);
   };
 
   useEffect(() => {
@@ -204,10 +274,12 @@ function StudyApp() {
     let mounted = true;
 
     async function loadStudyState() {
-      const [goal, reviewItems, skillProfiles] = await Promise.all([
+      const [goal, reviewItems, skillProfiles, practiceSessions, attempts] = await Promise.all([
         getOrCreateActiveGoal(),
         loadReviewItems(),
         loadSkillProfiles(),
+        loadPracticeSessions(),
+        loadAttempts(),
       ]);
       if (!mounted) return;
       setActiveGoal(goal);
@@ -215,6 +287,8 @@ function StudyApp() {
       setReviewItemCount(countDueReviews(reviewItems));
       setPersistedReviewItems(reviewItems);
       setPersistedSkillProfiles(skillProfiles);
+      setPersistedPracticeSessions(practiceSessions);
+      setPersistedAttempts(attempts);
     }
 
     loadStudyState().catch((error) => {
@@ -230,13 +304,17 @@ function StudyApp() {
 
   const persistCompletionReport = async (report: PracticeCompletionReport) => {
     await persistPracticeCompletion(report);
-    const [reviewItems, skillProfiles] = await Promise.all([
+    const [reviewItems, skillProfiles, practiceSessions, attempts] = await Promise.all([
       loadReviewItems(),
       loadSkillProfiles(),
+      loadPracticeSessions(),
+      loadAttempts(),
     ]);
     setReviewItemCount(countDueReviews(reviewItems));
     setPersistedReviewItems(reviewItems);
     setPersistedSkillProfiles(skillProfiles);
+    setPersistedPracticeSessions(practiceSessions);
+    setPersistedAttempts(attempts);
   };
 
   const handleCompleteReviewItem = async (reviewItemId: string, evidence: ReviewCompletionEvidence) => {
@@ -352,6 +430,16 @@ function StudyApp() {
     startLearningIfUnlocked('仔细阅读训练', () => setIsPracticing(true));
   };
 
+  const handleStartGrammarPractice = () => {
+    setCustomPassage(CET4_GRAMMAR_STRUCTURE_PASSAGE);
+    startLearningIfUnlocked('语法结构训练', () => setIsPracticing(true));
+  };
+
+  const handleStartClozePractice = () => {
+    setCustomPassage(CET4_CLOZE_CONTEXT_PASSAGE);
+    startLearningIfUnlocked('完形填空训练', () => setIsPracticing(true));
+  };
+
   const handleCompletePractice = (score: number, report: PracticeCompletionReport) => {
     setIsPracticing(false);
     setReadingProgress({ completed: true, score });
@@ -442,10 +530,13 @@ function StudyApp() {
             onStartWriting={() => startLearningIfUnlocked('写作训练', () => setSubjectivePracticeMode('writing'))}
             onStartTranslation={() => startLearningIfUnlocked('翻译训练', () => setSubjectivePracticeMode('translation'))}
             onStartVocabulary={() => startLearningIfUnlocked('单词练习', () => setIsVocabularyPracticing(true))}
+            onStartGrammar={handleStartGrammarPractice}
+            onStartCloze={handleStartClozePractice}
             onStartMockExam={() => startLearningIfUnlocked('阶段模考', () => setActiveTab('mock'))}
             onStartOnboarding={() => setShowOnboarding(true)}
             onViewReview={() => setActiveTab('review')}
             onStartSpeaking={() => startLearningIfUnlocked('口语重说', () => setActiveTab('speaking'))}
+            onOpenSettings={() => setActiveTab('settings')}
             onTriggerModal={handleTriggerModal}
             readingProgress={readingProgress}
             examCountdown={examCountdown}
@@ -466,6 +557,8 @@ function StudyApp() {
           <PracticeHub
             onStartOnboarding={() => setShowOnboarding(true)}
             onStartVocabulary={() => startLearningIfUnlocked('单词练习', () => setIsVocabularyPracticing(true))}
+            onStartGrammar={handleStartGrammarPractice}
+            onStartCloze={handleStartClozePractice}
             onStartReading={handleSelectPassage}
             onStartListening={() => startLearningIfUnlocked('听力训练', () => setIsListeningPracticing(true))}
             onStartWriting={() => startLearningIfUnlocked('写作训练', () => setSubjectivePracticeMode('writing'))}
@@ -473,6 +566,8 @@ function StudyApp() {
             onStartMockExam={() => startLearningIfUnlocked('阶段模考', () => setActiveTab('mock'))}
             examId={activeExamId}
             examName={activeExamName}
+            skillProfiles={persistedSkillProfiles}
+            dailyPlan={dailyPlan}
           />
         );
       case 'mock':
@@ -480,6 +575,8 @@ function StudyApp() {
           <MockExam
             onBack={() => setActiveTab('today')}
             onComplete={handleCompleteMockExam}
+            skillProfiles={persistedSkillProfiles}
+            dailyPlan={dailyPlan}
           />
         );
       case 'review':
@@ -500,7 +597,14 @@ function StudyApp() {
           />
         );
       case 'progress':
-        return <ProgressSection scoreChange={speakingScoreChange} persistedSkillProfiles={persistedSkillProfiles} />;
+        return (
+          <ProgressSection
+            scoreChange={speakingScoreChange}
+            persistedSkillProfiles={persistedSkillProfiles}
+            persistedPracticeSessions={persistedPracticeSessions}
+            persistedAttempts={persistedAttempts}
+          />
+        );
       case 'import':
         return (
           <MaterialImporter
@@ -531,10 +635,13 @@ function StudyApp() {
             onStartWriting={() => startLearningIfUnlocked('写作训练', () => setSubjectivePracticeMode('writing'))}
             onStartTranslation={() => startLearningIfUnlocked('翻译训练', () => setSubjectivePracticeMode('translation'))}
             onStartVocabulary={() => startLearningIfUnlocked('单词练习', () => setIsVocabularyPracticing(true))}
+            onStartGrammar={handleStartGrammarPractice}
+            onStartCloze={handleStartClozePractice}
             onStartMockExam={() => startLearningIfUnlocked('阶段模考', () => setActiveTab('mock'))}
             onStartOnboarding={() => setShowOnboarding(true)}
             onViewReview={() => setActiveTab('review')}
             onStartSpeaking={() => startLearningIfUnlocked('口语重说', () => setActiveTab('speaking'))}
+            onOpenSettings={() => setActiveTab('settings')}
             onTriggerModal={handleTriggerModal}
             readingProgress={readingProgress}
             examCountdown={examCountdown}
@@ -693,6 +800,7 @@ function StudyApp() {
               </h3>
               <button
                 onClick={() => setModalContent(null)}
+                aria-label="关闭提示"
                 className="text-slate-400 hover:text-[#003178] p-3 sm:p-1.5 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
               >
                 <X className="h-5 w-5" strokeWidth={2.5} />

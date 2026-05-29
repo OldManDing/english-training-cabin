@@ -8,6 +8,8 @@ import {
 const strongAnswers = {
   'diag-reading-location': 'B',
   'diag-listening-turning-point': 'C',
+  'diag-vocabulary-cloze': 'A',
+  'diag-grammar-structure': 'C',
   'diag-translation-structure':
     'With the development of online learning, more college students can arrange their study time more flexibly.',
   'diag-writing-argument':
@@ -41,11 +43,9 @@ describe('onboarding diagnostic scoring', () => {
 
   it('changes weak-skill ordering when answers are incorrect or too thin', () => {
     const details = scoreDiagnosticAnswers({
+      ...strongAnswers,
       'diag-reading-location': 'A',
       'diag-listening-turning-point': 'B',
-      'diag-translation-structure': strongAnswers['diag-translation-structure'],
-      'diag-writing-argument': strongAnswers['diag-writing-argument'],
-      'diag-speaking-response': strongAnswers['diag-speaking-response'],
     });
 
     expect(details.find((detail) => detail.skillArea === 'reading')?.score).toBe(42);
@@ -54,11 +54,9 @@ describe('onboarding diagnostic scoring', () => {
 
     const report = buildOnboardingDiagnosticReport({
       answers: {
+        ...strongAnswers,
         'diag-reading-location': 'A',
         'diag-listening-turning-point': 'B',
-        'diag-translation-structure': strongAnswers['diag-translation-structure'],
-        'diag-writing-argument': strongAnswers['diag-writing-argument'],
-        'diag-speaking-response': strongAnswers['diag-speaking-response'],
       },
       targetScore: 600,
       dailyMinutes: 60,

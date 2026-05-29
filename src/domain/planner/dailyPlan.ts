@@ -27,16 +27,31 @@ function minutesByMode(minutes: number, mode: BuildDailyPlanInput['energyMode'])
   return minutes;
 }
 
-function practiceTitleForSkill(skill: string): string {
+type AdaptivePracticeMode = 'cloze-context' | 'grammar-structure' | 'vocabulary-audio-choice';
+
+function practiceModeForProfile(profile?: Pick<SkillProfile, 'skillArea' | 'subSkillId'>): AdaptivePracticeMode | undefined {
+  if (!profile) return undefined;
+  const subSkill = profile.subSkillId.toLowerCase();
+
+  if (subSkill.includes('cloze')) return 'cloze-context';
+  if (profile.skillArea === 'grammar') return 'grammar-structure';
+  if (profile.skillArea === 'vocabulary') return 'vocabulary-audio-choice';
+  return undefined;
+}
+
+function practiceTitleForSkill(skill: string, mode?: AdaptivePracticeMode): string {
+  if (mode === 'cloze-context') return '完形/选词填空语境专项';
+  if (mode === 'grammar-structure') return '语法结构与固定搭配专项';
   if (skill === 'listening') return '长对话精听与选项定位';
   if (skill === 'writing') return '短文写作结构与论证';
   if (skill === 'translation') return '段落翻译与中文干扰修正';
   if (skill === 'vocabulary') return '核心词汇听音与语块记忆';
+  if (skill === 'grammar') return '语法结构与完形填空专项';
   return '仔细阅读同义替换突破';
 }
 
-function isPracticeSkill(skill: SkillProfile['skillArea']): skill is 'reading' | 'listening' | 'writing' | 'translation' | 'vocabulary' {
-  return ['reading', 'listening', 'writing', 'translation', 'vocabulary'].includes(skill);
+function isPracticeSkill(skill: SkillProfile['skillArea']): skill is 'reading' | 'listening' | 'writing' | 'translation' | 'vocabulary' | 'grammar' {
+  return ['reading', 'listening', 'writing', 'translation', 'vocabulary', 'grammar'].includes(skill);
 }
 
 function clampMinutes(value: number, min: number, max: number): number {
@@ -108,9 +123,14 @@ export function buildDailyPlan(input: BuildDailyPlanInput): DailyPlan {
     })[0];
   const examDaysLeft = daysUntilExam(input.goal.examDate, date);
   const weakestSkill = sortedProfiles[0];
-  const weakestPracticeSkill = sortedProfiles.find((profile) => isPracticeSkill(profile.skillArea))?.skillArea;
+  const weakestPracticeProfile = sortedProfiles.find((profile) => isPracticeSkill(profile.skillArea));
+  const weakestPracticeSkill = weakestPracticeProfile?.skillArea;
   const configuredPracticeSkill = input.goal.prioritySkills.find((skill) => skill !== 'speaking');
   const primaryPracticeSkill = declinedStageSection?.skillArea ?? weakestPracticeSkill ?? configuredPracticeSkill ?? 'reading';
+  const primaryPracticeProfile = declinedStageSection
+    ? sortedProfiles.find((profile) => profile.skillArea === declinedStageSection.skillArea)
+    : weakestPracticeProfile;
+  const primaryPracticeMode = practiceModeForProfile(primaryPracticeProfile);
   const latestVocabularyProfile = [...(input.skillProfiles ?? [])]
     .filter((profile) => profile.skillArea === 'vocabulary' && profile.evidenceCount > 0)
     .sort((left, right) => right.lastUpdatedAt.localeCompare(left.lastUpdatedAt))[0];
@@ -157,19 +177,6 @@ export function buildDailyPlan(input: BuildDailyPlanInput): DailyPlan {
     });
   }
 
-  if (mockMinutes > 0) {
-    tasks.push({
-      id: `task-mock-${date}`,
-      type: 'mock',
-      title: '阶段模考：写作/听力/阅读/翻译综合校准',
-      skillArea: 'reading',
-      estimatedMinutes: mockMinutes,
-      priority: 'high',
-      reason: `距离考试约 ${examDaysLeft} 天，必须用阶段模考校准分项能力，而不是只做零散专项。`,
-      payload: { examId: input.goal.examId, mode: 'cet4-stage-mock' },
-    });
-  }
-
   const remainingPracticeMinutes = Math.max(0, taskMinutes.practiceMinutes - mockMinutes);
   const vocabularyMinutes = needsVocabularyTask && primaryPracticeSkill !== 'vocabulary' && remainingPracticeMinutes >= 20
     ? clampMinutes(Math.round(remainingPracticeMinutes * 0.35), 8, 12)
@@ -177,11 +184,13 @@ export function buildDailyPlan(input: BuildDailyPlanInput): DailyPlan {
   const primaryPracticeMinutes = primaryPracticeSkill === 'vocabulary'
     ? remainingPracticeMinutes
     : Math.max(8, remainingPracticeMinutes - vocabularyMinutes);
+  const severePracticeWeakness = Boolean(primaryPracticeProfile && primaryPracticeProfile.score < 60);
+  const practiceBeforeMock = Boolean(declinedStageSection || severePracticeWeakness);
 
-  tasks.push({
+  const primaryPracticeTask: DailyPlan['tasks'][number] = {
     id: `task-practice-${primaryPracticeSkill}-${date}`,
     type: 'practice',
-    title: practiceTitleForSkill(primaryPracticeSkill),
+    title: practiceTitleForSkill(primaryPracticeSkill, primaryPracticeMode),
     skillArea: primaryPracticeSkill,
     estimatedMinutes: primaryPracticeMinutes,
     priority: declinedStageSection || (!reviewCandidates.length && hasAbilityEvidence) ? 'high' : 'medium',
@@ -190,8 +199,30 @@ export function buildDailyPlan(input: BuildDailyPlanInput): DailyPlan {
       : weakestSkill
       ? `${weakestSkill.subSkillId} 当前掌握度 ${weakestSkill.score}%，需要用新题补证据。`
       : '尚未积累足够练习证据，先用 CET-4 核心题型建立能力基线。',
-    payload: { examId: input.goal.examId },
-  });
+    payload: {
+      examId: input.goal.examId,
+      mode: primaryPracticeMode,
+      sourceProfileId: primaryPracticeProfile?.id,
+      sourceSubSkillId: primaryPracticeProfile?.subSkillId,
+    },
+  };
+
+  const mockTask: DailyPlan['tasks'][number] | null = mockMinutes > 0
+    ? {
+        id: `task-mock-${date}`,
+        type: 'mock',
+        title: '阶段模考：写作/听力/阅读/翻译综合校准',
+        skillArea: 'reading',
+        estimatedMinutes: mockMinutes,
+        priority: 'high',
+        reason: `距离考试约 ${examDaysLeft} 天，必须用阶段模考校准分项能力，而不是只做零散专项。`,
+        payload: { examId: input.goal.examId, mode: 'cet4-stage-mock' },
+      }
+    : null;
+
+  if (practiceBeforeMock) tasks.push(primaryPracticeTask);
+  if (mockTask) tasks.push(mockTask);
+  if (!practiceBeforeMock) tasks.push(primaryPracticeTask);
 
   if (needsVocabularyTask && primaryPracticeSkill !== 'vocabulary' && vocabularyMinutes > 0) {
     tasks.push({

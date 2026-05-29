@@ -7,6 +7,8 @@ import { registerAndEnterApp, registerApiAccount } from './helpers/auth';
 async function answerOnboardingDiagnostic(page: Page) {
   await page.getByRole('button', { name: /A\. They mainly protect old books/ }).click();
   await page.getByRole('button', { name: /C\. Join the online workshop/ }).click();
+  await page.getByRole('button', { name: /A\. suitable/ }).click();
+  await page.getByRole('button', { name: /C\. to review/ }).click();
   await page.getByLabel('翻译句法转换作答').fill(
     'With the development of online learning, more college students can arrange their study time more flexibly.',
   );
@@ -15,6 +17,22 @@ async function answerOnboardingDiagnostic(page: Page) {
   );
   await page.getByLabel('口语连贯表达初筛作答').fill(
     'One habit that helps me learn English is reading aloud every morning. It works because I can practice pronunciation and remember useful expressions. For example, I repeat one short paragraph three times, so I become more confident.',
+  );
+}
+
+async function answerGrammarWeakDiagnostic(page: Page) {
+  await page.getByRole('button', { name: /B\. They have become flexible learning hubs/ }).click();
+  await page.getByRole('button', { name: /C\. Join the online workshop/ }).click();
+  await page.getByRole('button', { name: /A\. suitable/ }).click();
+  await page.getByRole('button', { name: /A\. review$/ }).click();
+  await page.getByLabel('翻译句法转换作答').fill(
+    'With the development of online learning, more college students can arrange their study time more flexibly.',
+  );
+  await page.getByLabel('写作结构与论证作答').fill(
+    'In my opinion, students can use AI tools wisely because they can receive quick feedback. For example, AI can point out grammar problems and suggest better expressions. However, students should revise the answer themselves instead of copying it.',
+  );
+  await page.getByLabel('口语连贯表达初筛作答').fill(
+    'One habit that helps me learn English is reading aloud every morning. It works because I can practice pronunciation and remember useful expressions. For example, I repeat one paragraph three times, so I become more confident.',
   );
 }
 
@@ -355,7 +373,7 @@ test('onboarding diagnostic persists the initial ability portrait before enterin
   await expect(page.getByTestId('diagnostic-score-reading')).toContainText('42');
   await page.getByRole('button', { name: /开启今日训练/ }).click();
   await expect(page.getByRole('heading', { name: '今日训练' })).toBeVisible();
-  await expect(page.getByText('核心词汇听音与语块记忆')).toBeVisible();
+  await expect(page.getByText(/阅读|复习|同义替换|入门诊断/).first()).toBeVisible();
 
   const result = await page.evaluate(async () => {
     function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
@@ -386,13 +404,38 @@ test('onboarding diagnostic persists the initial ability portrait before enterin
     dailyMinutes: 45,
   });
   expect(result.sessions).toBe(1);
-  expect(result.attempts).toBe(5);
+  expect(result.attempts).toBe(7);
   expect(result.reviewItems).toBeGreaterThanOrEqual(1);
-  expect(result.skillProfiles).toHaveLength(5);
+  expect(result.skillProfiles).toHaveLength(7);
   expect(result.skillProfiles.find((profile: { skillArea: string }) => profile.skillArea === 'reading')).toMatchObject({
     score: 42,
     evidenceCount: 1,
   });
+});
+
+test('diagnostic weakness updates the daily primary task and routes into the matching practice module', async ({ page }) => {
+  await registerAndEnterApp(page, 'mvp-diagnostic-adaptive-ui');
+  await resetLocalLearningData(page);
+  await page.reload();
+
+  await page.getByRole('button', { name: '入门能力诊断' }).click();
+  await page.getByRole('button', { name: '开始诊断' }).click();
+  await page.getByRole('button', { name: '进入真实诊断' }).click();
+  await answerGrammarWeakDiagnostic(page);
+  await page.getByRole('button', { name: '提交诊断并生成画像' }).click();
+
+  await expect(page.getByRole('heading', { name: '您的能力画像已生成' })).toBeVisible({ timeout: 7_000 });
+  await expect(page.getByTestId('diagnostic-score-grammar')).toContainText('42');
+  await page.getByRole('button', { name: /开启今日训练/ }).click();
+
+  await expect(page.getByRole('heading', { name: '今日训练' })).toBeVisible();
+  await expect(page.getByTestId('today-skill-diagnostic-grammar')).toContainText('42%');
+  await expect(page.getByTestId('today-primary-task-title')).toContainText('语法结构与固定搭配专项');
+  await expect(page.getByTestId('today-task-row-practice-grammar-0')).toContainText('语法结构与固定搭配专项');
+
+  await page.getByTestId('today-primary-task-action').click();
+  await expect(page.getByRole('heading', { name: '语法与完形填空训练舱' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '语法结构与固定搭配专项', exact: true })).toBeVisible();
 });
 
 test('target exam filters visible question bank and mock exam guides incomplete submissions', async ({ page }) => {

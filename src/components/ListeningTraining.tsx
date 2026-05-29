@@ -299,6 +299,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
         <div className="flex items-center space-x-3 sm:space-x-4 min-w-0">
           <button
             onClick={onBack}
+            aria-label="返回专项练习"
             className="p-2 text-[#434652] hover:text-[#003178] hover:bg-[#e6f6ff] rounded-xl transition-all cursor-pointer"
           >
             <ArrowLeft className="h-5 w-5" />
@@ -318,7 +319,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
         <div className="w-full lg:w-auto overflow-x-auto bg-neutral-100 p-1 rounded-xl flex items-center space-x-1 border border-neutral-200 text-xs">
           <button
             onClick={() => setActiveTab('ref')}
-            className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${
+            className={`min-h-11 px-3 py-2 rounded-lg font-semibold transition-all ${
               activeTab === 'ref' ? 'bg-[#003178] text-white shadow-xs' : 'text-[#434652] hover:bg-white/50'
             }`}
           >
@@ -326,7 +327,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
           </button>
           <button
             onClick={() => setActiveTab('focus')}
-            className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${
+            className={`min-h-11 px-3 py-2 rounded-lg font-semibold transition-all ${
               activeTab === 'focus' ? 'bg-[#003178] text-white shadow-xs' : 'text-[#434652] hover:bg-white/50'
             }`}
           >
@@ -334,7 +335,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
           </button>
           <button
             onClick={() => setActiveTab('shadow')}
-            className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${
+            className={`min-h-11 px-3 py-2 rounded-lg font-semibold transition-all ${
               activeTab === 'shadow' ? 'bg-[#003178] text-white shadow-xs' : 'text-[#434652] hover:bg-white/50'
             }`}
           >
@@ -435,6 +436,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
                   {/* Backward 10s */}
                   <button
                     onClick={() => skipAudio(-10)}
+                    aria-label="后退10秒"
                     className="p-2 hover:bg-white rounded-full text-gray-500 hover:text-[#003178] transition border border-transparent hover:border-gray-200 shadow-2xs cursor-pointer"
                     title="后退10秒"
                   >
@@ -444,6 +446,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
                   {/* Play Main Circle Toggle */}
                   <button
                     onClick={toggleAudioPlayback}
+                    aria-label={isPlaying ? '暂停听力材料' : '播放听力材料'}
                     className="p-4 bg-[#003178] hover:bg-[#003178]/90 text-white rounded-full shadow-md flex items-center justify-center hover:scale-105 transition-all cursor-pointer"
                   >
                     {isPlaying ? <Pause className="h-5 w-5 fill-white" /> : <Play className="h-5 w-5 fill-white translate-x-0.5" />}
@@ -452,6 +455,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
                   {/* Forward 10s */}
                   <button
                     onClick={() => skipAudio(10)}
+                    aria-label="前进10秒"
                     className="p-2 hover:bg-white rounded-full text-gray-500 hover:text-[#003178] transition border border-transparent hover:border-gray-200 shadow-2xs cursor-pointer"
                     title="前进10秒"
                   >
@@ -606,7 +610,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
                       key={lvl}
                       onClick={() => handleSelectConfidence(lvl)}
                       disabled={activeQ.isSubmitted}
-                      className={`text-[10px] font-bold px-3 py-1 rounded-lg transition-all ${
+                      className={`min-h-11 text-[10px] font-bold px-3 py-2 rounded-lg transition-all ${
                         isChosen
                           ? 'bg-[#003178] text-white shadow-xs scale-105'
                           : 'text-[#434652] hover:bg-white'
@@ -714,7 +718,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
               <div className="flex items-center justify-between pt-2">
                 <button
                   onClick={handleAddToReviewQueue}
-                  className="px-4 py-2 bg-white text-[#003178] border border-gray-200 hover:border-[#dbf1fe] text-[11px] font-bold rounded-xl hover:bg-[#dbf1fe] transition flex items-center gap-1 shrink-0 cursor-pointer"
+                    className="flex min-h-11 shrink-0 cursor-pointer items-center gap-1 rounded-xl border border-gray-200 bg-white px-4 py-2 text-[11px] font-bold text-[#003178] transition hover:border-[#dbf1fe] hover:bg-[#dbf1fe]"
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
                   <span>加入复习队列</span>
@@ -722,7 +726,7 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
 
                 <button
                   onClick={handleNextQuestion}
-                  className="px-6 py-2 bg-[#003178] hover:bg-sky-900 border text-white text-[11px] font-bold rounded-xl transition flex items-center gap-1 cursor-pointer"
+                  className="flex min-h-11 cursor-pointer items-center gap-1 rounded-xl border bg-[#003178] px-6 py-2 text-[11px] font-bold text-white transition hover:bg-sky-900"
                 >
                   <span>{currentQuestionIndex < questions.length - 1 ? '下一题' : '完成本次听力练习'}</span>
                   <ArrowRight className="h-3.5 w-3.5" />

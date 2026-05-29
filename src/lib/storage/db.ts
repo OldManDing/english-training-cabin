@@ -121,6 +121,14 @@ export async function loadSkillProfiles(): Promise<SkillProfile[]> {
   return db.skillProfiles.orderBy('lastUpdatedAt').reverse().toArray();
 }
 
+export async function loadPracticeSessions(): Promise<PracticeSession[]> {
+  return db.practiceSessions.orderBy('startedAt').reverse().toArray();
+}
+
+export async function loadAttempts(): Promise<Attempt[]> {
+  return db.attempts.orderBy('createdAt').reverse().toArray();
+}
+
 export async function persistSkillProfiles(skillProfiles: SkillProfile[]): Promise<void> {
   if (skillProfiles.length === 0) return;
   await db.skillProfiles.bulkPut(skillProfiles);

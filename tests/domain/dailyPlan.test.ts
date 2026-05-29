@@ -284,4 +284,124 @@ describe('buildDailyPlan', () => {
       title: '核心词汇听音与语块记忆',
     });
   });
+
+  it('routes a diagnostic cloze weakness to the cloze practice entry instead of generic vocabulary', () => {
+    const plan = buildDailyPlan({
+      goal,
+      date: '2026-05-24',
+      skillProfiles: [
+        {
+          id: 'cet4-vocabulary-diagnostic-cloze-context',
+          skillArea: 'vocabulary',
+          subSkillId: 'diagnostic-cloze-context',
+          score: 42,
+          confidence: 2,
+          evidenceCount: 1,
+          lastUpdatedAt: '2026-05-24T00:00:00.000Z',
+        },
+        {
+          id: 'cet4-reading-careful-reading',
+          skillArea: 'reading',
+          subSkillId: 'careful-reading',
+          score: 82,
+          confidence: 4,
+          evidenceCount: 5,
+          lastUpdatedAt: '2026-05-24T00:00:00.000Z',
+        },
+      ],
+    });
+
+    expect(plan.tasks.find((task) => task.type === 'practice')).toMatchObject({
+      title: '完形/选词填空语境专项',
+      payload: expect.objectContaining({
+        mode: 'cloze-context',
+        sourceSubSkillId: 'diagnostic-cloze-context',
+      }),
+    });
+  });
+
+  it('routes a diagnostic grammar weakness to grammar structure practice', () => {
+    const plan = buildDailyPlan({
+      goal,
+      date: '2026-05-24',
+      skillProfiles: [
+        {
+          id: 'cet4-grammar-diagnostic-grammar-structure',
+          skillArea: 'grammar',
+          subSkillId: 'diagnostic-grammar-structure',
+          score: 42,
+          confidence: 2,
+          evidenceCount: 1,
+          lastUpdatedAt: '2026-05-24T00:00:00.000Z',
+        },
+        {
+          id: 'cet4-reading-careful-reading',
+          skillArea: 'reading',
+          subSkillId: 'careful-reading',
+          score: 82,
+          confidence: 4,
+          evidenceCount: 5,
+          lastUpdatedAt: '2026-05-24T00:00:00.000Z',
+        },
+      ],
+    });
+
+    expect(plan.tasks.find((task) => task.type === 'practice')).toMatchObject({
+      title: '语法结构与固定搭配专项',
+      skillArea: 'grammar',
+      payload: expect.objectContaining({
+        mode: 'grammar-structure',
+        sourceSubSkillId: 'diagnostic-grammar-structure',
+      }),
+    });
+  });
+
+  it('keeps a severe diagnostic weakness ahead of stage mock calibration near the exam', () => {
+    const plan = buildDailyPlan({
+      goal,
+      date: '2026-05-29',
+      skillProfiles: [
+        {
+          id: 'cet4-grammar-diagnostic-grammar-structure',
+          skillArea: 'grammar',
+          subSkillId: 'diagnostic-grammar-structure',
+          score: 42,
+          confidence: 2,
+          evidenceCount: 1,
+          lastUpdatedAt: '2026-05-29T00:00:00.000Z',
+        },
+        {
+          id: 'cet4-reading-careful-reading',
+          skillArea: 'reading',
+          subSkillId: 'careful-reading',
+          score: 82,
+          confidence: 4,
+          evidenceCount: 5,
+          lastUpdatedAt: '2026-05-29T00:00:00.000Z',
+        },
+        {
+          id: 'cet4-vocabulary-cet4-core-vocabulary',
+          skillArea: 'vocabulary',
+          subSkillId: 'cet4-core-vocabulary',
+          score: 78,
+          confidence: 4,
+          evidenceCount: 5,
+          lastUpdatedAt: '2026-05-29T00:00:00.000Z',
+        },
+      ],
+    });
+
+    expect(plan.tasks[0]).toMatchObject({
+      type: 'practice',
+      title: '语法结构与固定搭配专项',
+      skillArea: 'grammar',
+      payload: expect.objectContaining({
+        mode: 'grammar-structure',
+      }),
+    });
+    expect(plan.tasks[1]).toMatchObject({
+      type: 'mock',
+      title: '阶段模考：写作/听力/阅读/翻译综合校准',
+    });
+  });
 });

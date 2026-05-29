@@ -115,6 +115,7 @@ export default function SubjectiveTraining({ mode, onBack, onComplete }: Subject
         <div className="flex items-center gap-3 sm:gap-4">
           <button
             onClick={onBack}
+            aria-label="返回专项练习"
             className="p-2 rounded-xl text-[#003178] hover:bg-[#dbf1fe] cursor-pointer"
           >
             <ArrowLeft className="h-5 w-5" />

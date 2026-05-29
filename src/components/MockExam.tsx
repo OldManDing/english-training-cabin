@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { CET4_MOCK_EXAM_BANK, type Cet4MockChoiceQuestion } from '../questionBank';
 import { buildMockExamReport, MockExamReportResult } from '../domain/practice/mockExam';
-import { PracticeCompletionReport } from '../types';
+import { DailyPlan, PracticeCompletionReport, SkillProfile } from '../types';
 
 type Choice = 'A' | 'B' | 'C' | 'D';
 type MockSectionId = 'writing' | 'listening' | 'reading' | 'translation' | 'review';
@@ -25,9 +25,57 @@ type MockSectionId = 'writing' | 'listening' | 'reading' | 'translation' | 'revi
 interface MockExamProps {
   onBack: () => void;
   onComplete: (score: number, report: PracticeCompletionReport) => void;
+  skillProfiles?: SkillProfile[];
+  dailyPlan?: DailyPlan | null;
 }
 
-export default function MockExam({ onBack, onComplete }: MockExamProps) {
+function hashText(value: string): number {
+  return value.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+}
+
+function getWeakestMockProfile(skillProfiles: SkillProfile[]): SkillProfile | undefined {
+  return skillProfiles
+    .filter((profile) => profile.evidenceCount > 0)
+    .filter((profile) => ['writing', 'listening', 'reading', 'translation', 'grammar', 'vocabulary'].includes(profile.skillArea))
+    .sort((left, right) => {
+      if (left.score !== right.score) return left.score - right.score;
+      return right.lastUpdatedAt.localeCompare(left.lastUpdatedAt);
+    })[0];
+}
+
+function labelWeakSkill(profile?: SkillProfile): string {
+  if (!profile) return '尚未完成诊断';
+  if (profile.subSkillId.toLowerCase().includes('cloze')) return '完形/选词填空';
+  if (profile.skillArea === 'grammar') return '语法结构';
+  if (profile.skillArea === 'vocabulary') return '词汇语境';
+  if (profile.skillArea === 'listening') return '听力';
+  if (profile.skillArea === 'writing') return '写作';
+  if (profile.skillArea === 'translation') return '翻译';
+  return '阅读';
+}
+
+function buildMockRecommendation(skillProfiles: SkillProfile[], dailyPlan?: DailyPlan | null) {
+  const weakProfile = getWeakestMockProfile(skillProfiles);
+  const plannedMock = dailyPlan?.tasks.find((task) => task.type === 'mock');
+  const seed = weakProfile ? `${weakProfile.skillArea}-${weakProfile.subSkillId}-${weakProfile.score}` : plannedMock?.id ?? 'default';
+  const index = weakProfile && CET4_MOCK_EXAM_BANK.length > 0 ? hashText(seed) % CET4_MOCK_EXAM_BANK.length : 0;
+  const paper = CET4_MOCK_EXAM_BANK[index] ?? CET4_MOCK_EXAM_BANK[0];
+  const weakLabel = labelWeakSkill(weakProfile);
+
+  return {
+    paper,
+    weakLabel,
+    reason: weakProfile
+      ? `根据最近能力画像，${weakLabel} 当前为 ${weakProfile.score}%。系统默认切到第 ${index + 1} 套阶段卷，并在提交后把四项分数继续回写能力画像。`
+      : '尚未完成诊断时先使用默认阶段卷；完成入门诊断后，系统会按弱项自动调整默认卷和训练入口。',
+  };
+}
+
+export default function MockExam({ onBack, onComplete, skillProfiles = [], dailyPlan }: MockExamProps) {
+  const mockRecommendation = useMemo(
+    () => buildMockRecommendation(skillProfiles, dailyPlan),
+    [dailyPlan, skillProfiles],
+  );
   const [startedAt] = useState(() => new Date().toISOString());
   const [activeSection, setActiveSection] = useState<MockSectionId>('writing');
   const [choices, setChoices] = useState<Record<string, Choice | undefined>>({});
@@ -35,7 +83,8 @@ export default function MockExam({ onBack, onComplete }: MockExamProps) {
   const [translationAnswer, setTranslationAnswer] = useState('');
   const [result, setResult] = useState<MockExamReportResult | null>(null);
   const [isCompleting, setIsCompleting] = useState(false);
-  const [selectedPaperId, setSelectedPaperId] = useState(CET4_MOCK_EXAM_BANK[0].id);
+  const [selectedPaperId, setSelectedPaperId] = useState(mockRecommendation.paper.id);
+  const [hasManualPaperSelection, setHasManualPaperSelection] = useState(false);
   const paper = CET4_MOCK_EXAM_BANK.find((item) => item.id === selectedPaperId) ?? CET4_MOCK_EXAM_BANK[0];
 
   const listeningAnsweredCount = paper.listening.questions.filter((question) => choices[question.id]).length;
@@ -111,7 +160,7 @@ export default function MockExam({ onBack, onComplete }: MockExamProps) {
     window.speechSynthesis.speak(utterance);
   };
 
-  const selectPaper = (paperId: string) => {
+  const resetPaperState = (paperId: string) => {
     setSelectedPaperId(paperId);
     setActiveSection('writing');
     setChoices({});
@@ -119,6 +168,18 @@ export default function MockExam({ onBack, onComplete }: MockExamProps) {
     setTranslationAnswer('');
     setResult(null);
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+  };
+
+  useEffect(() => {
+    if (hasManualPaperSelection || result) return;
+    if (selectedPaperId !== mockRecommendation.paper.id) {
+      resetPaperState(mockRecommendation.paper.id);
+    }
+  }, [hasManualPaperSelection, mockRecommendation.paper.id, result, selectedPaperId]);
+
+  const selectPaper = (paperId: string) => {
+    setHasManualPaperSelection(true);
+    resetPaperState(paperId);
   };
 
   const submitMockExam = () => {
@@ -338,6 +399,20 @@ export default function MockExam({ onBack, onComplete }: MockExamProps) {
             </div>
           </div>
         </header>
+
+        {!result && (
+          <section className="rounded-[2rem] border border-emerald-100 bg-emerald-50 p-4 shadow-sm sm:p-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <div className="text-xs font-black text-emerald-800">诊断定制模考</div>
+                <p className="mt-1 text-sm font-bold leading-6 text-slate-700">{mockRecommendation.reason}</p>
+              </div>
+              <div className="rounded-2xl bg-white px-4 py-3 text-xs font-black text-[#003178]">
+                当前关注：{mockRecommendation.weakLabel}
+              </div>
+            </div>
+          </section>
+        )}
 
         {!result && (
           <section className="rounded-[2rem] border border-[#cfe6f2] bg-white/85 p-4 shadow-sm sm:p-5">

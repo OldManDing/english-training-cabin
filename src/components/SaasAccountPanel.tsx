@@ -52,6 +52,8 @@ function getApiMessage(error: unknown): string {
   return error instanceof Error ? error.message : '请求失败，请稍后重试。';
 }
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 function formatAccountState(account: PublicSaasAccountContext) {
   const statusMap = {
     trialing: '试运行',
@@ -91,7 +93,44 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
 
   useEffect(() => {
     setAuthError('');
+    const frame = window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      document.querySelector('main')?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [mode]);
+
+  const validateAuthForm = () => {
+    const normalizedEmail = email.trim();
+    const normalizedName = name.trim();
+    const normalizedOrganization = organizationName.trim();
+    const normalizedInviteCode = inviteCode.trim();
+    const normalizedRecoveryCode = recoveryCode.trim();
+    const normalizedActionToken = actionToken.trim();
+
+    if ((mode === 'register' || mode === 'invitation') && !normalizedName) {
+      return '请输入姓名。';
+    }
+    if (mode === 'register' && !normalizedOrganization) {
+      return '请输入团队或学校名称。';
+    }
+    if (mode === 'register' && !normalizedInviteCode) {
+      return '请输入有效邀请码。';
+    }
+    if ((mode === 'register' || mode === 'login' || mode === 'reset') && !EMAIL_PATTERN.test(normalizedEmail)) {
+      return '请输入有效邮箱。';
+    }
+    if (mode === 'reset' && !normalizedRecoveryCode) {
+      return '请输入账号恢复码。';
+    }
+    if (mode === 'invitation' && !normalizedActionToken) {
+      return '请输入邀请链接中的 token。';
+    }
+    if (password.length < 8) {
+      return '密码至少需要 8 位。';
+    }
+    return '';
+  };
 
   useEffect(() => {
     if (!token) return;
@@ -131,8 +170,21 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
   }, [token, oneTimeRecoveryCode]);
 
   const handleAuthSubmit = async () => {
-    setIsBusy(true);
     setAuthError('');
+    const validationError = validateAuthForm();
+    if (validationError) {
+      setAuthError(validationError);
+      return;
+    }
+
+    const normalizedEmail = email.trim();
+    const normalizedName = name.trim();
+    const normalizedOrganization = organizationName.trim();
+    const normalizedInviteCode = inviteCode.trim();
+    const normalizedRecoveryCode = recoveryCode.trim();
+    const normalizedActionToken = actionToken.trim();
+
+    setIsBusy(true);
     try {
       const endpoint = mode === 'register'
         ? '/api/auth/register'
@@ -142,12 +194,18 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
             ? '/api/auth/password-reset'
             : '/api/workspace/invitations/accept';
       const body = mode === 'register'
-        ? { email, password, name, organizationName, inviteCode }
+        ? {
+            email: normalizedEmail,
+            password,
+            name: normalizedName,
+            organizationName: normalizedOrganization,
+            inviteCode: normalizedInviteCode,
+          }
         : mode === 'login'
-          ? { email, password }
+          ? { email: normalizedEmail, password }
           : mode === 'reset'
-            ? { email, recoveryCode, password }
-            : { token: actionToken, name, password };
+            ? { email: normalizedEmail, recoveryCode: normalizedRecoveryCode, password }
+            : { token: normalizedActionToken, name: normalizedName, password };
       const payload = await apiRequest<AuthPayload>(
         endpoint,
         {
@@ -332,7 +390,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
               <p className="text-[10.5px] font-black text-[#003178]">
                 接受团队邀请
               </p>
-              <button type="button" onClick={() => setMode('login')} className="text-[10px] font-black text-[#003178]">返回登录</button>
+              <button type="button" onClick={() => setMode('login')} className="ui-button ui-button-secondary ui-button-compact">返回登录</button>
             </div>
           )}
 
@@ -431,7 +489,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
             data-testid="saas-auth-submit"
             type="submit"
             disabled={isBusy}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#003178] px-4 py-3 text-xs font-black text-white transition hover:bg-[#07244f] disabled:bg-gray-400"
+            className="ui-button ui-button-primary ui-button-full"
           >
             {isBusy ? <RefreshCw className="h-4 w-4 animate-spin" /> : mode === 'register' || mode === 'invitation' ? <UserPlus className="h-4 w-4" /> : mode === 'reset' ? <KeyRound className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
             {mode === 'register' ? '创建云端账号' : mode === 'login' ? '登录云端账号' : mode === 'reset' ? '用恢复码重置密码' : '接受邀请并加入团队'}
@@ -449,19 +507,19 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
           )}
 
           {mode !== 'invitation' && (
-            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[11px] font-black">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {mode !== 'login' && (
-                <button type="button" onClick={() => setMode('login')} className="text-[#003178]">
+                <button type="button" onClick={() => setMode('login')} className="ui-button ui-button-secondary ui-button-compact ui-button-full">
                   返回登录
                 </button>
               )}
               {mode !== 'register' && (
-                <button type="button" onClick={() => setMode('register')} className="text-[#003178]">
+                <button type="button" onClick={() => setMode('register')} className="ui-button ui-button-secondary ui-button-compact ui-button-full">
                   使用邀请码注册
                 </button>
               )}
               {mode !== 'reset' && (
-                <button type="button" onClick={() => setMode('reset')} className="text-[#667085]">
+                <button type="button" onClick={() => setMode('reset')} className="ui-button ui-button-muted ui-button-compact ui-button-full">
                   忘记密码
                 </button>
               )}
@@ -485,7 +543,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
               <button
                 type="button"
                 onClick={handleLogout}
-                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[10px] font-black text-[#434652] hover:bg-white"
+                className="ui-button ui-button-muted ui-button-compact"
               >
                 <LogOut className="h-3.5 w-3.5" />
                 退出
@@ -500,7 +558,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
               type="button"
               onClick={handleGenerateRecoveryCode}
               disabled={isBusy}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[#cfe6f2] bg-white px-3 py-2 text-[10px] font-black text-[#003178] hover:bg-[#eef7fc] disabled:text-gray-400"
+              className="ui-button ui-button-secondary ui-button-compact"
             >
               <KeyRound className="h-3.5 w-3.5" />
               生成新的账号恢复码
@@ -512,7 +570,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
               type="button"
               onClick={handleCloudBackup}
               disabled={isBusy || !account.entitlements.cloudSync}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#003178] px-4 py-3 text-xs font-black text-white transition hover:bg-[#07244f] disabled:bg-gray-400"
+              className="ui-button ui-button-primary ui-button-full"
             >
               <UploadCloud className="h-4 w-4" />
               同步到云端
@@ -521,7 +579,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
               type="button"
               onClick={handleCloudRestore}
               disabled={isBusy}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#cfe6f2] bg-[#f7fbff] px-4 py-3 text-xs font-black text-[#003178] transition hover:bg-[#eef7fc] disabled:text-gray-400"
+              className="ui-button ui-button-secondary ui-button-full"
             >
               <DownloadCloud className="h-4 w-4" />
               从云端恢复
@@ -533,7 +591,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
               data-testid="saas-ops-toggle"
               type="button"
               onClick={() => setShowOperations((current) => !current)}
-              className="flex w-full items-center justify-between gap-3 text-left"
+              className="ui-button ui-button-secondary ui-button-full justify-between text-left"
             >
               <span>
                 <span className="block text-xs font-black text-[#003178]">团队与数据管理（高级）</span>
@@ -569,7 +627,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
             <button
               type="button"
               onClick={() => navigator.clipboard?.writeText(oneTimeRecoveryCode)}
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-amber-900 px-3 py-2 text-[10px] font-black text-white"
+              className="ui-button ui-button-warning ui-button-compact"
             >
               <Copy className="h-3.5 w-3.5" />
               复制
@@ -587,7 +645,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
                 if (currentToken) setStoredAuthToken(currentToken, true);
                 onAuthenticated();
               }}
-              className="w-full rounded-xl bg-[#003178] px-4 py-3 text-xs font-black text-white hover:bg-[#07244f]"
+              className="ui-button ui-button-primary ui-button-full"
             >
               我已保存恢复码，进入学习舱
             </button>

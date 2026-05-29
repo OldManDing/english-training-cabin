@@ -289,7 +289,7 @@ export default function SaasOperationsPanel({ token, account, onStatus }: SaasOp
           type="button"
           onClick={() => runAction('团队控制台已刷新。', async () => undefined)}
           disabled={isBusy}
-          className="w-full sm:w-auto rounded-xl border border-[#cfe6f2] bg-white px-3 py-3 sm:py-2 text-[10px] font-black text-[#003178] disabled:text-gray-400"
+          className="ui-button ui-button-secondary ui-button-compact w-full sm:w-auto"
         >
           刷新
         </button>
@@ -328,7 +328,7 @@ export default function SaasOperationsPanel({ token, account, onStatus }: SaasOp
                   <p className="text-[10px] font-black text-[#003178]">{compactDeviceLabel(session.userAgent)} {session.current ? '· 当前设备' : ''}</p>
                   <p className="text-[9.5px] font-bold text-[#434652]">最近使用 {formatDate(session.lastUsedAt ?? session.createdAt)} · {session.active ? '有效' : '已失效'}</p>
                 </div>
-                <button type="button" onClick={() => revokeSession(session.id)} disabled={isBusy || session.current || !session.active} className="rounded-lg px-3 py-2 text-[9px] font-black text-rose-700 disabled:text-gray-300">
+                <button type="button" onClick={() => revokeSession(session.id)} disabled={isBusy || session.current || !session.active} className="ui-button ui-button-danger ui-button-compact">
                   撤销
                 </button>
               </div>
@@ -345,7 +345,7 @@ export default function SaasOperationsPanel({ token, account, onStatus }: SaasOp
           </h5>
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
             <input value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} data-testid="saas-invite-email" className="rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-3 py-2 text-[10px] font-bold text-[#003178]" placeholder="成员账号邮箱（仅生成邀请链接）" type="email" />
-            <button type="button" onClick={inviteMember} disabled={isBusy || !inviteEmail} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#003178] px-3 py-2 text-[10px] font-black text-white disabled:bg-gray-400">
+            <button type="button" onClick={inviteMember} disabled={isBusy || !inviteEmail} className="ui-button ui-button-primary ui-button-compact">
               <UserPlus className="h-3.5 w-3.5" />
               邀请
             </button>
@@ -377,26 +377,26 @@ export default function SaasOperationsPanel({ token, account, onStatus }: SaasOp
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-2">
             <input value={contentTitle} onChange={(event) => setContentTitle(event.target.value)} data-testid="saas-content-title" className="lg:col-span-2 rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-3 py-2 text-[10px] font-bold text-[#003178]" placeholder="内容标题" />
             <div className="ui-select-shell">
-              <select value={contentAssetType} onChange={(event) => setContentAssetType(event.target.value as ContentAsset['assetType'])} className="ui-select min-h-9 rounded-xl py-2 pl-3 pr-8 text-[10px]">
+              <select aria-label="内容类型" value={contentAssetType} onChange={(event) => setContentAssetType(event.target.value as ContentAsset['assetType'])} className="ui-select min-h-11 rounded-xl py-2 pl-3 pr-8 text-[10px]">
                 {Object.entries(assetTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
               <ChevronDown className="ui-select-icon right-3" />
             </div>
             <div className="ui-select-shell">
-              <select value={contentSourceType} onChange={(event) => setContentSourceType(event.target.value as ContentAsset['sourceType'])} className="ui-select min-h-9 rounded-xl py-2 pl-3 pr-8 text-[10px]">
+              <select aria-label="内容来源" value={contentSourceType} onChange={(event) => setContentSourceType(event.target.value as ContentAsset['sourceType'])} className="ui-select min-h-11 rounded-xl py-2 pl-3 pr-8 text-[10px]">
                 {Object.entries(sourceTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
               <ChevronDown className="ui-select-icon right-3" />
             </div>
             <div className="ui-select-shell">
-              <select value={contentLicenseStatus} onChange={(event) => setContentLicenseStatus(event.target.value as ContentAsset['licenseStatus'])} className="ui-select min-h-9 rounded-xl py-2 pl-3 pr-8 text-[10px]">
+              <select aria-label="授权状态" value={contentLicenseStatus} onChange={(event) => setContentLicenseStatus(event.target.value as ContentAsset['licenseStatus'])} className="ui-select min-h-11 rounded-xl py-2 pl-3 pr-8 text-[10px]">
                 {Object.entries(licenseStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
               <ChevronDown className="ui-select-icon right-3" />
             </div>
           </div>
           <textarea value={contentNotes} onChange={(event) => setContentNotes(event.target.value)} className="w-full rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-3 py-2 text-[10px] font-bold text-[#003178]" rows={2} placeholder="授权说明、来源证据或下架原因" />
-          <button type="button" onClick={createContentAsset} disabled={isBusy || contentTitle.length < 2} className="rounded-xl bg-[#003178] px-3 py-2 text-[10px] font-black text-white disabled:bg-gray-400">
+          <button type="button" onClick={createContentAsset} disabled={isBusy || contentTitle.length < 2} className="ui-button ui-button-primary ui-button-compact">
             登记内容资产
           </button>
           <div className="space-y-2">
@@ -407,7 +407,7 @@ export default function SaasOperationsPanel({ token, account, onStatus }: SaasOp
                   <p className="text-[9.5px] font-bold text-[#434652]">{assetTypeLabels[asset.assetType]} · {sourceTypeLabels[asset.sourceType]} · {licenseStatusLabels[asset.licenseStatus]}</p>
                 </div>
                 <div className="ui-select-shell sm:w-40">
-                  <select value={asset.licenseStatus} onChange={(event) => updateContentAsset(asset, event.target.value as ContentAsset['licenseStatus'])} className="ui-select min-h-9 rounded-xl py-2 pl-3 pr-8 text-[10px]">
+                  <select aria-label={`${asset.title} 授权状态`} value={asset.licenseStatus} onChange={(event) => updateContentAsset(asset, event.target.value as ContentAsset['licenseStatus'])} className="ui-select min-h-11 rounded-xl py-2 pl-3 pr-8 text-[10px]">
                     {Object.entries(licenseStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
                   <ChevronDown className="ui-select-icon right-3" />
@@ -424,13 +424,13 @@ export default function SaasOperationsPanel({ token, account, onStatus }: SaasOp
           数据权利与合规请求
         </h5>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={downloadCloudArchive} disabled={isBusy} className="rounded-xl bg-[#003178] px-3 py-2 text-[10px] font-black text-white disabled:bg-gray-400">
+          <button type="button" onClick={downloadCloudArchive} disabled={isBusy} className="ui-button ui-button-primary ui-button-compact">
             立即下载我的云端档案
           </button>
-          <button type="button" onClick={() => createDataRequest('export')} disabled={isBusy} className="rounded-xl border border-[#cfe6f2] px-3 py-2 text-[10px] font-black text-[#003178] disabled:text-gray-400">
+          <button type="button" onClick={() => createDataRequest('export')} disabled={isBusy} className="ui-button ui-button-secondary ui-button-compact">
             提交导出留痕请求
           </button>
-          <button type="button" onClick={() => createDataRequest('delete')} disabled={isBusy} className="inline-flex items-center gap-1.5 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-[10px] font-black text-rose-700 disabled:text-gray-400">
+          <button type="button" onClick={() => createDataRequest('delete')} disabled={isBusy} className="ui-button ui-button-danger ui-button-compact">
             <Trash2 className="h-3.5 w-3.5" />
             请求删除云端档案
           </button>
@@ -446,8 +446,8 @@ export default function SaasOperationsPanel({ token, account, onStatus }: SaasOp
               </div>
               {isOwner && (request.status === 'queued' || request.status === 'processing') && (
                 <div className="flex gap-1">
-                  <button type="button" onClick={() => resolveDataRequest(request.id, 'processing')} className="rounded-lg px-2 py-1 text-[9px] font-black text-[#003178]">处理中</button>
-                  <button type="button" onClick={() => resolveDataRequest(request.id, 'completed')} className="rounded-lg px-2 py-1 text-[9px] font-black text-emerald-700">完成</button>
+                  <button type="button" onClick={() => resolveDataRequest(request.id, 'processing')} className="ui-button ui-button-secondary ui-button-compact">处理中</button>
+                  <button type="button" onClick={() => resolveDataRequest(request.id, 'completed')} className="ui-button ui-button-success ui-button-compact">完成</button>
                 </div>
               )}
             </div>

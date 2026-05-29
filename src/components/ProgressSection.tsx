@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Activity, AlertCircle, Award, Check, FileText, Globe, Sparkle, Zap } from 'lucide-react';
-import { SkillProfile } from '../types';
+import { Activity, AlertCircle, Award, Check, Database, FileText, Globe, Sparkle, Zap } from 'lucide-react';
+import { Attempt, PracticeSession, SkillProfile } from '../types';
 import {
   buildAbilityEvidenceSummary,
   buildAbilityTimelineBars,
@@ -9,10 +9,13 @@ import {
   type AbilityEvidenceTab,
   type AbilityNodeIcon,
 } from '../domain/progress/abilityEvidence';
+import { buildLearningEvidenceLedger, type EvidenceCoverageStatus } from '../domain/progress/evidenceLedger';
 
 interface ProgressSectionProps {
   scoreChange?: { from: number; to: number };
   persistedSkillProfiles?: SkillProfile[];
+  persistedPracticeSessions?: PracticeSession[];
+  persistedAttempts?: Attempt[];
 }
 
 const KNOWLEDGE_NODE_ICONS: Record<AbilityNodeIcon, React.ComponentType<{ className?: string }>> = {
@@ -36,7 +39,24 @@ function barColor(type: string): string {
   return 'bg-[#003178]';
 }
 
-export default function ProgressSection({ scoreChange, persistedSkillProfiles = [] }: ProgressSectionProps) {
+function coverageBadgeClass(status: EvidenceCoverageStatus): string {
+  if (status === 'strong') return 'bg-emerald-50 text-emerald-700 border-emerald-100';
+  if (status === 'thin') return 'bg-amber-50 text-amber-700 border-amber-100';
+  return 'bg-slate-100 text-slate-500 border-slate-200';
+}
+
+function coverageLabel(status: EvidenceCoverageStatus): string {
+  if (status === 'strong') return '证据充分';
+  if (status === 'thin') return '证据偏薄';
+  return '等待证据';
+}
+
+export default function ProgressSection({
+  scoreChange,
+  persistedSkillProfiles = [],
+  persistedPracticeSessions = [],
+  persistedAttempts = [],
+}: ProgressSectionProps) {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<AbilityEvidenceTab>('reading');
   const [selectedWeek, setSelectedWeek] = useState<string>('W6');
@@ -44,6 +64,11 @@ export default function ProgressSection({ scoreChange, persistedSkillProfiles = 
   const evidenceKnowledgeTabs = buildEvidenceKnowledgeTabs(persistedSkillProfiles);
   const stageProgress = buildStageProgressSummary(persistedSkillProfiles);
   const weeklyBars = buildAbilityTimelineBars(persistedSkillProfiles);
+  const evidenceLedger = buildLearningEvidenceLedger({
+    sessions: persistedPracticeSessions,
+    attempts: persistedAttempts,
+    skillProfiles: persistedSkillProfiles,
+  });
   const radarScale = 0.8;
   const { listening, reading, writing, speaking } = abilitySummary.scores;
 
@@ -250,6 +275,110 @@ export default function ProgressSection({ scoreChange, persistedSkillProfiles = 
                   按当前能力均值估算，CET 分数变化约 {stageProgress.estimatedCetScoreChange > 0 ? '+' : ''}{stageProgress.estimatedCetScoreChange}。
                 </span>
               )}
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-3xl border border-[#c3c6d4] bg-white p-4 shadow-2xs transition-colors hover:border-[#003178] sm:p-6">
+          <div className="mb-5 flex flex-col gap-3 border-b pb-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-[#071e27]">
+                <Database className="h-4 w-4 text-[#003178]" />
+                学习证据账本
+              </h3>
+              <p className="mt-2 max-w-3xl text-xs font-semibold leading-5 text-slate-500">
+                这里展示能力画像、阶段验证和每日调度实际依赖的学习证据，避免系统只给结论、不说明依据。
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-center text-[11px] font-black sm:min-w-96 sm:grid-cols-4">
+              <div className="rounded-2xl bg-[#eef7fc] p-3 text-[#003178]">
+                <div className="font-mono text-xl">{evidenceLedger.totalCompletedSessions}</div>
+                <div>完成训练</div>
+              </div>
+              <div className="rounded-2xl bg-[#eef7fc] p-3 text-[#003178]">
+                <div className="font-mono text-xl">{evidenceLedger.totalAttempts}</div>
+                <div>作答记录</div>
+              </div>
+              <div className="rounded-2xl bg-emerald-50 p-3 text-emerald-700">
+                <div className="font-mono text-xl">{evidenceLedger.feedbackAttemptCount}</div>
+                <div>反馈证据</div>
+              </div>
+              <div className="rounded-2xl bg-amber-50 p-3 text-amber-700">
+                <div className="font-mono text-xl">{evidenceLedger.mistakeReasonCount}</div>
+                <div>错因标签</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+            <div className="space-y-3">
+              <h4 className="text-xs font-black text-[#003178]">能力证据覆盖</h4>
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {evidenceLedger.skillCoverage.map((item) => (
+                  <div key={item.skillArea} className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-black text-slate-800">{item.label}</span>
+                      <span className={`rounded-full border px-2 py-1 text-[10px] font-black ${coverageBadgeClass(item.status)}`}>
+                        {coverageLabel(item.status)}
+                      </span>
+                    </div>
+                    <div className="mt-3 flex items-end justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400">证据数</p>
+                        <p className="font-mono text-2xl font-black text-[#003178]">{item.evidenceCount}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] font-bold text-slate-400">最新分</p>
+                        <p className="font-mono text-2xl font-black text-slate-700">{item.latestScore ?? '--'}</p>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-[10px] font-semibold text-slate-400">
+                      {item.latestUpdatedAt ? `更新 ${item.latestUpdatedAt.slice(0, 10)}` : '尚未写入学习证据'}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="text-xs font-black text-[#003178]">最近学习证据</h4>
+              {evidenceLedger.recentEvidence.length > 0 ? (
+                <div className="space-y-2">
+                  {evidenceLedger.recentEvidence.map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-slate-100 bg-white p-3 shadow-2xs">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-black text-slate-800">{item.label}</p>
+                          <p className="mt-1 text-[10px] font-semibold text-slate-400">
+                            {item.modeId} · {item.finishedAt.slice(0, 10)}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-[#eef7fc] px-2 py-1 font-mono text-[11px] font-black text-[#003178]">
+                          {item.correctRate == null ? '--' : `${item.correctRate}%`}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-[10px] font-bold text-slate-500">
+                        {item.attemptCount} 条作答 · {item.feedbackCount} 条 AI 反馈 · {item.mistakeReasonCount} 个错因
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-xs font-semibold leading-6 text-slate-500">
+                  还没有可展示的学习会话。完成诊断、专项练习、复习或阶段模考后，这里会自动沉淀证据。
+                </div>
+              )}
+            </div>
+          </div>
+
+          {evidenceLedger.verificationGaps.length > 0 && (
+            <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50 p-4">
+              <h4 className="text-xs font-black text-amber-800">下一步验证缺口</h4>
+              <ul className="mt-2 space-y-1 text-xs font-semibold leading-6 text-amber-800">
+                {evidenceLedger.verificationGaps.slice(0, 4).map((gap) => (
+                  <li key={gap}>{gap}</li>
+                ))}
+              </ul>
             </div>
           )}
         </section>

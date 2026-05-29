@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, CheckCircle2, XCircle, ChevronRight, HelpCircle, Volume2, Headphones, Sparkles } from 'lucide-react';
-import { Passage, PracticeCompletionReport, Question } from '../types';
+import { Passage, PracticeCompletionReport, Question, SkillArea } from '../types';
 import { buildChoicePracticeReport } from '../domain/practice/reports';
 
 interface ReadingTrainingProps {
@@ -20,6 +20,16 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
   const [startedAt] = useState(() => new Date().toISOString());
 
   const currentQuestion: Question = passage.questions[currentIdx];
+  const practiceModuleId = passage.moduleId ?? 'reading';
+  const practiceQuestionTypeId = currentQuestion.questionTypeId ?? passage.questions[0]?.questionTypeId ?? 'careful-reading';
+  const practiceSkillArea: SkillArea = practiceModuleId === 'grammar' ? 'grammar' : 'reading';
+  const trainingTitle = practiceModuleId === 'grammar'
+    ? '语法与完形填空训练舱'
+    : practiceQuestionTypeId === 'word-bank'
+    ? '选词填空训练舱'
+    : practiceQuestionTypeId === 'long-matching'
+    ? '长篇匹配训练舱'
+    : '仔细阅读训练舱';
 
   // Reset states on question change
   useEffect(() => {
@@ -84,11 +94,11 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
       const finalScore = Math.round((correctCount / passage.questions.length) * 100);
       const report = buildChoicePracticeReport({
         examId: passage.examId ?? 'cet4',
-        moduleId: passage.moduleId ?? 'reading',
-        questionTypeId: 'careful-reading',
-        modeId: 'careful-reading-practice',
-        skillArea: 'reading',
-        plannedMinutes: 18,
+        moduleId: practiceModuleId,
+        questionTypeId: practiceQuestionTypeId,
+        modeId: `${practiceQuestionTypeId}-practice`,
+        skillArea: practiceSkillArea,
+        plannedMinutes: practiceModuleId === 'grammar' ? 12 : 18,
         startedAt,
         questions: passage.questions.map((question) => ({
           id: question.id,
@@ -96,7 +106,7 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
           correctAnswer: question.correctAnswer,
           type: question.type,
           moduleId: question.moduleId,
-          questionTypeId: question.questionTypeId,
+          questionTypeId: question.questionTypeId ?? practiceQuestionTypeId,
           correctSentence: question.correctSentence,
           explanation: question.explanation,
         })),
@@ -250,13 +260,14 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
         <div className="flex items-center space-x-3 sm:space-x-4 min-w-0">
           <button
             onClick={onBack}
+            aria-label="返回专项练习"
             className="p-2 hover:bg-[#dbf1fe] text-[#003178] rounded-xl transition-colors cursor-pointer pointer-events-auto"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
           <span className="h-4 w-[1px] bg-gray-300" />
           <h3 className="font-extrabold text-sm text-[#003178] tracking-tight truncate max-w-xs sm:max-w-md">
-            仔细阅读训练舱：{passage.title}
+            {trainingTitle}：{passage.title}
           </h3>
         </div>
 
@@ -398,7 +409,7 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
                     { id: 'not_sure', label: '不太确定', color: 'peer-checked:bg-amber-100 peer-checked:text-amber-800 peer-checked:border-amber-600' },
                     { id: 'guess', label: '纯属盲猜', color: 'peer-checked:bg-red-100 peer-checked:text-red-800 peer-checked:border-red-600' },
                   ].map((item) => (
-                    <label key={item.id} className="flex-1 text-center cursor-pointer">
+                    <label key={item.id} className="flex min-h-11 flex-1 cursor-pointer text-center">
                       <input
                         type="radio"
                         name="confidence"
@@ -407,7 +418,7 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
                         onChange={() => setConfidence(item.id as any)}
                         className="sr-only peer"
                       />
-                      <div className="py-2 px-1 text-xs border border-gray-200 rounded-xl bg-white hover:bg-gray-50 peer-checked:border-2 font-semibold transition-all transition-colors text-gray-500">
+                      <div className="flex min-h-11 w-full items-center justify-center rounded-xl border border-gray-200 bg-white px-1 py-2 text-xs font-semibold text-gray-500 transition-all transition-colors hover:bg-gray-50 peer-checked:border-2">
                         {item.label}
                       </div>
                     </label>
@@ -449,7 +460,7 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
                         const targetText = (currentQuestion as any).correctSentence || currentQuestion.explanation;
                         handleVoicePlay(targetText);
                       }}
-                      className="px-2.5 py-1 text-[11px] bg-white border border-gray-300 text-gray-600 rounded-lg hover:border-[#003178] hover:text-[#003178] flex items-center gap-1.5 font-bold transition-all"
+                      className="flex min-h-11 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-[11px] font-bold text-gray-600 transition-all hover:border-[#003178] hover:text-[#003178]"
                     >
                       <Volume2 className="h-3.5 w-3.5" />
                       <span>{isPlayingText ? '轻触停止' : '朗读线索原句'}</span>

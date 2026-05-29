@@ -15,15 +15,17 @@ export interface QuestionBankCoverageItem {
 
 export interface Cet4MockChoiceQuestion {
   id: string;
-  moduleId: 'listening' | 'reading';
+  moduleId: 'listening' | 'reading' | 'grammar';
   questionTypeId:
     | 'short-news'
     | 'long-conversation'
     | 'listening-passage'
     | 'word-bank'
     | 'long-matching'
-    | 'careful-reading';
-  skillArea: 'listening' | 'reading';
+    | 'careful-reading'
+    | 'grammar-structure'
+    | 'cloze-choice';
+  skillArea: 'listening' | 'reading' | 'grammar';
   title: string;
   prompt: string;
   options: Record<Choice, string>;
@@ -1658,7 +1660,7 @@ export const CET4_READING_BANK: Passage[] = [
 
 function makeMockChoiceQuestion(params: {
   id: string;
-  moduleId: 'listening' | 'reading';
+  moduleId: 'listening' | 'reading' | 'grammar';
   questionTypeId: Cet4MockChoiceQuestion['questionTypeId'];
   title: string;
   prompt: string;
@@ -2702,6 +2704,80 @@ export const CET4_READING_PRACTICE_QUESTIONS: Cet4MockChoiceQuestion[] = [
   ...CET4_LONG_MATCHING_PRACTICE_QUESTIONS,
   ...CET4_CAREFUL_READING_PRACTICE_QUESTIONS,
 ];
+
+const CET4_GRAMMAR_STRUCTURE_ROWS = [
+  ['grammar-to-review', '语法结构 1', 'Students are encouraged ___ their mistakes before the next quiz.', 'review', 'reviewing', 'to review', 'reviewed', 'C', 'be encouraged to do sth. 是固定结构。', '非谓语|固定搭配'],
+  ['grammar-has-improved', '语法结构 2', 'Her listening ability ___ a lot since she started daily practice.', 'improves', 'has improved', 'improved', 'will improve', 'B', 'since 引导到现在的时间段，主句用现在完成时。', '时态|现在完成时'],
+  ['grammar-was-organized', '语法结构 3', 'The online workshop ___ by the student union last Friday.', 'organizes', 'organized', 'was organized', 'has organizing', 'C', 'workshop 与 organize 是被动关系，last Friday 用一般过去时被动。', '被动语态|校园活动'],
+  ['grammar-because-of', '语法结构 4', 'The meeting was postponed ___ heavy rain.', 'because', 'because of', 'although', 'so that', 'B', 'because of 后接名词短语 heavy rain。', '介词短语|原因表达'],
+  ['grammar-fewer', '语法结构 5', 'After feedback, the class made ___ grammar mistakes in writing.', 'less', 'fewer', 'little', 'much', 'B', 'mistakes 是可数名词复数，用 fewer。', '数量词|可数名词'],
+  ['grammar-which', '语法结构 6', 'The report ___ we discussed yesterday was based on survey data.', 'who', 'which', 'where', 'whose', 'B', '先行词 report 是物，定语从句中作宾语，用 which。', '定语从句|关系代词'],
+  ['grammar-unless', '语法结构 7', 'You will not improve your pronunciation ___ you practice aloud.', 'unless', 'because', 'although', 'while', 'A', 'unless 表示“除非”，符合条件逻辑。', '条件状语从句|连接词'],
+  ['grammar-in-order-to', '语法结构 8', 'She took notes carefully ___ remember the main ideas.', 'so that', 'in order to', 'because of', 'as soon as', 'B', 'in order to 后接动词原形，表示目的。', '目的表达|非谓语'],
+  ['grammar-neither-nor', '语法结构 9', 'The answer is ___ accurate nor complete.', 'either', 'neither', 'both', 'not only', 'B', 'neither...nor... 表示“两者都不”。', '并列结构|固定搭配'],
+  ['grammar-should-be-kept', '语法结构 10', 'Personal learning data should ___ safely.', 'keep', 'kept', 'be kept', 'keeping', 'C', 'data 与 keep 是被动关系，should 后接 be done。', '情态动词被动语态|数据安全'],
+] as const;
+
+export const CET4_GRAMMAR_PRACTICE_QUESTIONS: Cet4MockChoiceQuestion[] =
+  CET4_GRAMMAR_STRUCTURE_ROWS.map(([id, title, prompt, optionA, optionB, optionC, optionD, answer, explanation, focus], index) => makeMockChoiceQuestion({
+    id: `cet4-${id}`,
+    moduleId: 'grammar',
+    questionTypeId: 'grammar-structure',
+    title,
+    prompt,
+    correctAnswer: answer as Choice,
+    correctOption: ({ A: optionA, B: optionB, C: optionC, D: optionD } as Record<Choice, string>)[answer as Choice],
+    correctSentence: `${prompt} (${focus})`,
+    explanation,
+    trapType: focus,
+    wrongOptions: {
+      A: optionA,
+      B: optionB,
+      C: optionC,
+      D: optionD,
+    },
+  }));
+
+const CLOZE_CONTEXT_FRAMES = [
+  {
+    slug: 'context-meaning',
+    title: '完形填空语境线索',
+    prompt: (item: VocabularyPracticeItem) =>
+      `Complete the sentence with the most suitable word: The passage gives a context clue, so the best word is related to "${item.options[item.correctAnswer]}".`,
+    explanation: (item: VocabularyPracticeItem) => `完形填空先看空格前后语境，再判断词义。该题线索对应 ${item.word}。`,
+    trapType: '完形填空|词义语境',
+  },
+  {
+    slug: 'collocation',
+    title: '完形填空搭配线索',
+    prompt: (item: VocabularyPracticeItem) =>
+      `Choose the word that best completes this collocation in context: ${item.collocation}.`,
+    explanation: (item: VocabularyPracticeItem) => `该空依赖固定搭配和语块记忆：${item.collocation}。`,
+    trapType: '完形填空|搭配错误',
+  },
+  {
+    slug: 'sentence-logic',
+    title: '完形填空句际逻辑',
+    prompt: (item: VocabularyPracticeItem) =>
+      `The sentence before the blank says: "${item.example}" Which word best keeps the meaning consistent?`,
+    explanation: (item: VocabularyPracticeItem) => `完形题不能只背中文释义，要根据前句语义保持一致。正确词是 ${item.word}。`,
+    trapType: '完形填空|上下文逻辑',
+  },
+] as const;
+
+export const CET4_CLOZE_PRACTICE_QUESTIONS: Cet4MockChoiceQuestion[] =
+  CET4_VOCABULARY_BANK.slice(0, 600).flatMap((item, itemIndex) => CLOZE_CONTEXT_FRAMES.map((frame, frameIndex) => makeMockChoiceQuestion({
+    id: `practice-cloze-${item.id.replace(/^vocab-/, '')}-${frame.slug}`,
+    moduleId: 'grammar',
+    questionTypeId: 'cloze-choice',
+    title: `${frame.title} ${itemIndex + 1}-${frameIndex + 1}`,
+    prompt: frame.prompt(item),
+    correctAnswer: (['A', 'B', 'C', 'D'] as Choice[])[(itemIndex + frameIndex) % 4],
+    correctOption: item.word,
+    correctSentence: item.example,
+    explanation: frame.explanation(item),
+    trapType: frame.trapType,
+  })));
 
 const DEGREE_PRACTICAL_WRITING_CONFIGS = [
   {
@@ -3761,6 +3837,24 @@ export const CET4_QUESTION_BANK_COVERAGE: QuestionBankCoverageItem[] = [
     builtInCount: CET4_READING_PRACTICE_QUESTIONS.filter((question) => question.questionTypeId === 'word-bank').length,
     durationMinutes: 10,
     trainingRoute: '选词填空专项 + 词汇语块 + 阶段模考',
+  },
+  {
+    moduleId: 'grammar',
+    questionTypeId: 'cloze-choice',
+    name: '完形/语境填空',
+    officialCount: '补弱题型',
+    builtInCount: CET4_CLOZE_PRACTICE_QUESTIONS.length,
+    durationMinutes: 12,
+    trainingRoute: '完形语境专项 + 诊断弱项推荐',
+  },
+  {
+    moduleId: 'grammar',
+    questionTypeId: 'grammar-structure',
+    name: '语法结构',
+    officialCount: '能力支撑',
+    builtInCount: CET4_GRAMMAR_PRACTICE_QUESTIONS.length,
+    durationMinutes: 12,
+    trainingRoute: '语法结构专项 + 写译错因复盘',
   },
   {
     moduleId: 'reading',

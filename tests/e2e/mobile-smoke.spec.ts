@@ -28,6 +28,8 @@ async function expectMobilePrimaryNavReadable(page: Page) {
 async function answerMobileDiagnostic(page: Page) {
   await page.getByRole('button', { name: /B\. They have become flexible learning hubs/ }).click();
   await page.getByRole('button', { name: /C\. Join the online workshop/ }).click();
+  await page.getByRole('button', { name: /A\. suitable/ }).click();
+  await page.getByRole('button', { name: /C\. to review/ }).click();
   await page.getByLabel('翻译句法转换作答').fill(
     'With the development of online learning, more college students can arrange their study time more flexibly.',
   );

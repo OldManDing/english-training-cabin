@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   BookOpen,
   CheckCircle2,
@@ -19,6 +19,8 @@ import {
 import { CET4_VOCABULARY_BANK } from '../data';
 import {
   CET4_LISTENING_PRACTICE_QUESTIONS,
+  CET4_CLOZE_PRACTICE_QUESTIONS,
+  CET4_GRAMMAR_PRACTICE_QUESTIONS,
   CET4_MOCK_EXAM_BANK,
   CET4_QUESTION_BANK_COVERAGE,
   CET4_READING_BANK,
@@ -26,20 +28,24 @@ import {
   CET4_TRANSLATION_PROMPT_BANK,
   CET4_WRITING_PROMPT_BANK,
 } from '../questionBank';
-import { Passage } from '../types';
+import { DailyPlan, Passage, SkillProfile } from '../types';
 
-type PracticeModuleId = 'vocabulary' | 'reading' | 'listening' | 'writing' | 'translation' | 'mock';
+type PracticeModuleId = 'vocabulary' | 'cloze' | 'grammar' | 'reading' | 'listening' | 'writing' | 'translation' | 'mock';
 
 interface PracticeHubProps {
   examId: string;
   examName: string;
   onStartOnboarding: () => void;
   onStartVocabulary: () => void;
+  onStartGrammar: () => void;
+  onStartCloze: () => void;
   onStartReading: (passage: Passage) => void;
   onStartListening: () => void;
   onStartWriting: () => void;
   onStartTranslation: () => void;
   onStartMockExam: () => void;
+  skillProfiles?: SkillProfile[];
+  dailyPlan?: DailyPlan | null;
 }
 
 interface PracticeTone {
@@ -59,6 +65,8 @@ interface PracticeModule {
   actionLabel: string;
   outcome: string;
   route: string[];
+  skillArea: SkillProfile['skillArea'];
+  recommendation?: string;
   tone: PracticeTone;
   onStart: () => void;
 }
@@ -95,13 +103,18 @@ export default function PracticeHub({
   examName,
   onStartOnboarding,
   onStartVocabulary,
+  onStartGrammar,
+  onStartCloze,
   onStartReading,
   onStartListening,
   onStartWriting,
   onStartTranslation,
   onStartMockExam,
+  skillProfiles = [],
+  dailyPlan,
 }: PracticeHubProps) {
   const [selectedModuleId, setSelectedModuleId] = useState<PracticeModuleId>('vocabulary');
+  const [hasManualSelection, setHasManualSelection] = useState(false);
   const [visibleReadingCount, setVisibleReadingCount] = useState(8);
   const isCet4 = examId === 'cet4';
 
@@ -115,6 +128,46 @@ export default function PracticeHub({
     data: passage,
   })), []);
   const firstReadingPassage = readingPassages[0];
+  const latestScoreBySkill = useMemo(() => {
+    const result = new Map<SkillProfile['skillArea'], SkillProfile>();
+    skillProfiles.forEach((profile) => {
+      const current = result.get(profile.skillArea);
+      if (!current || profile.lastUpdatedAt > current.lastUpdatedAt) result.set(profile.skillArea, profile);
+    });
+    return result;
+  }, [skillProfiles]);
+  const moduleIdForTask = (task: DailyPlan['tasks'][number]): PracticeModuleId | undefined => {
+    const mode = String(task.payload?.mode ?? '');
+    if (task.type === 'mock') return 'mock';
+    if (mode.includes('cloze')) return 'cloze';
+    if (mode.includes('grammar')) return 'grammar';
+    if (['vocabulary', 'reading', 'listening', 'writing', 'translation'].includes(task.skillArea)) {
+      return task.skillArea as PracticeModuleId;
+    }
+    return undefined;
+  };
+  const plannedModuleIds = new Set<PracticeModuleId>(
+    dailyPlan?.tasks.map(moduleIdForTask).filter((id): id is PracticeModuleId => Boolean(id)) ?? [],
+  );
+  const latestProfileForModule = (moduleId: PracticeModuleId, skillArea: SkillProfile['skillArea']) => {
+    const profiles = skillProfiles
+      .filter((profile) => {
+        const subSkill = profile.subSkillId.toLowerCase();
+        if (moduleId === 'cloze') return subSkill.includes('cloze');
+        if (moduleId === 'vocabulary') return profile.skillArea === 'vocabulary' && !subSkill.includes('cloze');
+        return profile.skillArea === skillArea;
+      })
+      .sort((left, right) => right.lastUpdatedAt.localeCompare(left.lastUpdatedAt));
+    return profiles[0] ?? latestScoreBySkill.get(skillArea);
+  };
+  const recommendationFor = (moduleId: PracticeModuleId, skillArea: SkillProfile['skillArea']) => {
+    const profile = latestProfileForModule(moduleId, skillArea);
+    if (plannedModuleIds.has(moduleId)) return '今日计划推荐';
+    if (!profile) return '缺少诊断证据';
+    if (profile.score < 60) return '诊断弱项优先';
+    if (profile.score < 75) return '需要巩固';
+    return '';
+  };
 
   const modules: PracticeModule[] = [
     {
@@ -127,8 +180,40 @@ export default function PracticeHub({
       actionLabel: '开始单词练习',
       outcome: '生成词汇能力证据，低信心或错误项进入主动回忆队列。',
       route: ['自动播报', '释义选择', '把握度标记', '错因入库'],
+      skillArea: 'vocabulary',
+      recommendation: recommendationFor('vocabulary', 'vocabulary'),
       tone: TONES.green,
       onStart: onStartVocabulary,
+    },
+    {
+      id: 'cloze',
+      Icon: ListChecks,
+      label: '完形/选词填空',
+      subtitle: '围绕上下文、词义辨析、固定搭配和句际逻辑做小题闭环',
+      count: `完形/语境题 ${CET4_CLOZE_PRACTICE_QUESTIONS.length} 题`,
+      duration: '12m/组',
+      actionLabel: '开始完形填空训练',
+      outcome: '补齐完形与选词填空能力证据，避免只背单词但不会进语境。',
+      route: ['读上下文', '选词入空', '解释搭配', '错因复习'],
+      skillArea: 'vocabulary',
+      recommendation: recommendationFor('cloze', 'vocabulary'),
+      tone: TONES.green,
+      onStart: onStartCloze,
+    },
+    {
+      id: 'grammar',
+      Icon: ListChecks,
+      label: '语法结构',
+      subtitle: '训练时态、语态、非谓语、从句、连接词和固定搭配',
+      count: `语法结构 ${CET4_GRAMMAR_PRACTICE_QUESTIONS.length} 题`,
+      duration: '12m/组',
+      actionLabel: '开始语法训练',
+      outcome: '语法结果会写入 grammar 能力画像，并反向支撑写作、翻译和完形。',
+      route: ['看句法线索', '选择结构', '解释规则', '写入画像'],
+      skillArea: 'grammar',
+      recommendation: recommendationFor('grammar', 'grammar'),
+      tone: TONES.blue,
+      onStart: onStartGrammar,
     },
     {
       id: 'reading',
@@ -140,6 +225,8 @@ export default function PracticeHub({
       actionLabel: '开始仔细阅读训练',
       outcome: '每题保留定位线索、作答、把握度和阅读能力画像。',
       route: ['选材料', '读文章', '逐题提交', '查看错因'],
+      skillArea: 'reading',
+      recommendation: recommendationFor('reading', 'reading'),
       tone: TONES.blue,
       onStart: () => {
         if (firstReadingPassage) onStartReading(firstReadingPassage.data);
@@ -155,6 +242,8 @@ export default function PracticeHub({
       actionLabel: '开始听力训练',
       outcome: '听力作答会记录关键词漏听、转折漏听和低信心证据。',
       route: ['自动播报', '作答', '把握度', '听力错因'],
+      skillArea: 'listening',
+      recommendation: recommendationFor('listening', 'listening'),
       tone: TONES.blue,
       onStart: onStartListening,
     },
@@ -168,6 +257,8 @@ export default function PracticeHub({
       actionLabel: '开始写作训练',
       outcome: '写作输出会形成结构、语法、表达升级和复习项。',
       route: ['读题', '先输出', 'AI/规则反馈', '写入画像'],
+      skillArea: 'writing',
+      recommendation: recommendationFor('writing', 'writing'),
       tone: TONES.amber,
       onStart: onStartWriting,
     },
@@ -181,6 +272,8 @@ export default function PracticeHub({
       actionLabel: '开始翻译训练',
       outcome: '保留中文干扰、搭配错误、句法转换等弱项证据。',
       route: ['读中文', '先翻译', '结构反馈', '复习表达'],
+      skillArea: 'translation',
+      recommendation: recommendationFor('translation', 'translation'),
       tone: TONES.amber,
       onStart: onStartTranslation,
     },
@@ -194,13 +287,33 @@ export default function PracticeHub({
       actionLabel: '开始阶段模考',
       outcome: '一次生成写作、听力、阅读、翻译四项分数和阶段验证证据。',
       route: ['写作', '听力', '阅读', '翻译', '提交检查'],
+      skillArea: 'reading',
+      recommendation: plannedModuleIds.has('mock') ? '今日计划推荐' : '',
       tone: TONES.rose,
       onStart: onStartMockExam,
     },
   ];
-  const selectedModule = modules.find((module) => module.id === selectedModuleId) ?? modules[0];
+  const orderedModules = [...modules].sort((left, right) => {
+    const rank = (module: PracticeModule) => {
+      const score = latestProfileForModule(module.id, module.skillArea)?.score;
+      if (module.recommendation === '今日计划推荐') return 0;
+      if (module.recommendation === '诊断弱项优先') return 1;
+      if (module.recommendation === '缺少诊断证据') return 2;
+      if (module.recommendation === '需要巩固') return 3;
+      return typeof score === 'number' ? 10 + score : 20;
+    };
+    return rank(left) - rank(right);
+  });
+  const recommendedModuleId = orderedModules[0]?.id ?? 'vocabulary';
+  const recommendedModule = orderedModules[0];
+  const recommendedTask = dailyPlan?.tasks.find((task) => moduleIdForTask(task) === recommendedModuleId);
+  const selectedModule = orderedModules.find((module) => module.id === selectedModuleId) ?? orderedModules[0];
   const selectedIcon = selectedModule.Icon;
   const visibleReadingPassages = readingPassages.slice(0, visibleReadingCount);
+
+  useEffect(() => {
+    if (!hasManualSelection) setSelectedModuleId(recommendedModuleId);
+  }, [hasManualSelection, recommendedModuleId]);
 
   return (
     <div className="app-page-surface flex-1 overflow-y-auto overflow-x-hidden bg-[#f7fbff] p-4 sm:p-6 lg:h-screen lg:p-8">
@@ -229,10 +342,11 @@ export default function PracticeHub({
             </button>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-5">
             {[
               ['阅读材料', readingPassages.length],
               ['词汇语块', CET4_VOCABULARY_BANK.length],
+              ['语法完形', CET4_GRAMMAR_PRACTICE_QUESTIONS.length + CET4_CLOZE_PRACTICE_QUESTIONS.length],
               ['阅读题池', CET4_READING_PRACTICE_QUESTIONS.length],
               ['写译题', CET4_WRITING_PROMPT_BANK.length + CET4_TRANSLATION_PROMPT_BANK.length],
             ].map(([label, value]) => (
@@ -242,6 +356,28 @@ export default function PracticeHub({
               </div>
             ))}
           </div>
+
+          {isCet4 && recommendedModule && (
+            <div className="mt-5 rounded-3xl border border-emerald-100 bg-emerald-50 p-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <div className="text-xs font-black text-emerald-800">诊断驱动推荐</div>
+                  <p className="mt-1 text-sm font-bold leading-6 text-slate-700">
+                    当前优先进入「{recommendedModule.label}」。
+                    {recommendedTask?.reason ?? '系统会根据最近能力画像、今日计划和复习压力自动调整专项排序。'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={recommendedModule.onStart}
+                  className="ui-button ui-button-success shrink-0"
+                >
+                  进入推荐专项
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </header>
 
         {!isCet4 && (
@@ -252,7 +388,7 @@ export default function PracticeHub({
 
         {isCet4 && (
         <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3" aria-label="专项练习模块">
-          {modules.map((module, index) => {
+          {orderedModules.map((module, index) => {
             const Icon = module.Icon;
             const isActive = selectedModuleId === module.id;
             return (
@@ -264,7 +400,10 @@ export default function PracticeHub({
               >
                 <button
                   type="button"
-                  onClick={() => setSelectedModuleId(module.id)}
+                  onClick={() => {
+                    setHasManualSelection(true);
+                    setSelectedModuleId(module.id);
+                  }}
                   aria-pressed={isActive}
                   className="w-full rounded-2xl text-left focus:outline-none focus:ring-2 focus:ring-white/70"
                 >
@@ -279,6 +418,13 @@ export default function PracticeHub({
                       {isActive ? '已选择' : module.duration}
                     </span>
                   </div>
+                  {module.recommendation ? (
+                    <span className={`mt-3 inline-flex rounded-full px-2.5 py-1 text-[10px] font-black ${
+                      isActive ? 'bg-white/18 text-white' : 'bg-amber-50 text-amber-700'
+                    }`}>
+                      {module.recommendation}
+                    </span>
+                  ) : null}
                   <h3 className={`mt-3 text-lg font-black ${isActive ? 'text-white' : 'text-[#071e27]'}`}>{module.label}</h3>
                   <p className={`mt-2 min-h-10 text-sm font-semibold leading-5 ${isActive ? 'text-white/82' : 'text-slate-500'}`}>
                     {module.subtitle}
@@ -293,7 +439,7 @@ export default function PracticeHub({
                     event.stopPropagation();
                     module.onStart();
                   }}
-                  className={`mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 text-sm font-black shadow-sm transition ${
+                  className={`ui-button ui-button-full mt-4 ${
                     isActive ? 'bg-white text-[#003178] hover:bg-slate-50' : module.tone.button
                   }`}
                 >
@@ -322,7 +468,7 @@ export default function PracticeHub({
                 type="button"
                 onClick={selectedModule.onStart}
                 aria-label={`进入当前${selectedModule.label}训练`}
-                className={`inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-2xl px-5 text-sm font-black shadow-sm transition ${selectedModule.tone.button}`}
+                className={`ui-button shrink-0 ${selectedModule.tone.button}`}
               >
                 进入当前训练
                 <ChevronRight className="h-4 w-4" />
@@ -400,7 +546,7 @@ export default function PracticeHub({
                   <button
                     type="button"
                     onClick={() => onStartReading(passage.data)}
-                    className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#003178] px-4 text-xs font-black text-white transition hover:bg-[#0d47a1] sm:w-auto"
+                    className="ui-button ui-button-primary mt-4 w-full sm:w-auto"
                   >
                     <FileText className="h-4 w-4" />
                     开始仔细阅读训练
@@ -412,7 +558,7 @@ export default function PracticeHub({
               <button
                 type="button"
                 onClick={() => setVisibleReadingCount((count) => Math.min(readingPassages.length, count + 8))}
-                className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-2xl border border-[#cfe6f2] bg-white px-4 text-sm font-black text-[#003178] transition hover:bg-[#eef7fc]"
+                className="ui-button ui-button-secondary ui-button-full mt-4"
               >
                 展开更多阅读材料
               </button>
@@ -434,7 +580,7 @@ export default function PracticeHub({
               <p className="text-xs font-bold leading-5 text-slate-500">原创模拟题，不冒充官方真题。</p>
             </div>
             <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {CET4_QUESTION_BANK_COVERAGE.slice(0, 6).map((item) => (
+              {CET4_QUESTION_BANK_COVERAGE.slice(0, 8).map((item) => (
                 <div key={`${item.moduleId}-${item.questionTypeId}`}>
                   <CoverageCard item={item} tone="blue" />
                 </div>

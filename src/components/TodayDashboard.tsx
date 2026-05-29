@@ -14,10 +14,13 @@ interface TodayDashboardProps {
   onStartWriting: () => void;
   onStartTranslation: () => void;
   onStartVocabulary: () => void;
+  onStartGrammar: () => void;
+  onStartCloze: () => void;
   onStartMockExam: () => void;
   onStartOnboarding: () => void;
   onViewReview: () => void;
   onStartSpeaking: () => void;
+  onOpenSettings?: () => void;
   onTriggerModal?: (title: string, body: string) => void;
   readingProgress: { completed: boolean; score?: number };
   examCountdown?: number;
@@ -39,10 +42,13 @@ export default function TodayDashboard({
   onStartWriting,
   onStartTranslation,
   onStartVocabulary,
+  onStartGrammar,
+  onStartCloze,
   onStartMockExam,
   onStartOnboarding, 
   onViewReview, 
   onStartSpeaking,
+  onOpenSettings,
   onTriggerModal,
   readingProgress,
   examCountdown = 0,
@@ -77,6 +83,8 @@ export default function TodayDashboard({
     ? '段落翻译'
     : displayedTask?.skillArea === 'vocabulary'
     ? '词汇语块'
+    : displayedTask?.skillArea === 'grammar'
+    ? '语法完形'
     : displayedTask?.skillArea === 'speaking'
     ? '口语表达'
     : '阅读理解';
@@ -94,6 +102,8 @@ export default function TodayDashboard({
     ? '包含 1 段中译英评阅'
     : displayedTask?.skillArea === 'vocabulary'
     ? '包含听音、释义辨析和语块例句'
+    : displayedTask?.skillArea === 'grammar'
+    ? '包含语法结构、固定搭配和完形语境判断'
     : displayedTask?.skillArea === 'speaking'
     ? '包含 1 轮重说和反馈对比'
     : '包含原创仔细阅读题组';
@@ -117,10 +127,19 @@ export default function TodayDashboard({
     : hasAbilityEvidence || readingProgress.completed
     ? '继续训练'
     : '下一步推荐';
-  const latestSkillScore = (skillArea: SkillProfile['skillArea']) => {
+  const latestProfile = (predicate: (profile: SkillProfile) => boolean) => {
     const profile = skillProfiles
-      .filter((item) => item.skillArea === skillArea)
+      .filter(predicate)
       .sort((left, right) => right.lastUpdatedAt.localeCompare(left.lastUpdatedAt))[0];
+    return profile;
+  };
+  const latestSkillScore = (skillArea: SkillProfile['skillArea']) => {
+    const profile = latestProfile((item) => item.skillArea === skillArea);
+    return profile?.score;
+  };
+  const latestSubSkillScore = (keyword: string) => {
+    const normalizedKeyword = keyword.toLowerCase();
+    const profile = latestProfile((item) => item.subSkillId.toLowerCase().includes(normalizedKeyword));
     return profile?.score;
   };
   const describeScore = (score: number) => {
@@ -130,9 +149,11 @@ export default function TodayDashboard({
     return { label: '优势', className: 'text-emerald-700', bar: 'bg-emerald-600' };
   };
   const skillDiagnosticRows = [
-    { label: '阅读: 细节定位', score: latestSkillScore('reading') },
-    { label: '听力: 长对话推断', score: latestSkillScore('listening') },
-    { label: '翻译: 复杂句型结构', score: latestSkillScore('translation') },
+    { key: 'reading', label: '阅读: 细节定位', score: latestSkillScore('reading') },
+    { key: 'listening', label: '听力: 长对话推断', score: latestSkillScore('listening') },
+    { key: 'cloze', label: '完形: 语境填空', score: latestSubSkillScore('cloze') },
+    { key: 'grammar', label: '语法: 结构搭配', score: latestSkillScore('grammar') },
+    { key: 'translation', label: '翻译: 复杂句型结构', score: latestSkillScore('translation') },
   ].map((item) => ({
     ...item,
     visual: typeof item.score === 'number' ? describeScore(item.score) : null,
@@ -149,6 +170,15 @@ export default function TodayDashboard({
     }
     if (task.type === 'mock') {
       onStartMockExam();
+      return;
+    }
+    const mode = String(task.payload?.mode ?? '');
+    if (mode.includes('cloze')) {
+      onStartCloze();
+      return;
+    }
+    if (mode.includes('grammar')) {
+      onStartGrammar();
       return;
     }
     if (task.type === 'speaking' || task.skillArea === 'speaking') {
@@ -169,6 +199,10 @@ export default function TodayDashboard({
     }
     if (task.skillArea === 'vocabulary') {
       onStartVocabulary();
+      return;
+    }
+    if (task.skillArea === 'grammar') {
+      onStartGrammar();
       return;
     }
     onStartReading();
@@ -193,14 +227,22 @@ export default function TodayDashboard({
     if (task.type === 'diagnostic') return { Icon: Sparkles, border: 'border-l-[#003178]', bg: 'bg-[#eef7fc]', icon: 'text-[#003178]' };
     if (task.type === 'mock') return { Icon: BarChart2, border: 'border-l-amber-500', bg: 'bg-amber-50', icon: 'text-amber-700' };
     if (task.type === 'review') return { Icon: BookMarked, border: 'border-l-rose-500', bg: 'bg-rose-50', icon: 'text-rose-600' };
+    const mode = String(task.payload?.mode ?? '');
+    if (mode.includes('cloze')) return { Icon: Sliders, border: 'border-l-emerald-600', bg: 'bg-emerald-50', icon: 'text-emerald-700' };
+    if (mode.includes('grammar')) return { Icon: Sliders, border: 'border-l-sky-600', bg: 'bg-sky-50', icon: 'text-sky-700' };
     if (task.skillArea === 'listening') return { Icon: Headphones, border: 'border-l-emerald-500', bg: 'bg-emerald-50', icon: 'text-emerald-600' };
     if (task.skillArea === 'vocabulary') return { Icon: Volume2, border: 'border-l-emerald-500', bg: 'bg-emerald-50', icon: 'text-emerald-600' };
+    if (task.skillArea === 'grammar') return { Icon: Sliders, border: 'border-l-sky-600', bg: 'bg-sky-50', icon: 'text-sky-700' };
     if (task.skillArea === 'speaking') return { Icon: Mic, border: 'border-l-[#003178]', bg: 'bg-[#eef7fc]', icon: 'text-[#003178]' };
     if (task.skillArea === 'writing' || task.skillArea === 'translation') return { Icon: Edit2, border: 'border-l-amber-500', bg: 'bg-amber-50', icon: 'text-amber-700' };
     return { Icon: BookOpen, border: 'border-l-[#003178]', bg: 'bg-[#eef7fc]', icon: 'text-[#003178]' };
   };
 
   const triggerTimeEdit = () => {
+    if (onOpenSettings) {
+      onOpenSettings();
+      return;
+    }
     setShowTimeEditToast(true);
     setTimeout(() => {
       setShowTimeEditToast(false);
@@ -232,7 +274,7 @@ export default function TodayDashboard({
             {/* AI Custom Adaptive Diagnostic Trigger */}
             <button
               onClick={onStartOnboarding}
-              className="px-4 py-2 bg-[#003178] text-white hover:bg-[#0d47a1] rounded-full text-xs font-black flex items-center gap-1.5 shadow-md hover:scale-[1.03] active:scale-[0.97] transition-all cursor-pointer pointer-events-auto border border-[#cfe6f2]"
+              className="ui-button ui-button-primary ui-button-compact rounded-full"
             >
               <Sparkles className="h-4 w-4 text-emerald-300 fill-emerald-300 animate-pulse" />
               <span>入门能力诊断</span>
@@ -278,7 +320,7 @@ export default function TodayDashboard({
                 <button
                   type="button"
                   onClick={onViewReview}
-                  className="rounded-2xl bg-[#003178] p-3 text-white transition hover:bg-[#0d47a1]"
+                  className="ui-button ui-button-primary ui-button-full flex-col p-3"
                 >
                   <div className="text-2xl">{reviewGateStatus.remainingRequired}</div>
                   <div>去复习</div>
@@ -333,7 +375,8 @@ export default function TodayDashboard({
               </span>
               <button 
                 onClick={triggerTimeEdit}
-                className="text-gray-400 hover:text-[#003178] p-1 rounded-lg hover:bg-slate-50 transition-colors pointer-events-auto cursor-pointer"
+                aria-label="调整今日训练时间"
+                className="ui-button ui-button-icon"
               >
                 <Edit2 className="h-3.5 w-3.5" />
               </button>
@@ -363,7 +406,7 @@ export default function TodayDashboard({
               </span>
             </div>
             <div className="pt-3">
-              <h4 className="font-extrabold text-sm text-[#003178] truncate">
+              <h4 data-testid="today-quick-task-title" className="font-extrabold text-sm text-[#003178] truncate">
                 {displayedTask?.title ?? '入门诊断'}
               </h4>
              <p className="text-[10.5px] text-gray-400 font-semibold mt-0.5">
@@ -373,7 +416,7 @@ export default function TodayDashboard({
             <div className="mt-2 text-right">
               <button 
                 onClick={startPrimaryTask}
-                className="px-4 py-1.5 bg-[#003178] hover:bg-[#0d47a1] text-white text-[10.5px] font-bold rounded-xl inline-flex items-center gap-1 hover:scale-[1.02] transition-transform pointer-events-auto cursor-pointer shadow-xs"
+                className="ui-button ui-button-primary ui-button-compact"
               >
                 <span>进入</span>
                 <ChevronRight className="h-3 w-3" />
@@ -413,7 +456,7 @@ export default function TodayDashboard({
 
               {/* Title of the prioritized task */}
               <div className="mt-3.5 relative z-10">
-                <h3 className="text-xl sm:text-2xl font-black text-[#0d47a1] tracking-tight">
+                <h3 data-testid="today-primary-task-title" className="text-xl sm:text-2xl font-black text-[#0d47a1] tracking-tight">
                   {displayedTask?.title ?? '入门诊断：建立初始能力画像'}
                 </h3>
               </div>
@@ -435,8 +478,9 @@ export default function TodayDashboard({
                   {primaryTaskSummary}
                 </span>
                 <button
+                  data-testid="today-primary-task-action"
                   onClick={startPrimaryTask}
-                  className="w-full sm:w-auto justify-center px-6 py-3 bg-[#1b6d24] hover:bg-emerald-700 text-white text-xs font-black rounded-2xl flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all pointer-events-auto cursor-pointer shadow-xs"
+                  className="ui-button ui-button-success ui-button-full sm:w-auto"
                 >
                   <Sparkles className="h-4 w-4 text-emerald-300 animate-pulse" />
                   <span>{primaryActionLabel}</span>
@@ -459,6 +503,7 @@ export default function TodayDashboard({
                   return (
                     <div
                       key={task.id}
+                      data-testid={`today-task-row-${task.type}-${task.skillArea}-${index}`}
                       onClick={() => startTask(task)}
                       className={`bg-white border border-[#c3c6d4]/60 border-l-[4px] ${visual.border} rounded-2xl p-4.5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between group hover:shadow-2xs hover:border-[#003178]/50 transition-all cursor-pointer pointer-events-auto`}
                     >
@@ -480,7 +525,7 @@ export default function TodayDashboard({
                           event.stopPropagation();
                           startTask(task);
                         }}
-                        className="p-2 text-gray-400 hover:text-[#003178] rounded-lg hover:bg-slate-50 transition-colors pointer-events-auto cursor-pointer"
+                        className="ui-button ui-button-icon shrink-0"
                         aria-label={`执行今日第 ${index + 1} 个任务`}
                       >
                         <ChevronRight className="h-5 w-5" />
@@ -520,7 +565,7 @@ export default function TodayDashboard({
               <div className="space-y-4">
                 
                 {skillDiagnosticRows.map((row) => (
-                  <div key={row.label} className="space-y-1">
+                  <div key={row.key} data-testid={`today-skill-diagnostic-${row.key}`} className="space-y-1">
                     <div className="flex justify-between text-[11px] font-bold">
                       <span className="text-[#434652]">{row.label}</span>
                       <span className={row.visual ? row.visual.className : 'text-slate-400'}>

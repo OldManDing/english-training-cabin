@@ -9,7 +9,7 @@ import {
   SkillProfile,
 } from '../../types';
 
-type DiagnosticSkillArea = Extract<SkillArea, 'reading' | 'listening' | 'translation' | 'writing' | 'speaking'>;
+type DiagnosticSkillArea = Extract<SkillArea, 'reading' | 'listening' | 'translation' | 'writing' | 'speaking' | 'vocabulary' | 'grammar'>;
 type ChoiceAnswer = 'A' | 'B' | 'C' | 'D';
 
 export type DiagnosticAnswerMap = Record<string, string>;
@@ -108,6 +108,46 @@ export const ONBOARDING_DIAGNOSTIC_ITEMS: DiagnosticItem[] = [
     correctAnswer: 'C',
     mistakeReason: '转折信息漏听' as MistakeReason,
     explanation: '"but the department moved it online" 是转折后的真实安排，Friday 是提交时限。',
+  },
+  {
+    id: 'diag-vocabulary-cloze',
+    kind: 'single-choice',
+    skillArea: 'vocabulary',
+    subSkillId: 'diagnostic-cloze-context',
+    title: '完形/选词填空语境判断',
+    contextLabel: '语境填空',
+    context:
+      'Many students can remember a word list, but they still choose the wrong word in a passage because they ignore the sentence before and after the blank.',
+    prompt: 'Which word best completes the sentence: Good readers use context to choose the most ___ word for a blank.',
+    options: [
+      { id: 'A', label: 'suitable' },
+      { id: 'B', label: 'silent' },
+      { id: 'C', label: 'expensive' },
+      { id: 'D', label: 'private' },
+    ],
+    correctAnswer: 'A',
+    mistakeReason: '搭配错误' as MistakeReason,
+    explanation: 'blank 前后的 use context 和 choose the most ... word 指向 suitable，考查语境、词义和搭配，不是孤立背词。',
+  },
+  {
+    id: 'diag-grammar-structure',
+    kind: 'single-choice',
+    skillArea: 'grammar',
+    subSkillId: 'diagnostic-grammar-structure',
+    title: '语法结构与固定搭配',
+    contextLabel: '语法结构',
+    context:
+      'A clear sentence usually depends on tense, voice, connectors, and common patterns. Grammar training should support reading, writing, translation, and cloze accuracy.',
+    prompt: 'Choose the best answer: Students are encouraged ___ mistakes before they become habits.',
+    options: [
+      { id: 'A', label: 'review' },
+      { id: 'B', label: 'reviewing' },
+      { id: 'C', label: 'to review' },
+      { id: 'D', label: 'reviewed' },
+    ],
+    correctAnswer: 'C',
+    mistakeReason: '语法错误' as MistakeReason,
+    explanation: 'be encouraged to do sth. 是固定结构；这里应选 to review，后接动词原形。',
   },
   {
     id: 'diag-translation-structure',

@@ -239,7 +239,7 @@ export default function MaterialImporter({ onLoadCustomPassage }: MaterialImport
                 适合导入自有或授权材料。字段至少包含 title、content、questions、options、correctAnswer。
               </p>
             </div>
-            <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-[#cfe6f2] bg-[#eef7fc] px-4 py-2 text-xs font-black text-[#003178] transition hover:bg-[#dbf1fe]">
+            <label className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-[#cfe6f2] bg-[#eef7fc] px-4 py-2 text-xs font-black text-[#003178] transition hover:bg-[#dbf1fe]">
               <UploadCloud className="h-4 w-4" />
               选择 JSON 文件
               <input type="file" accept="application/json,.json" className="sr-only" onChange={handleFileUpload} />

@@ -43,6 +43,8 @@ interface OnboardingDiagnosticProps {
 const skillLabels: Record<string, string> = {
   reading: '阅读',
   listening: '听力',
+  vocabulary: '词汇完形',
+  grammar: '语法',
   translation: '翻译',
   writing: '写作',
   speaking: '口语',
@@ -51,6 +53,8 @@ const skillLabels: Record<string, string> = {
 const skillIcons: Record<string, React.ReactNode> = {
   reading: <BookOpenCheck className="h-4 w-4" />,
   listening: <ListChecks className="h-4 w-4" />,
+  vocabulary: <BookOpenCheck className="h-4 w-4" />,
+  grammar: <ListChecks className="h-4 w-4" />,
   translation: <FilePenLine className="h-4 w-4" />,
   writing: <FilePenLine className="h-4 w-4" />,
   speaking: <Mic className="h-4 w-4" />,
@@ -227,7 +231,7 @@ export default function OnboardingDiagnostic({
                 入门诊断：先做题，再生成今日训练路线。
               </h1>
               <p className="mt-4 max-w-2xl text-sm font-semibold leading-7 text-slate-600">
-                这一步不再用自评冒充诊断。系统会让你完成阅读、听力转写、翻译、写作、口语表达初筛 5 个小任务，
+                这一步不再用自评冒充诊断。系统会让你完成阅读、听力转写、完形/选词填空、语法结构、翻译、写作、口语表达初筛 7 个小任务，
                 根据答案规则评分，并把 session、attempt、review item 和 skill profile 写入本地学习证据。
               </p>
               <div className="mt-6 rounded-3xl border border-[#cfe6f2] bg-[#f7fbff] p-4">
@@ -262,7 +266,7 @@ export default function OnboardingDiagnostic({
               <div className="mt-6 grid gap-3 sm:grid-cols-3">
                 {[
                   [selectedExamName, '当前目标'],
-                  ['5 项', '真实任务'],
+                  ['7 项', '真实任务'],
                   ['规则评分', '可解释弱项'],
                 ].map(([value, label]) => (
                   <div key={label} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
@@ -326,6 +330,7 @@ export default function OnboardingDiagnostic({
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                     <input
                       type="range"
+                      aria-label="目标分数"
                       min="425"
                       max="710"
                       step="5"
@@ -352,6 +357,7 @@ export default function OnboardingDiagnostic({
                     </label>
                     <input
                       type="date"
+                      aria-label="考试日期"
                       value={countdownDate}
                       onChange={(event) => setCountdownDate(event.target.value)}
                       className="min-h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold text-slate-700 outline-none focus:border-[#003178]"
@@ -564,7 +570,7 @@ export default function OnboardingDiagnostic({
               </div>
             </div>
 
-            <div className="mt-6 grid gap-4 lg:grid-cols-5">
+            <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               {report.details.map((detail) => (
                 <div
                   key={detail.itemId}

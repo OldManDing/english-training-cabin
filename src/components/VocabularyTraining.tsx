@@ -163,7 +163,7 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
               type="button"
               disabled={packIndex === 0}
               onClick={() => switchPack(packIndex - 1)}
-              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[#003178] disabled:cursor-not-allowed disabled:text-slate-300"
+              className="min-h-11 rounded-full border border-slate-200 bg-white px-3 py-2 text-[#003178] disabled:cursor-not-allowed disabled:text-slate-300"
             >
               上一组
             </button>
@@ -171,7 +171,7 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
               type="button"
               disabled={packIndex >= packCount - 1}
               onClick={() => switchPack(packIndex + 1)}
-              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[#003178] disabled:cursor-not-allowed disabled:text-slate-300"
+              className="min-h-11 rounded-full border border-slate-200 bg-white px-3 py-2 text-[#003178] disabled:cursor-not-allowed disabled:text-slate-300"
             >
               下一组
             </button>
