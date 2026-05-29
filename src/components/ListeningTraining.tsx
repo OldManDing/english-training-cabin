@@ -3,6 +3,7 @@ import { Headphones, ArrowLeft, Play, Pause, ChevronDown, ChevronUp, CheckCircle
 import { PracticeCompletionReport } from '../types';
 import { buildChoicePracticeReport } from '../domain/practice/reports';
 import { CET4_LISTENING_PRACTICE_QUESTIONS, CET4_MOCK_EXAM } from '../questionBank';
+import { SelectField } from './controls/FormControls';
 
 interface ListeningTrainingProps {
   onBack: () => void;
@@ -416,20 +417,19 @@ export default function ListeningTraining({ onBack, onComplete, onAddToReview }:
                 {/* Speed dropdown control */}
                 <div className="flex items-center gap-2 text-[11px] font-bold text-[#434652]">
                   <span className="shrink-0">速度</span>
-                  <div className="ui-select-shell w-28">
-                    <select
-                      value={audioSpeed}
-                      onChange={(e) => setAudioSpeed(parseFloat(e.target.value))}
-                      className="ui-select min-h-9 rounded-xl py-1.5 pl-3 pr-9 text-xs"
-                      aria-label="听力播放速度"
-                    >
-                      <option value="0.8">0.8x</option>
-                      <option value="1.0">1.0x</option>
-                      <option value="1.2">1.2x</option>
-                      <option value="1.5">1.5x</option>
-                    </select>
-                    <ChevronDown className="ui-select-icon right-3" />
-                  </div>
+                  <SelectField
+                    ariaLabel="听力播放速度"
+                    className="w-28"
+                    compact
+                    value={String(audioSpeed)}
+                    onChange={(nextValue) => setAudioSpeed(parseFloat(nextValue))}
+                    options={[
+                      { value: '0.8', label: '0.8x' },
+                      { value: '1', label: '1.0x' },
+                      { value: '1.2', label: '1.2x' },
+                      { value: '1.5', label: '1.5x' },
+                    ]}
+                  />
                 </div>
 
                 <div className="flex items-center space-x-4">

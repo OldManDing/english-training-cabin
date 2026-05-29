@@ -69,6 +69,48 @@ async function expectButtonHasVisibleChrome(page: Page, name: string) {
   expect(hasVisibleFill || hasVisibleBorder).toBe(true);
 }
 
+async function expectComboboxHasVisibleChrome(page: Page, name: string) {
+  const combobox = page.getByRole('combobox', { name });
+  await expect(combobox).toBeVisible();
+  const style = await combobox.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const computed = window.getComputedStyle(element);
+    return {
+      width: rect.width,
+      height: rect.height,
+      background: computed.backgroundColor,
+      borderWidth: computed.borderTopWidth,
+      borderStyle: computed.borderTopStyle,
+      borderColor: computed.borderTopColor,
+      radius: computed.borderTopLeftRadius,
+    };
+  });
+
+  expect(style.width).toBeGreaterThanOrEqual(44);
+  expect(style.height).toBeGreaterThanOrEqual(44);
+  expect(style.background).not.toBe('rgba(0, 0, 0, 0)');
+  expect(Number.parseFloat(style.borderWidth)).toBeGreaterThanOrEqual(1);
+  expect(style.borderStyle).not.toBe('none');
+  expect(style.borderColor).not.toBe('rgba(0, 0, 0, 0)');
+  expect(style.radius).not.toBe('0px');
+}
+
+async function chooseComboboxOption(page: Page, label: string, optionName: string | RegExp) {
+  await expectComboboxHasVisibleChrome(page, label);
+  await page.getByRole('combobox', { name: label }).click();
+  await expect(page.getByRole('listbox')).toBeVisible();
+  await page.getByRole('option', { name: optionName }).click();
+}
+
+async function chooseCalendarDay(page: Page, label: string, dayLabel: string, expectedValue: string) {
+  await expectComboboxHasVisibleChrome(page, label);
+  const calendarButton = page.getByRole('combobox', { name: label });
+  await calendarButton.click();
+  await expect(page.getByRole('dialog', { name: `${label} 日历` })).toBeVisible();
+  await page.getByRole('button', { name: dayLabel, exact: true }).click();
+  await expect(calendarButton).toContainText(expectedValue);
+}
+
 async function expectVisibleControlsHealthy(page: Page, context: string) {
   const issues = await page.evaluate((auditContext) => {
     const visible = (element: Element) => {
@@ -86,6 +128,15 @@ async function expectVisibleControlsHealthy(page: Page, context: string) {
 
     const controlIssues: string[] = [];
     const controls = Array.from(document.querySelectorAll('button, input, select, textarea, label')).filter(visible);
+    const nativeSelects = Array.from(document.querySelectorAll('select')).filter(visible);
+    const nativeDateInputs = Array.from(document.querySelectorAll('input[type="date"]')).filter(visible);
+
+    if (nativeSelects.length > 0) {
+      controlIssues.push(`${auditContext}: 仍存在可见原生 select，下拉面板无法统一样式`);
+    }
+    if (nativeDateInputs.length > 0) {
+      controlIssues.push(`${auditContext}: 仍存在可见原生日期输入，系统日历无法统一样式`);
+    }
 
     for (const control of controls) {
       if (control instanceof HTMLInputElement && control.type === 'file') continue;
@@ -189,9 +240,9 @@ test('primary workspaces keep controls usable and reset scroll on navigation', a
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   await expectVisibleControlsHealthy(page, 'settings');
 
-  await page.getByLabel('考试日期').fill('2026-06-20');
+  await chooseCalendarDay(page, '考试日期', '20', '2026-06-20');
   await page.getByLabel('目标分数').fill('560');
-  await page.getByRole('combobox', { name: '每日投入时长' }).selectOption('60');
+  await chooseComboboxOption(page, '每日投入时长', /60 分钟/);
   await page.getByRole('button', { name: '阅读能力 高级' }).click();
   await page.getByRole('button', { name: '听力能力 入门' }).click();
   await page.getByRole('button', { name: '翻译水平 中级' }).click();
@@ -209,9 +260,9 @@ test('primary workspaces keep controls usable and reset scroll on navigation', a
   await page.getByRole('button', { name: '邀请', exact: true }).click();
   await expect(page.getByText(/^邀请链接：/)).toBeVisible();
   await page.getByTestId('saas-content-title').fill('CET-4 UI 控件审计原创材料');
-  await page.getByRole('combobox', { name: '内容类型' }).selectOption('listening');
-  await page.getByRole('combobox', { name: '内容来源' }).selectOption('original');
-  await page.getByRole('combobox', { name: '授权状态' }).selectOption('cleared');
+  await chooseComboboxOption(page, '内容类型', '听力');
+  await chooseComboboxOption(page, '内容来源', '原创');
+  await chooseComboboxOption(page, '授权状态', '可发布');
   await page.getByRole('button', { name: '登记内容资产' }).click();
   await expect(page.getByText('CET-4 UI 控件审计原创材料')).toBeVisible();
 

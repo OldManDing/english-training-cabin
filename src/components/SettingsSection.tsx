@@ -3,6 +3,7 @@ import { Flag, LayoutGrid, Target, Calendar, Check, Lock, Sparkles, Sliders, Che
 import { exportLearningData, importLearningData } from '../lib/storage/db';
 import SaasAccountPanel from './SaasAccountPanel';
 import { listPublicExamProfiles } from '../exams/registry';
+import { DateField, SelectField } from './controls/FormControls';
 
 interface SettingsSectionProps {
   onSave?: (settings: {
@@ -246,41 +247,22 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                 {/* Exam type custom Selector */}
                 <div className="space-y-1.5">
                   <label className="block text-[11px] font-bold text-[#434652]">目标考试</label>
-                  <div className="relative">
-                    <select
-                      value={examType}
-                      onChange={(e) => setExamType(e.target.value)}
-                      className="ui-select"
-                      aria-label="目标考试"
-                    >
-                      {examOptions.map((exam) => (
-                        <option
-                          key={exam.id}
-                          value={exam.id}
-                          disabled={exam.routeAvailability !== 'trainable'}
-                        >
-                          {exam.name}
-                          {exam.routeAvailability === 'trainable' ? ' · 已开放训练闭环' : ' · 规划中'}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="ui-select-icon" />
-                  </div>
+                  <SelectField
+                    ariaLabel="目标考试"
+                    value={examType}
+                    onChange={setExamType}
+                    options={examOptions.map((exam) => ({
+                      value: exam.id,
+                      label: `${exam.name}${exam.routeAvailability === 'trainable' ? ' · 已开放训练闭环' : ' · 规划中'}`,
+                      disabled: exam.routeAvailability !== 'trainable',
+                    }))}
+                  />
                 </div>
 
                 {/* Date Picker matching screens */}
                 <div className="space-y-1.5">
                   <label className="block text-[11px] font-bold text-[#434652]">考试日期</label>
-                  <div className="relative">
-                    <input
-                      type="date"
-                      aria-label="考试日期"
-                      value={examDate}
-                      onChange={(e) => setExamDate(e.target.value)}
-                      className="w-full text-xs font-bold rounded-xl border border-[#c3c6d4] px-4 py-3 bg-[#f8fafc] text-[#003178] focus:outline-none focus:ring-1 focus:ring-[#003178] cursor-pointer"
-                    />
-                    <Calendar className="h-4 w-4 absolute right-4 top-3.5 text-[#003178] pointer-events-none hidden" />
-                  </div>
+                  <DateField ariaLabel="考试日期" value={examDate} onChange={setExamDate} />
                 </div>
               </div>
 
@@ -401,20 +383,17 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
               <div className="space-y-4">
                 <div className="space-y-1.5">
                   <label className="block text-[11px] font-bold text-[#434652]">每日投入时长</label>
-                  <div className="relative">
-                    <select
-                      value={dailyTargetMinutes}
-                      onChange={(e) => setDailyTargetMinutes(parseInt(e.target.value))}
-                      className="ui-select"
-                      aria-label="每日投入时长"
-                    >
-                      <option value="30">30 分钟 (轻量保持)</option>
-                      <option value="45">45 分钟 (主力冲刺流)</option>
-                      <option value="60">60 分钟 (稳定提升)</option>
-                      <option value="90">90 分钟 (高强度冲刺)</option>
-                    </select>
-                    <ChevronDown className="ui-select-icon" />
-                  </div>
+                  <SelectField
+                    ariaLabel="每日投入时长"
+                    value={String(dailyTargetMinutes)}
+                    onChange={(nextValue) => setDailyTargetMinutes(parseInt(nextValue))}
+                    options={[
+                      { value: '30', label: '30 分钟 (轻量保持)' },
+                      { value: '45', label: '45 分钟 (主力冲刺流)' },
+                      { value: '60', label: '60 分钟 (稳定提升)' },
+                      { value: '90', label: '90 分钟 (高强度冲刺)' },
+                    ]}
+                  />
                 </div>
 
                 <div className="pt-3 border-t border-gray-100 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

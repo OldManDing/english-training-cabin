@@ -18,6 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import { StudyGoal } from '../types';
+import { DateField, SelectField } from './controls/FormControls';
 import {
   buildOnboardingDiagnosticReport,
   DiagnosticAnswerMap,
@@ -241,27 +242,18 @@ export default function OnboardingDiagnostic({
                 <p className="mt-1 text-xs font-bold leading-5 text-slate-500">
                   诊断、训练计划和题库都会按目标考试过滤。当前完整训练闭环只开放 CET-4，其他考试保留为扩展路线。
                 </p>
-                <div className="ui-select-shell mt-3">
-                  <select
-                    id="diagnostic-exam-select"
-                    data-testid="diagnostic-exam-select"
-                    value={targetExamId}
-                    onChange={(event) => setTargetExamId(event.target.value)}
-                    className="ui-select"
-                  >
-                    {examOptions.map((exam) => (
-                      <option
-                        key={exam.id}
-                        value={exam.id}
-                        disabled={exam.routeAvailability !== 'trainable'}
-                      >
-                        {exam.name}
-                        {exam.routeAvailability === 'trainable' ? ' · 已开放诊断题库' : ' · 题库建设中'}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="ui-select-icon" />
-                </div>
+                <SelectField
+                  ariaLabel="先选择目标考试"
+                  testId="diagnostic-exam-select"
+                  className="mt-3"
+                  value={targetExamId}
+                  onChange={setTargetExamId}
+                  options={examOptions.map((exam) => ({
+                    value: exam.id,
+                    label: `${exam.name}${exam.routeAvailability === 'trainable' ? ' · 已开放诊断题库' : ' · 题库建设中'}`,
+                    disabled: exam.routeAvailability !== 'trainable',
+                  }))}
+                />
               </div>
               <div className="mt-6 grid gap-3 sm:grid-cols-3">
                 {[
@@ -355,13 +347,7 @@ export default function OnboardingDiagnostic({
                       <Calendar className="h-4 w-4" />
                       考试日期
                     </label>
-                    <input
-                      type="date"
-                      aria-label="考试日期"
-                      value={countdownDate}
-                      onChange={(event) => setCountdownDate(event.target.value)}
-                      className="min-h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold text-slate-700 outline-none focus:border-[#003178]"
-                    />
+                    <DateField ariaLabel="考试日期" value={countdownDate} onChange={setCountdownDate} />
                   </div>
                   <div className="rounded-2xl border border-sky-100 bg-[#dbf1fe] p-4">
                     <div className="text-xs font-black text-[#003178]">距离目标</div>

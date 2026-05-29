@@ -18,6 +18,7 @@ import {
 import { CET4_MOCK_EXAM_BANK, type Cet4MockChoiceQuestion } from '../questionBank';
 import { buildMockExamReport, MockExamReportResult } from '../domain/practice/mockExam';
 import { DailyPlan, PracticeCompletionReport, SkillProfile } from '../types';
+import { SelectField } from './controls/FormControls';
 
 type Choice = 'A' | 'B' | 'C' | 'D';
 type MockSectionId = 'writing' | 'listening' | 'reading' | 'translation' | 'review';
@@ -425,20 +426,15 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
               </div>
               <label className="flex min-w-0 flex-col gap-1 text-xs font-black text-[#003178]">
                 选择模拟卷
-                <div className="ui-select-shell">
-                  <select
-                    value={selectedPaperId}
-                    onChange={(event) => selectPaper(event.target.value)}
-                    className="ui-select"
-                  >
-                    {CET4_MOCK_EXAM_BANK.map((item, index) => (
-                      <option key={item.id} value={item.id}>
-                        {`第 ${index + 1} 套：${item.title}`}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="ui-select-icon" />
-                </div>
+                <SelectField
+                  ariaLabel="选择模拟卷"
+                  value={selectedPaperId}
+                  onChange={selectPaper}
+                  options={CET4_MOCK_EXAM_BANK.map((item, index) => ({
+                    value: item.id,
+                    label: `第 ${index + 1} 套：${item.title}`,
+                  }))}
+                />
               </label>
               <div className="grid grid-cols-4 gap-1 text-center text-[10px] font-black text-slate-500">
                 {sections.filter((section) => section.id !== 'review').map((section, index) => (

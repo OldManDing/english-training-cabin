@@ -93,6 +93,12 @@ async function installSpeechSynthesisMock(page: Page) {
   });
 }
 
+async function chooseComboboxOption(page: Page, label: string, optionName: string | RegExp) {
+  await page.getByRole('combobox', { name: label }).click();
+  await expect(page.getByRole('listbox')).toBeVisible();
+  await page.getByRole('option', { name: optionName }).click();
+}
+
 test('MVP critical reading flow persists local learning evidence', async ({ page }) => {
   await registerAndEnterApp(page, 'mvp-reading');
   await resetLocalLearningData(page);
@@ -354,7 +360,7 @@ test('onboarding diagnostic persists the initial ability portrait before enterin
 
   await page.getByRole('button', { name: '入门能力诊断' }).click();
   await expect(page.getByText('诊断、训练计划和题库都会按目标考试过滤')).toBeVisible();
-  await expect(page.getByTestId('diagnostic-exam-select')).toHaveValue('cet4');
+  await expect(page.getByTestId('diagnostic-exam-select')).toContainText('大学英语四级');
   await page.getByRole('button', { name: '开始诊断' }).click();
   await expect(page.getByRole('heading', { name: '学习目标设置' })).toBeVisible();
   await expect(page.getByText('当前题库：大学英语四级')).toBeVisible();
@@ -449,13 +455,13 @@ test('target exam filters visible question bank and mock exam guides incomplete 
   await expect(page.getByText('学位英语结构')).toHaveCount(0);
 
   await page.getByRole('button', { name: '设置' }).click();
-  await expect(page.getByRole('combobox', { name: '目标考试' })).toHaveValue('cet4');
-  await expect(page.getByRole('combobox', { name: '每日投入时长' })).toHaveValue('60');
+  await expect(page.getByRole('combobox', { name: '目标考试' })).toContainText('大学英语四级');
+  await expect(page.getByRole('combobox', { name: '每日投入时长' })).toContainText('60 分钟');
 
   await page.getByRole('button', { name: '阶段模考', exact: true }).click();
   const paperSelect = page.getByRole('combobox', { name: '选择模拟卷' });
-  await expect(paperSelect).toHaveValue(CET4_MOCK_EXAM_BANK[0].id);
-  await paperSelect.selectOption(CET4_MOCK_EXAM_BANK[1].id);
+  await expect(paperSelect).toContainText(CET4_MOCK_EXAM_BANK[0].title);
+  await chooseComboboxOption(page, '选择模拟卷', new RegExp(CET4_MOCK_EXAM_BANK[1].title));
   await expect(page.getByRole('heading', { name: CET4_MOCK_EXAM_BANK[1].title })).toBeVisible();
 
   await page.getByTestId('mock-section-review').click();
