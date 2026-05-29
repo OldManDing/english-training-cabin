@@ -359,7 +359,7 @@ test('onboarding diagnostic persists the initial ability portrait before enterin
   await page.reload();
 
   await page.getByRole('button', { name: '入门能力诊断' }).click();
-  await expect(page.getByText('诊断、训练计划和题库都会按目标考试过滤')).toBeVisible();
+  await expect(page.getByText('当前完整训练闭环先开放 CET-4。')).toBeVisible();
   await expect(page.getByTestId('diagnostic-exam-select')).toContainText('大学英语四级');
   await page.getByRole('button', { name: '开始诊断' }).click();
   await expect(page.getByRole('heading', { name: '学习目标设置' })).toBeVisible();
@@ -451,7 +451,8 @@ test('target exam filters visible question bank and mock exam guides incomplete 
 
   await page.getByRole('button', { name: '专项练习' }).click();
   await expect(page.getByText('大学英语四级 专项训练工作台')).toBeVisible();
-  await expect(page.getByText('当前只显示 大学英语四级 题目')).toBeVisible();
+  await expect(page.getByText('题库范围')).toBeVisible();
+  await expect(page.getByText('大学英语四级 · 原创模拟')).toBeVisible();
   await expect(page.getByText('学位英语结构')).toHaveCount(0);
 
   await page.getByRole('button', { name: '设置' }).click();
@@ -542,7 +543,7 @@ test('vocabulary practice plays audio controls, scores answers, and persists rev
 
   await page.getByRole('button', { name: '专项练习' }).click();
   await expect(page.getByRole('heading', { name: /专项练习/ })).toBeVisible();
-  await expect(page.getByText(`核心词汇 ${CET4_VOCABULARY_BANK.length} 个`)).toBeVisible();
+  await expect(page.getByText(`核心词汇 ${CET4_VOCABULARY_BANK.length} 个`).first()).toBeVisible();
   await page.getByRole('button', { name: '开始单词练习' }).click();
 
   await expect(page.getByRole('heading', { name: CET4_VOCABULARY_BANK[0].word })).toBeVisible();
@@ -614,6 +615,10 @@ test('staged mock exam covers CET-4 modules and persists score evidence', async 
   for (const question of CET4_MOCK_EXAM.reading.questions) {
     await page.getByTestId(`mock-choice-${question.id}-${question.correctAnswer}`).click();
   }
+  await page.getByTestId('mock-section-foundation').click();
+  for (const question of CET4_MOCK_EXAM.foundation.questions) {
+    await page.getByTestId(`mock-choice-${question.id}-${question.correctAnswer}`).click();
+  }
   await page.getByTestId('mock-section-translation').click();
   await page.getByTestId('mock-translation-answer').fill(
     'More and more college students use digital tools to learn English. Effective tools should not only give answers, but also help students find mistakes, actively recall knowledge and review at the right time.',
@@ -648,8 +653,15 @@ test('staged mock exam covers CET-4 modules and persists score evidence', async 
   });
 
   expect(result.sessions.some((session: { modeId: string }) => session.modeId === 'cet4-standard-mock')).toBeTruthy();
-  expect(result.attempts).toBe(CET4_MOCK_EXAM.listening.questions.length + CET4_MOCK_EXAM.reading.questions.length + 2);
+  expect(result.attempts).toBe(
+    CET4_MOCK_EXAM.listening.questions.length
+      + CET4_MOCK_EXAM.reading.questions.length
+      + CET4_MOCK_EXAM.foundation.questions.length
+      + 2,
+  );
   expect(result.skillProfiles.map((profile: { skillArea: string }) => profile.skillArea).sort()).toEqual([
+    'grammar',
+    'grammar',
     'listening',
     'reading',
     'translation',

@@ -19,7 +19,7 @@ export interface MockExamAnswers {
 }
 
 export interface MockExamSectionScore {
-  moduleId: 'writing' | 'listening' | 'reading' | 'translation';
+  moduleId: 'writing' | 'listening' | 'reading' | 'grammar' | 'translation';
   label: string;
   score: number;
   correctCount?: number;
@@ -83,6 +83,8 @@ function scoreSubjectiveAnswer(params: {
 function deriveChoiceMistakeReason(question: Cet4MockChoiceQuestion): MistakeReason {
   if (question.trapType) return question.trapType as MistakeReason;
   if (question.skillArea === 'listening') return '关键信息漏听' as MistakeReason;
+  if (question.questionTypeId === 'grammar-structure') return '语法错误' as MistakeReason;
+  if (question.questionTypeId === 'cloze-choice') return '搭配错误' as MistakeReason;
   if (question.questionTypeId === 'word-bank') return '搭配错误' as MistakeReason;
   return '定位失准' as MistakeReason;
 }
@@ -279,9 +281,10 @@ export function buildMockExamReport(input: {
   const sessionId = makeId('session-cet4-mock');
   const listeningQuestions = paper.listening.questions;
   const readingQuestions = paper.reading.questions;
+  const foundationQuestions = paper.foundation.questions;
   const choiceResult = buildChoiceAttempts({
     sessionId,
-    questions: [...listeningQuestions, ...readingQuestions],
+    questions: [...listeningQuestions, ...readingQuestions, ...foundationQuestions],
     answers: input.answers.choices,
     startedAt: input.startedAt,
     createdAt,
@@ -329,14 +332,24 @@ export function buildMockExamReport(input: {
   const objectiveAttempts = choiceResult.attempts;
   const listeningAttempts = objectiveAttempts.filter((attempt) => attempt.moduleId === 'listening');
   const readingAttempts = objectiveAttempts.filter((attempt) => attempt.moduleId === 'reading');
+  const foundationAttempts = objectiveAttempts.filter((attempt) => attempt.moduleId === 'grammar');
+  const grammarStructureAttempts = foundationAttempts.filter((attempt) => attempt.questionTypeId === 'grammar-structure');
+  const clozeAttempts = foundationAttempts.filter((attempt) => attempt.questionTypeId === 'cloze-choice');
   const listeningCorrect = listeningAttempts.filter((attempt) => attempt.isCorrect).length;
   const readingCorrect = readingAttempts.filter((attempt) => attempt.isCorrect).length;
+  const foundationCorrect = foundationAttempts.filter((attempt) => attempt.isCorrect).length;
+  const grammarStructureCorrect = grammarStructureAttempts.filter((attempt) => attempt.isCorrect).length;
+  const clozeCorrect = clozeAttempts.filter((attempt) => attempt.isCorrect).length;
   const listeningScore = Math.round((listeningCorrect / Math.max(1, listeningAttempts.length)) * 100);
   const readingScore = Math.round((readingCorrect / Math.max(1, readingAttempts.length)) * 100);
+  const foundationScore = Math.round((foundationCorrect / Math.max(1, foundationAttempts.length)) * 100);
+  const grammarStructureScore = Math.round((grammarStructureCorrect / Math.max(1, grammarStructureAttempts.length)) * 100);
+  const clozeScore = Math.round((clozeCorrect / Math.max(1, clozeAttempts.length)) * 100);
   const sectionScores: MockExamSectionScore[] = [
     { moduleId: 'writing', label: '写作', score: writingScore.score },
     { moduleId: 'listening', label: '听力', score: listeningScore, correctCount: listeningCorrect, totalCount: listeningAttempts.length },
     { moduleId: 'reading', label: '阅读', score: readingScore, correctCount: readingCorrect, totalCount: readingAttempts.length },
+    { moduleId: 'grammar', label: '语法/完形', score: foundationScore, correctCount: foundationCorrect, totalCount: foundationAttempts.length },
     { moduleId: 'translation', label: '翻译', score: translationScore.score },
   ];
   const score = Math.round(
@@ -359,6 +372,8 @@ export function buildMockExamReport(input: {
     buildSkillProfile({ moduleId: 'writing', subSkillId: 'mock-short-essay', score: writingScore.score, evidenceCount: 1, createdAt }),
     buildSkillProfile({ moduleId: 'listening', subSkillId: 'mock-listening-mixed', score: listeningScore, evidenceCount: listeningAttempts.length, createdAt }),
     buildSkillProfile({ moduleId: 'reading', subSkillId: 'mock-reading-mixed', score: readingScore, evidenceCount: readingAttempts.length, createdAt }),
+    buildSkillProfile({ moduleId: 'grammar', subSkillId: 'mock-grammar-structure', score: grammarStructureScore, evidenceCount: grammarStructureAttempts.length, createdAt }),
+    buildSkillProfile({ moduleId: 'grammar', subSkillId: 'mock-cloze-choice', score: clozeScore, evidenceCount: clozeAttempts.length, createdAt }),
     buildSkillProfile({ moduleId: 'translation', subSkillId: 'mock-paragraph-translation', score: translationScore.score, evidenceCount: 1, createdAt }),
   ];
   const session: PracticeSession = {

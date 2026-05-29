@@ -89,24 +89,24 @@ export default function TodayDashboard({
     ? '口语表达'
     : '阅读理解';
   const primaryTaskSummary = displayedTask?.type === 'diagnostic'
-    ? '先建立能力画像，再进入个性化练习'
+    ? '建立画像'
     : displayedTask?.type === 'review'
-    ? '先消化到期错因，再进入新题训练'
+    ? '处理到期复习'
     : displayedTask?.type === 'mock'
-    ? '覆盖写作、听力、阅读、翻译，生成分项分数和复习清单'
+    ? '完整模考'
     : displayedTask?.skillArea === 'listening'
-    ? '包含 3 道长对话精听题'
+    ? '长对话精听'
     : displayedTask?.skillArea === 'writing'
-    ? '包含 1 篇短文写作评阅'
+    ? '短文写作'
     : displayedTask?.skillArea === 'translation'
-    ? '包含 1 段中译英评阅'
+    ? '段落翻译'
     : displayedTask?.skillArea === 'vocabulary'
-    ? '包含听音、释义辨析和语块例句'
+    ? '词汇听音'
     : displayedTask?.skillArea === 'grammar'
-    ? '包含语法结构、固定搭配和完形语境判断'
+    ? '语法完形'
     : displayedTask?.skillArea === 'speaking'
-    ? '包含 1 轮重说和反馈对比'
-    : '包含原创仔细阅读题组';
+    ? '口语重说'
+    : '仔细阅读';
   const primaryActionLabel = displayedTask?.type === 'diagnostic'
     ? '开始诊断'
     : displayedTask?.type === 'review'
@@ -305,7 +305,7 @@ export default function TodayDashboard({
                   今日必须先完成 {reviewGateStatus.remainingRequired} 条到期主动回忆
                 </h3>
                 <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
-                  到期项会按优先级进入 1/3/7/14/30 天间隔计划。完成今日最低剂量后，专项练习、模考和口语训练自动解锁。
+                  完成最低复习量后，专项、模考和口语入口自动解锁。
                 </p>
               </div>
               <div className="grid grid-cols-3 gap-2 text-center text-xs font-black sm:min-w-80">
@@ -332,7 +332,7 @@ export default function TodayDashboard({
 
         {!reviewGateStatus?.locked && reviewGateStatus && reviewGateStatus.dueCount > 0 && (
           <section className="rounded-[2rem] border border-emerald-100 bg-emerald-50 p-4 text-sm font-semibold leading-6 text-emerald-900 shadow-sm">
-            今日最低复习剂量已完成，新训练已解锁；剩余 {reviewGateStatus.dueCount} 条到期项仍建议在今天处理完。
+            复习剂量已完成；剩余 {reviewGateStatus.dueCount} 条可稍后处理。
           </section>
         )}
 
@@ -461,21 +461,15 @@ export default function TodayDashboard({
                 </h3>
               </div>
 
-              {/* AI explanation system block */}
-              <div className="bg-[#e3f2fd]/85 border border-[#c7e3fc]/80 rounded-2xl p-4.5 mt-5 text-[11px] leading-relaxed select-none relative z-10">
-                <div className="flex items-center gap-1.5 font-bold text-[#003178] mb-1.5">
-                  <Sparkles className="h-4 w-4 text-[#003178] fill-[#003178]/10" />
-                  <span>智能任务调度</span>
-                </div>
-                <p className="text-[#434652] font-semibold">
-                  {displayedTask?.reason ?? '系统正在基于本地练习记录和复习队列，为您生成今日最高收益训练。'} 距考试仅剩 <span className="text-[#003178] font-black">{examCountdown}</span> 天。
-                </p>
+              <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-black relative z-10">
+                <span className="rounded-full bg-[#eef7fc] px-3 py-1 text-[#003178]">{primaryTaskSummary}</span>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-500">距考试 {examCountdown} 天</span>
               </div>
 
               {/* Bottom footer button bar */}
               <div className="mt-5.5 pt-4.5 border-t border-gray-100 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between relative z-10">
                 <span className="text-xs font-bold text-gray-400">
-                  {primaryTaskSummary}
+                  {targetExamName} · {displayedTask?.estimatedMinutes ?? 12}m
                 </span>
                 <button
                   data-testid="today-primary-task-action"
@@ -697,7 +691,9 @@ export default function TodayDashboard({
         </div>
 
         {onTriggerModal && (
-          <LaunchReadinessNotice onOpen={onTriggerModal} />
+          <div className="pt-1">
+            <LaunchReadinessNotice onOpen={onTriggerModal} />
+          </div>
         )}
 
       </div>

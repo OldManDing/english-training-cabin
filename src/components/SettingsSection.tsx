@@ -216,7 +216,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
               目标与计划设置
             </h2>
             <p className="text-xs text-[#434652] opacity-80 mt-1">
-              配置您的训练舱，生成个性化的备考计划。
+              目标、时间和数据。
             </p>
           </div>
           <button
@@ -426,7 +426,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                 本地数据保险箱
               </h3>
               <p className="text-[11px] leading-5 text-[#434652] font-semibold">
-                学习记录默认仅保存在当前浏览器。导出备份可用于更换设备前留存进度；恢复备份会覆盖当前浏览器中的学习记录。
+                学习记录默认保存在当前浏览器；更换设备前可先导出。
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
@@ -469,15 +469,17 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                 </p>
               </div>
 
-              {/* AI logic details */}
-              <div className="bg-white/80 border border-[#cbecfe] rounded-2xl p-4.5 text-xs text-[#003178]">
-                <div className="flex items-center gap-1.5 font-bold text-xs mb-1.5">
-                  <Sparkles className="h-4 w-4 text-[#003178]" />
-                  <span>计划生成逻辑</span>
-                </div>
-                <p className="text-[10.5px] leading-relaxed text-[#434652] font-medium">
-                  系统根据考试倒计时 <span className="font-bold text-[#003178]">({daysRemaining}天)</span>、目标分数 <span className="font-bold text-[#003178]">({targetScore}+)</span> 及每日投入 <span className="font-bold text-[#003178]">({dailyTargetMinutes}分钟)</span> 动态计算训练节奏。
-                </p>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  [`${daysRemaining}天`, '倒计时'],
+                  [`${targetScore}+`, '目标分'],
+                  [`${dailyTargetMinutes}m`, '每日'],
+                ].map(([value, label]) => (
+                  <div key={label} className="rounded-2xl border border-[#cbecfe] bg-white/80 px-3 py-2 text-center">
+                    <div className="text-sm font-black text-[#003178]">{value}</div>
+                    <div className="text-[10px] font-bold text-slate-400">{label}</div>
+                  </div>
+                ))}
               </div>
 
               {/* Grid simulations */}

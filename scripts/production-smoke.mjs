@@ -55,9 +55,10 @@ const exams = await requestJson('/api/exams');
 assert(Array.isArray(exams.exams) && exams.exams.length > 0, 'exam registry is empty');
 assert(exams.activeExamIds?.includes('cet4'), 'CET-4 is not marked as the active trainable exam');
 assert(exams.roadmapExamIds?.includes('ielts') && exams.roadmapExamIds?.includes('toefl'), 'roadmap exams are not published as metadata');
-assert(exams.mockExam?.plannedMinutes === 125, 'standard mock exam metadata is not published');
+assert(exams.mockExam?.plannedMinutes === 137, 'standard mock exam metadata is not published');
 assert(exams.mockExam?.listeningQuestionCount === 25, 'listening mock count is not standard');
 assert(exams.mockExam?.readingQuestionCount === 30, 'reading mock count is not standard');
+assert(exams.mockExam?.foundationQuestionCount === 8, 'foundation calibration count is not published');
 checks.push('exam registry ok');
 
 const registerEmail = `smoke-${smokeRunId}@${smokeAccountDomain}`;

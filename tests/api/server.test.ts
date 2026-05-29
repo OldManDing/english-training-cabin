@@ -760,10 +760,11 @@ describe('server API', () => {
     expect(response.body.questionBankCoverage.length).toBeGreaterThanOrEqual(8);
     expect(response.body.mockExam).toMatchObject({
       id: 'cet4-standard-mock-001',
-      plannedMinutes: 125,
+      plannedMinutes: 137,
     });
     expect(response.body.mockExam.listeningQuestionCount).toBe(25);
     expect(response.body.mockExam.readingQuestionCount).toBe(30);
+    expect(response.body.mockExam.foundationQuestionCount).toBe(8);
     expect(response.body.degreeEnglish.outline).toMatchObject({
       id: 'nanjing-tech-degree-english-2025-09',
       plannedMinutes: 120,
@@ -1073,7 +1074,11 @@ describe('server API', () => {
         startedAt: new Date(Date.now() - 120_000).toISOString(),
         answers: {
           choices: Object.fromEntries(
-            [...CET4_MOCK_EXAM.listening.questions, ...CET4_MOCK_EXAM.reading.questions].map((question) => [
+            [
+              ...CET4_MOCK_EXAM.listening.questions,
+              ...CET4_MOCK_EXAM.reading.questions,
+              ...CET4_MOCK_EXAM.foundation.questions,
+            ].map((question) => [
               question.id,
               question.correctAnswer,
             ]),
@@ -1090,12 +1095,14 @@ describe('server API', () => {
       moduleId: 'mock',
       modeId: 'cet4-standard-mock',
     });
-    expect(response.body.report.attempts).toHaveLength(57);
-    expect(response.body.sectionScores).toHaveLength(4);
+    expect(response.body.report.attempts).toHaveLength(65);
+    expect(response.body.sectionScores).toHaveLength(5);
     expect(response.body.report.skillProfiles.map((profile: { skillArea: string }) => profile.skillArea)).toEqual([
       'writing',
       'listening',
       'reading',
+      'grammar',
+      'grammar',
       'translation',
     ]);
   });

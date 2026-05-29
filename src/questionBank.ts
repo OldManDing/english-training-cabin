@@ -54,6 +54,12 @@ export interface Cet4MockExamPaper {
     passage: string;
     questions: Cet4MockChoiceQuestion[];
   };
+  foundation: {
+    title: string;
+    sourceNotice: string;
+    plannedMinutes: number;
+    questions: Cet4MockChoiceQuestion[];
+  };
   translation: {
     prompt: string;
     keywords: string[];
@@ -2779,6 +2785,25 @@ export const CET4_CLOZE_PRACTICE_QUESTIONS: Cet4MockChoiceQuestion[] =
     trapType: frame.trapType,
   })));
 
+function takeCyclic<T>(items: T[], startIndex: number, count: number): T[] {
+  if (items.length === 0) return [];
+  return Array.from({ length: count }, (_, index) => items[(startIndex + index) % items.length]);
+}
+
+const CET4_FOUNDATION_CALIBRATION_MINUTES = 12;
+
+function buildCET4FoundationCalibration(paperIndex: number): Cet4MockExamPaper['foundation'] {
+  const grammarQuestions = takeCyclic(CET4_GRAMMAR_PRACTICE_QUESTIONS, paperIndex * 4, 4);
+  const clozeQuestions = takeCyclic(CET4_CLOZE_PRACTICE_QUESTIONS, paperIndex * 4, 4);
+
+  return {
+    title: '语法/完形基础校准',
+    sourceNotice: '补充校准题不计入 CET-4 标准分，用于阶段模考后生成语法结构与完形语境弱项证据。',
+    plannedMinutes: CET4_FOUNDATION_CALIBRATION_MINUTES,
+    questions: [...grammarQuestions, ...clozeQuestions],
+  };
+}
+
 const DEGREE_PRACTICAL_WRITING_CONFIGS = [
   {
     slug: 'lecture-notice',
@@ -3719,8 +3744,8 @@ export const CET4_TRANSLATION_PROMPT_BANK: Cet4SubjectivePrompt[] = [
 export const CET4_MOCK_EXAM: Cet4MockExamPaper = {
   id: 'cet4-standard-mock-001',
   title: 'CET-4 标准结构模拟卷 A',
-  sourceNotice: '内置原创模拟题，不是官方真题；按 CET-4 笔试结构覆盖写作 1 题、听力 25 题、阅读 30 题、翻译 1 题，用于形成评分和复习闭环。',
-  plannedMinutes: 125,
+  sourceNotice: '内置原创模拟题，不是官方真题；标准分仍按 CET-4 写作、听力、阅读、翻译四部分计算，另加语法/完形基础校准题生成弱项证据。',
+  plannedMinutes: 125 + CET4_FOUNDATION_CALIBRATION_MINUTES,
   writing: {
     prompt: CET4_WRITING_PROMPT_BANK[0].prompt,
     minWords: CET4_WRITING_PROMPT_BANK[0].minWords ?? 120,
@@ -3735,17 +3760,13 @@ export const CET4_MOCK_EXAM: Cet4MockExamPaper = {
     passage: CET4_STANDARD_READING_PASSAGE,
     questions: CET4_STANDARD_READING_QUESTIONS,
   },
+  foundation: buildCET4FoundationCalibration(0),
   translation: {
     prompt: CET4_TRANSLATION_PROMPT_BANK[0].prompt,
     keywords: CET4_TRANSLATION_PROMPT_BANK[0].keywords,
     sampleAnswer: CET4_TRANSLATION_PROMPT_BANK[0].sampleAnswer,
   },
 };
-
-function takeCyclic<T>(items: T[], startIndex: number, count: number): T[] {
-  if (items.length === 0) return [];
-  return Array.from({ length: count }, (_, index) => items[(startIndex + index) % items.length]);
-}
 
 function buildCET4MockExamVariant(paperIndex: number): Cet4MockExamPaper {
   const paperNo = String(paperIndex + 1).padStart(3, '0');
@@ -3763,8 +3784,8 @@ function buildCET4MockExamVariant(paperIndex: number): Cet4MockExamPaper {
   return {
     id: `cet4-standard-mock-${paperNo}`,
     title: `CET-4 标准结构模拟卷 ${String.fromCharCode(64 + paperIndex + 1)}`,
-    sourceNotice: '由内置原创题池自动组卷，保持 CET-4 笔试 57 题结构；阅读 Part III 仍使用标准结构卷，听力和写译任务按题池轮换。',
-    plannedMinutes: 125,
+    sourceNotice: '由内置原创题池自动组卷；标准分保持 CET-4 笔试 57 题结构，语法/完形作为阶段校准补充题单独生成能力证据。',
+    plannedMinutes: 125 + CET4_FOUNDATION_CALIBRATION_MINUTES,
     writing: {
       prompt: writingPrompt.prompt,
       minWords: writingPrompt.minWords ?? 120,
@@ -3779,6 +3800,7 @@ function buildCET4MockExamVariant(paperIndex: number): Cet4MockExamPaper {
       passage: CET4_STANDARD_READING_PASSAGE,
       questions: CET4_STANDARD_READING_QUESTIONS,
     },
+    foundation: buildCET4FoundationCalibration(paperIndex),
     translation: {
       prompt: translationPrompt.prompt,
       keywords: translationPrompt.keywords,
@@ -3845,7 +3867,7 @@ export const CET4_QUESTION_BANK_COVERAGE: QuestionBankCoverageItem[] = [
     officialCount: '补弱题型',
     builtInCount: CET4_CLOZE_PRACTICE_QUESTIONS.length,
     durationMinutes: 12,
-    trainingRoute: '完形语境专项 + 诊断弱项推荐',
+    trainingRoute: '完形语境专项 + 诊断弱项推荐 + 阶段模考基础校准',
   },
   {
     moduleId: 'grammar',
@@ -3854,7 +3876,7 @@ export const CET4_QUESTION_BANK_COVERAGE: QuestionBankCoverageItem[] = [
     officialCount: '能力支撑',
     builtInCount: CET4_GRAMMAR_PRACTICE_QUESTIONS.length,
     durationMinutes: 12,
-    trainingRoute: '语法结构专项 + 写译错因复盘',
+    trainingRoute: '语法结构专项 + 写译错因复盘 + 阶段模考基础校准',
   },
   {
     moduleId: 'reading',

@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   BookOpen,
-  CheckCircle2,
   ChevronRight,
   ClipboardCheck,
   FileText,
@@ -11,7 +10,6 @@ import {
   LibraryBig,
   ListChecks,
   PenLine,
-  Route,
   ShieldCheck,
   Volume2,
   type LucideIcon,
@@ -326,10 +324,10 @@ export default function PracticeHub({
                 {examName} 专项训练工作台
               </div>
               <h2 className="text-2xl font-black leading-tight text-[#003178] sm:text-3xl">
-                专项练习：先选训练目标，再进入可评分练习
+                专项练习
               </h2>
               <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
-                专项练习只展示当前目标考试题库。先选择要训练的能力，再进入作答、反馈、错因入库和能力画像更新。
+                选择一个能力，直接开始训练。
               </p>
             </div>
             <button
@@ -363,8 +361,7 @@ export default function PracticeHub({
                 <div>
                   <div className="text-xs font-black text-emerald-800">诊断驱动推荐</div>
                   <p className="mt-1 text-sm font-bold leading-6 text-slate-700">
-                    当前优先进入「{recommendedModule.label}」。
-                    {recommendedTask?.reason ?? '系统会根据最近能力画像、今日计划和复习压力自动调整专项排序。'}
+                    优先进入「{recommendedModule.label}」{recommendedTask?.reason ? ` · ${recommendedTask.reason}` : ''}
                   </p>
                 </div>
                 <button
@@ -426,7 +423,7 @@ export default function PracticeHub({
                     </span>
                   ) : null}
                   <h3 className={`mt-3 text-lg font-black ${isActive ? 'text-white' : 'text-[#071e27]'}`}>{module.label}</h3>
-                  <p className={`mt-2 min-h-10 text-sm font-semibold leading-5 ${isActive ? 'text-white/82' : 'text-slate-500'}`}>
+                  <p className={`mt-2 line-clamp-1 text-sm font-semibold leading-5 ${isActive ? 'text-white/82' : 'text-slate-500'}`}>
                     {module.subtitle}
                   </p>
                   <div className={`mt-3 text-xs font-black ${isActive ? 'text-white/78' : 'text-slate-500'}`}>
@@ -453,16 +450,21 @@ export default function PracticeHub({
         )}
 
         {isCet4 && (
-        <section className="grid grid-cols-1 gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="rounded-[2rem] border border-[#cfe6f2] bg-white p-5 shadow-sm sm:p-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <section className="rounded-[2rem] border border-[#cfe6f2] bg-white p-4 shadow-sm sm:p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-black ${selectedModule.tone.pill}`}>
                   {React.createElement(selectedIcon, { className: 'h-4 w-4' })}
-                  当前训练路径
+                  当前选择
                 </span>
                 <h3 className="mt-3 text-2xl font-black text-[#003178]">{selectedModule.label}</h3>
-                <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">{selectedModule.outcome}</p>
+                <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-black text-slate-500">
+                  <span className="rounded-full bg-slate-100 px-3 py-1">{selectedModule.duration}</span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1">{selectedModule.count}</span>
+                  {selectedModule.recommendation ? (
+                    <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700">{selectedModule.recommendation}</span>
+                  ) : null}
+                </div>
               </div>
               <button
                 type="button"
@@ -474,42 +476,6 @@ export default function PracticeHub({
                 <ChevronRight className="h-4 w-4" />
               </button>
             </div>
-
-            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {selectedModule.route.map((step, index) => (
-                <div key={step} className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#003178] text-[10px] font-black text-white">
-                      {index + 1}
-                    </span>
-                    <span className="text-xs font-black text-[#071e27]">{step}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <aside className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-            <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-black text-slate-600">
-              <Route className="h-4 w-4" />
-              闭环证据
-            </span>
-            <div className="mt-4 space-y-3">
-              {[
-                ['作答先行', '用户必须先输入答案或选择选项，不直接展示参考答案。'],
-                ['反馈可解释', '结果包含错因、定位线索或结构化改写建议。'],
-                ['数据可沉淀', '完成后写入 PracticeSession、Attempt、ReviewItem 或 SkillProfile。'],
-              ].map(([title, detail]) => (
-                <div key={title} className="flex gap-3 rounded-2xl bg-slate-50 p-3">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
-                  <div>
-                    <div className="text-xs font-black text-[#071e27]">{title}</div>
-                    <p className="mt-1 text-[11px] font-semibold leading-5 text-slate-500">{detail}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </aside>
         </section>
         )}
 
@@ -567,54 +533,42 @@ export default function PracticeHub({
         )}
 
         {isCet4 && (
-        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <span className="inline-flex items-center gap-2 rounded-full border border-[#cfe6f2] bg-[#eef7fc] px-2.5 py-1 text-[10px] font-black text-[#003178]">
-                  <ListChecks className="h-3.5 w-3.5" />
-                  CET-4 覆盖
-                </span>
-                <h3 className="mt-3 text-lg font-black text-[#071e27]">主要题型覆盖清单</h3>
+        <details className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-left">
+            <span className="inline-flex items-center gap-2 text-sm font-black text-[#003178]">
+              <ShieldCheck className="h-4 w-4" />
+              题库范围
+            </span>
+            <span className="text-xs font-bold text-slate-500">{examName} · 原创模拟</span>
+          </summary>
+          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+            <div>
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#cfe6f2] bg-[#eef7fc] px-2.5 py-1 text-[10px] font-black text-[#003178]">
+                <ListChecks className="h-3.5 w-3.5" />
+                题型覆盖
               </div>
-              <p className="text-xs font-bold leading-5 text-slate-500">原创模拟题，不冒充官方真题。</p>
-            </div>
-            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {CET4_QUESTION_BANK_COVERAGE.slice(0, 8).map((item) => (
-                <div key={`${item.moduleId}-${item.questionTypeId}`}>
-                  <CoverageCard item={item} tone="blue" />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-[2rem] border border-emerald-200 bg-white p-5 shadow-sm sm:p-6">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <span className="inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">
-                  <ShieldCheck className="h-3.5 w-3.5" />
-                  题库过滤规则
-                </span>
-                <h3 className="mt-3 text-lg font-black text-[#071e27]">当前只显示 {examName} 题目</h3>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {CET4_QUESTION_BANK_COVERAGE.slice(0, 8).map((item) => (
+                  <div key={`${item.moduleId}-${item.questionTypeId}`}>
+                    <CoverageCard item={item} tone="blue" />
+                  </div>
+                ))}
               </div>
-              <p className="text-xs font-bold leading-5 text-slate-500">
-                切换考试后需要重新诊断并加载对应题库
-              </p>
             </div>
-            <div className="mt-4 space-y-3">
+            <div className="space-y-2">
               {[
-                ['诊断', '入门诊断先确定目标考试，后续能力画像按 examId 写入。'],
-                ['专项', '阅读、听力、写作、翻译与词汇入口只使用 CET-4 内置原创模拟题。'],
-                ['模考', '阶段模考只使用 CET-4 标准结构卷，避免跨考试污染提分证据。'],
+                ['诊断', '按目标考试生成画像'],
+                ['专项', '只显示当前题库'],
+                ['模考', '使用 CET-4 结构卷'],
               ].map(([title, detail]) => (
                 <div key={title} className="rounded-2xl border border-emerald-100 bg-emerald-50/55 p-3">
                   <div className="text-xs font-black text-emerald-800">{title}</div>
-                  <p className="mt-1 text-[11px] font-semibold leading-5 text-slate-600">{detail}</p>
+                  <p className="mt-1 text-[11px] font-semibold text-slate-600">{detail}</p>
                 </div>
               ))}
             </div>
           </div>
-        </section>
+        </details>
         )}
       </div>
     </div>

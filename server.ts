@@ -888,6 +888,7 @@ export function createApp(options: CreateAppOptions = {}) {
         sourceNotice: CET4_MOCK_EXAM.sourceNotice,
         listeningQuestionCount: CET4_MOCK_EXAM.listening.questions.length,
         readingQuestionCount: CET4_MOCK_EXAM.reading.questions.length,
+        foundationQuestionCount: CET4_MOCK_EXAM.foundation.questions.length,
       },
       degreeEnglish: {
         outline: {

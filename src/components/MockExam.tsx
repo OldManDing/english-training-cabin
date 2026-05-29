@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
@@ -21,7 +20,7 @@ import { DailyPlan, PracticeCompletionReport, SkillProfile } from '../types';
 import { SelectField } from './controls/FormControls';
 
 type Choice = 'A' | 'B' | 'C' | 'D';
-type MockSectionId = 'writing' | 'listening' | 'reading' | 'translation' | 'review';
+type MockSectionId = 'writing' | 'listening' | 'reading' | 'foundation' | 'translation' | 'review';
 
 interface MockExamProps {
   onBack: () => void;
@@ -67,8 +66,8 @@ function buildMockRecommendation(skillProfiles: SkillProfile[], dailyPlan?: Dail
     paper,
     weakLabel,
     reason: weakProfile
-      ? `根据最近能力画像，${weakLabel} 当前为 ${weakProfile.score}%。系统默认切到第 ${index + 1} 套阶段卷，并在提交后把四项分数继续回写能力画像。`
-      : '尚未完成诊断时先使用默认阶段卷；完成入门诊断后，系统会按弱项自动调整默认卷和训练入口。',
+      ? `${weakLabel} ${weakProfile.score}% · 第 ${index + 1} 套`
+      : '默认阶段卷',
   };
 }
 
@@ -90,13 +89,15 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
 
   const listeningAnsweredCount = paper.listening.questions.filter((question) => choices[question.id]).length;
   const readingAnsweredCount = paper.reading.questions.filter((question) => choices[question.id]).length;
+  const foundationAnsweredCount = paper.foundation.questions.filter((question) => choices[question.id]).length;
   const writingCharCount = writingAnswer.trim().length;
   const translationCharCount = translationAnswer.trim().length;
   const writingReady = writingCharCount >= 40;
   const listeningReady = listeningAnsweredCount === paper.listening.questions.length;
   const readingReady = readingAnsweredCount === paper.reading.questions.length;
+  const foundationReady = foundationAnsweredCount === paper.foundation.questions.length;
   const translationReady = translationCharCount >= 20;
-  const canSubmit = writingReady && listeningReady && readingReady && translationReady;
+  const canSubmit = writingReady && listeningReady && readingReady && foundationReady && translationReady;
 
   const sections: Array<{
     id: MockSectionId;
@@ -129,6 +130,14 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
       time: '40m',
       status: `${readingAnsweredCount}/${paper.reading.questions.length} 题`,
       ready: readingReady,
+    },
+    {
+      id: 'foundation',
+      label: '语法/完形',
+      shortLabel: '语法',
+      time: `${paper.foundation.plannedMinutes}m`,
+      status: `${foundationAnsweredCount}/${paper.foundation.questions.length} 题`,
+      ready: foundationReady,
     },
     {
       id: 'translation',
@@ -221,12 +230,12 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
       case 'writing':
         return (
           <section className="rounded-[2rem] border border-[#cfe6f2] bg-white p-5 shadow-sm sm:p-6">
-            <SectionHeader
-              icon={<PenLine className="h-5 w-5" />}
-              eyebrow="Part I"
-              title="写作：先完成可评分输出"
-              detail="建议先写作，避免被后续客观题打断表达结构。"
-            />
+              <SectionHeader
+                icon={<PenLine className="h-5 w-5" />}
+                eyebrow="Part I"
+                title="写作：先完成可评分输出"
+                detail="30 分钟"
+              />
             <p className="mt-4 rounded-3xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold leading-7 text-slate-700">
               {paper.writing.prompt}
             </p>
@@ -253,7 +262,7 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
                 icon={<Headphones className="h-5 w-5" />}
                 eyebrow="Part II"
                 title="听力：先听后答"
-                detail="先播放材料，再完成所有听力选择题。转写默认折叠，作为无音频环境兜底。"
+                detail="播放后作答"
               />
               <button
                 type="button"
@@ -278,12 +287,12 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
       case 'reading':
         return (
           <section className="rounded-[2rem] border border-[#cfe6f2] bg-white p-5 shadow-sm sm:p-6">
-            <SectionHeader
-              icon={<FileText className="h-5 w-5" />}
-              eyebrow="Part III"
-              title="阅读：读文章后集中作答"
-              detail="阅读题和听力题分开推进，避免长页面混答造成漏题。"
-            />
+              <SectionHeader
+                icon={<FileText className="h-5 w-5" />}
+                eyebrow="Part III"
+                title="阅读：读文章后集中作答"
+                detail="读文后作答"
+              />
             <p className="mt-4 rounded-3xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold leading-7 text-slate-700">
               {paper.reading.passage}
             </p>
@@ -294,15 +303,34 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
             />
           </section>
         );
+      case 'foundation':
+        return (
+          <section className="rounded-[2rem] border border-[#cfe6f2] bg-white p-5 shadow-sm sm:p-6">
+              <SectionHeader
+                icon={<ListChecks className="h-5 w-5" />}
+                eyebrow="Calibration"
+                title={paper.foundation.title}
+                detail="不计入标准分"
+              />
+            <p className="mt-4 rounded-3xl border border-slate-100 bg-amber-50 p-4 text-sm font-semibold leading-7 text-amber-800">
+              {paper.foundation.sourceNotice}
+            </p>
+            <QuestionList
+              questions={paper.foundation.questions}
+              choices={choices}
+              onSelect={(questionId, choice) => setChoices((current) => ({ ...current, [questionId]: choice }))}
+            />
+          </section>
+        );
       case 'translation':
         return (
           <section className="rounded-[2rem] border border-[#cfe6f2] bg-white p-5 shadow-sm sm:p-6">
-            <SectionHeader
-              icon={<PenLine className="h-5 w-5" />}
-              eyebrow="Part IV"
-              title="翻译：最后做输出校准"
-              detail="提交前保留翻译编辑区，便于对照写作输出和词汇选择。"
-            />
+              <SectionHeader
+                icon={<PenLine className="h-5 w-5" />}
+                eyebrow="Part IV"
+                title="翻译：最后做输出校准"
+                detail="20 字符以上"
+              />
             <p className="mt-4 rounded-3xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold leading-7 text-slate-700">
               {paper.translation.prompt}
             </p>
@@ -319,13 +347,13 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
       case 'review':
         return (
           <section className="rounded-[2rem] border border-[#cfe6f2] bg-white p-5 shadow-sm sm:p-6">
-            <SectionHeader
-              icon={<ListChecks className="h-5 w-5" />}
-              eyebrow="Submit"
-              title="提交前检查"
-              detail="系统只允许完整模考进入评分，避免半套卷污染阶段提分证据。"
-            />
-            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <SectionHeader
+                icon={<ListChecks className="h-5 w-5" />}
+                eyebrow="Submit"
+                title="提交前检查"
+                detail="完成全部模块后提交"
+              />
+            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
               {sections.filter((section) => section.id !== 'review').map((section) => (
                 <button
                   key={`review-${section.id}`}
@@ -348,7 +376,7 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
               </p>
             ) : (
               <p className="mt-4 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-bold leading-6 text-emerald-800">
-                四个模块均已完成，可以提交并生成阶段模考报告。
+                全部模块均已完成，可以提交并生成阶段模考报告。
               </p>
             )}
           </section>
@@ -378,11 +406,12 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
                 {paper.title}
               </h2>
               <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
-                覆盖写作、听力、阅读、翻译四个 CET-4 笔试模块。提交后会生成分项分数、错因复习项和能力图谱证据。
+                完成全部模块后统一评分。
               </p>
-              <p className="mt-2 text-xs font-bold leading-5 text-amber-700">
-                {paper.sourceNotice}
-              </p>
+              <details className="mt-2 text-xs font-bold leading-5 text-amber-700">
+                <summary className="cursor-pointer">组卷说明</summary>
+                <p className="mt-1">{paper.sourceNotice}</p>
+              </details>
             </div>
             <div className="grid grid-cols-3 gap-2 text-center text-xs font-black sm:min-w-[320px]">
               <div className="rounded-2xl bg-[#eef7fc] p-3 text-[#003178]">
@@ -390,7 +419,7 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
                 <div>分钟</div>
               </div>
               <div className="rounded-2xl bg-emerald-50 p-3 text-emerald-700">
-                <div className="text-2xl">{completedSectionCount}/4</div>
+                <div className="text-2xl">{completedSectionCount}/{sections.length - 1}</div>
                 <div>模块完成</div>
               </div>
               <div className="rounded-2xl bg-amber-50 p-3 text-amber-700">
@@ -402,27 +431,14 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
         </header>
 
         {!result && (
-          <section className="rounded-[2rem] border border-emerald-100 bg-emerald-50 p-4 shadow-sm sm:p-5">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <div className="text-xs font-black text-emerald-800">诊断定制模考</div>
-                <p className="mt-1 text-sm font-bold leading-6 text-slate-700">{mockRecommendation.reason}</p>
-              </div>
-              <div className="rounded-2xl bg-white px-4 py-3 text-xs font-black text-[#003178]">
-                当前关注：{mockRecommendation.weakLabel}
-              </div>
-            </div>
-          </section>
-        )}
-
-        {!result && (
           <section className="rounded-[2rem] border border-[#cfe6f2] bg-white/85 p-4 shadow-sm sm:p-5">
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px_360px] xl:items-center">
               <div className="min-w-0">
-                <div className="text-sm font-black text-[#003178]">模考规则：按正式卷顺序推进，最后统一提交评分</div>
-                <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
-                  单项练习可以随时返回修改；阶段模考报告只在写作、听力、阅读、翻译全部完成后生成，避免半套卷污染提分证据。
-                </p>
+                <div className="text-sm font-black text-[#003178]">按卷面顺序推进，最后提交</div>
+                <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-black">
+                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">{mockRecommendation.reason}</span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-500">关注：{mockRecommendation.weakLabel}</span>
+                </div>
               </div>
               <label className="flex min-w-0 flex-col gap-1 text-xs font-black text-[#003178]">
                 选择模拟卷
@@ -436,7 +452,7 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
                   }))}
                 />
               </label>
-              <div className="grid grid-cols-4 gap-1 text-center text-[10px] font-black text-slate-500">
+              <div className="grid grid-cols-5 gap-1 text-center text-[10px] font-black text-slate-500">
                 {sections.filter((section) => section.id !== 'review').map((section, index) => (
                   <button
                     key={`flow-${section.id}`}
@@ -465,7 +481,7 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
                 </div>
                 <h3 className="mt-3 text-2xl font-black text-[#003178]">综合模拟得分 {result.score}</h3>
                 <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
-                  本次生成 {result.report.attempts.length} 条作答证据、{result.report.reviewItems.length} 个错因复习项和 {result.report.skillProfiles.length} 个能力画像节点。
+                  {result.report.attempts.length} 条作答 · {result.report.reviewItems.length} 个复习项 · {result.report.skillProfiles.length} 个画像节点
                 </p>
               </div>
               <button
@@ -480,7 +496,7 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
               </button>
             </div>
 
-            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
               {result.sectionScores.map((section) => (
                 <div key={section.moduleId} className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
                   <div className="text-xs font-black text-slate-500">{section.label}</div>
@@ -565,7 +581,7 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
               </div>
               {!canSubmit && (
                 <p className="mt-2 text-center text-[11px] font-bold text-slate-500">
-                  仍需完成：{incompleteSections.map((section) => section.label).join('、')}。系统会把提交动作锁定到完整模考证据。
+                  仍需完成：{incompleteSections.map((section) => section.label).join('、')}。
                 </p>
               )}
             </div>

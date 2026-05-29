@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { CET4_VOCABULARY_BANK } from '../../src/data';
 import {
   CET4_LISTENING_PRACTICE_QUESTIONS,
+  CET4_CLOZE_PRACTICE_QUESTIONS,
+  CET4_GRAMMAR_PRACTICE_QUESTIONS,
   CET4_MOCK_EXAM,
   CET4_MOCK_EXAM_BANK,
   CET4_QUESTION_BANK_COVERAGE,
@@ -23,10 +25,12 @@ describe('CET-4 syllabus-aligned question bank coverage', () => {
   it('keeps the standard mock exam aligned with the CET-4 written-test structure', () => {
     const listeningCounts = countBy(CET4_MOCK_EXAM.listening.questions, (question) => question.questionTypeId);
     const readingCounts = countBy(CET4_MOCK_EXAM.reading.questions, (question) => question.questionTypeId);
+    const foundationCounts = countBy(CET4_MOCK_EXAM.foundation.questions, (question) => question.questionTypeId);
 
-    expect(CET4_MOCK_EXAM.plannedMinutes).toBe(125);
+    expect(CET4_MOCK_EXAM.plannedMinutes).toBe(137);
     expect(CET4_MOCK_EXAM.listening.questions).toHaveLength(25);
     expect(CET4_MOCK_EXAM.reading.questions).toHaveLength(30);
+    expect(CET4_MOCK_EXAM.foundation.questions).toHaveLength(8);
     expect(listeningCounts).toMatchObject({
       'short-news': 7,
       'long-conversation': 8,
@@ -36,6 +40,10 @@ describe('CET-4 syllabus-aligned question bank coverage', () => {
       'word-bank': 10,
       'long-matching': 10,
       'careful-reading': 10,
+    });
+    expect(foundationCounts).toMatchObject({
+      'grammar-structure': 4,
+      'cloze-choice': 4,
     });
   });
 
@@ -49,6 +57,8 @@ describe('CET-4 syllabus-aligned question bank coverage', () => {
     expect(CET4_LISTENING_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(1_000);
     expect(CET4_WORD_BANK_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(1_500);
     expect(CET4_LONG_MATCHING_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(1_000);
+    expect(CET4_GRAMMAR_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(10);
+    expect(CET4_CLOZE_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(1_500);
     expect(CET4_READING_BANK.length).toBeGreaterThanOrEqual(300);
     expect(CET4_READING_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(4_000);
     expect(carefulReadingQuestionCount).toBeGreaterThanOrEqual(1_200);
@@ -62,6 +72,8 @@ describe('CET-4 syllabus-aligned question bank coverage', () => {
     expect(coverageByType['long-matching']).toBe(
       CET4_READING_PRACTICE_QUESTIONS.filter((question) => question.questionTypeId === 'long-matching').length,
     );
+    expect(coverageByType['grammar-structure']).toBe(CET4_GRAMMAR_PRACTICE_QUESTIONS.length);
+    expect(coverageByType['cloze-choice']).toBe(CET4_CLOZE_PRACTICE_QUESTIONS.length);
     expect(coverageByType['short-essay']).toBe(CET4_WRITING_PROMPT_BANK.length);
     expect(coverageByType['paragraph-translation']).toBe(CET4_TRANSLATION_PROMPT_BANK.length);
   });
@@ -100,6 +112,7 @@ describe('CET-4 syllabus-aligned question bank coverage', () => {
     const mockQuestionIds = [
       ...CET4_MOCK_EXAM_BANK.flatMap((paper) => paper.listening.questions.map((question) => `${paper.id}-${question.id}`)),
       ...CET4_MOCK_EXAM_BANK.flatMap((paper) => paper.reading.questions.map((question) => `${paper.id}-${question.id}`)),
+      ...CET4_MOCK_EXAM_BANK.flatMap((paper) => paper.foundation.questions.map((question) => `${paper.id}-${question.id}`)),
     ];
     const readingPracticeQuestionIds = CET4_READING_PRACTICE_QUESTIONS.map((question) => question.id);
     const listeningPracticeQuestionIds = CET4_LISTENING_PRACTICE_QUESTIONS.map((question) => question.id);

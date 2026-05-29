@@ -229,18 +229,17 @@ export default function OnboardingDiagnostic({
                 入门诊断
               </div>
               <h1 className="text-3xl font-black leading-tight text-[#071e27] sm:text-5xl">
-                入门诊断：先做题，再生成今日训练路线。
+                入门诊断
               </h1>
               <p className="mt-4 max-w-2xl text-sm font-semibold leading-7 text-slate-600">
-                这一步不再用自评冒充诊断。系统会让你完成阅读、听力转写、完形/选词填空、语法结构、翻译、写作、口语表达初筛 7 个小任务，
-                根据答案规则评分，并把 session、attempt、review item 和 skill profile 写入本地学习证据。
+                完成 7 个小任务，生成初始能力画像和今日训练路线。
               </p>
               <div className="mt-6 rounded-3xl border border-[#cfe6f2] bg-[#f7fbff] p-4">
                 <label className="block text-sm font-black text-[#003178]" htmlFor="diagnostic-exam-select">
                   先选择目标考试
                 </label>
                 <p className="mt-1 text-xs font-bold leading-5 text-slate-500">
-                  诊断、训练计划和题库都会按目标考试过滤。当前完整训练闭环只开放 CET-4，其他考试保留为扩展路线。
+                  当前完整训练闭环先开放 CET-4。
                 </p>
                 <SelectField
                   ariaLabel="先选择目标考试"
@@ -279,13 +278,13 @@ export default function OnboardingDiagnostic({
             </div>
 
             <div className="rounded-[2rem] border border-[#cfe6f2] bg-[#f0f9ff]/80 p-5 shadow-sm sm:p-6">
-              <h2 className="mb-4 text-lg font-black text-[#003178]">验收口径</h2>
+              <h2 className="mb-4 text-lg font-black text-[#003178]">诊断范围</h2>
               <div className="space-y-3">
                 {[
-                  `目标考试先锁定为 ${selectedExamName}，诊断题和后续题库只取对应考试范围。`,
-                  '必须有可作答题目，不能只点“生成”。',
-                  '必须按答案产生不同分数和弱项排序。',
-                  '必须能返回上一步修改目标或答案。',
+                  `${selectedExamName} 题库`,
+                  '7 项真实作答',
+                  '弱项排序',
+                  '可返回修改',
                 ].map((item) => (
                   <div key={item} className="flex gap-3 rounded-2xl bg-white p-3 text-sm font-bold text-slate-700">
                     <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
@@ -305,7 +304,7 @@ export default function OnboardingDiagnostic({
                 学习目标设置
               </h2>
               <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-                目标只决定训练强度和计划节奏；能力画像必须由下一步真实题目评分生成。
+                设置目标分、日期和每日时间。
               </p>
 
               <div className="mt-7 space-y-7">
@@ -313,7 +312,7 @@ export default function OnboardingDiagnostic({
                   <div className="text-xs font-black text-[#003178]">目标考试已锁定</div>
                   <div className="mt-1 text-2xl font-black text-[#003178]">{selectedExamName}</div>
                   <p className="mt-2 text-xs font-bold leading-5 text-slate-500">
-                    本次诊断会使用 {selectedExamName} 的题型权重与内置原创模拟题。切换考试需要回到上一步重新确认。
+                    切换考试需返回上一步。
                   </p>
                 </div>
 
@@ -418,10 +417,10 @@ export default function OnboardingDiagnostic({
               <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-md">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h2 className="text-2xl font-black text-[#003178]">真实小题诊断</h2>
-                    <p className="mt-1 text-sm font-semibold text-slate-500">
-                      当前目标：{selectedExamName}。请先完成作答，提交后会按答案生成分数、弱项和复习项。
-                    </p>
+                      <h2 className="text-2xl font-black text-[#003178]">真实小题诊断</h2>
+                      <p className="mt-1 text-sm font-semibold text-slate-500">
+                        当前目标：{selectedExamName}。完成后生成弱项排序。
+                      </p>
                   </div>
                   <div className="rounded-2xl bg-[#003178]/10 px-4 py-2 text-sm font-black text-[#003178]">
                     {answeredCount}/{ONBOARDING_DIAGNOSTIC_ITEMS.length} 已完成
@@ -450,7 +449,7 @@ export default function OnboardingDiagnostic({
                         <div>
                           <div className="text-sm font-black text-[#003178]">听力材料</div>
                           <p className="mt-1 text-xs font-bold leading-5 text-slate-600">
-                            请先播放材料并作答；听不清时再展开转写。这里使用浏览器语音合成播报原创诊断材料。
+                            先听后答；听不清可展开转写。
                           </p>
                         </div>
                         <button
@@ -546,8 +545,7 @@ export default function OnboardingDiagnostic({
                 </div>
                 <h2 className="text-3xl font-black text-[#003178]">您的能力画像已生成</h2>
                 <p className="mt-2 text-sm font-semibold text-slate-500">
-                  当前目标考试：{selectedExamName}。已写入 {report.attempts.length} 条作答证据、{report.skillProfiles.length} 条能力画像、
-                  {report.reviewItems.length} 条复习项。今日任务会优先处理最低分弱项。
+                  {report.attempts.length} 条作答 · {report.skillProfiles.length} 条画像 · {report.reviewItems.length} 条复习
                 </p>
               </div>
               <div className="rounded-[2rem] border border-sky-100 bg-sky-50 p-5 text-center">
@@ -582,7 +580,6 @@ export default function OnboardingDiagnostic({
                   <h3 className="text-sm font-black text-amber-900">下一步训练重点</h3>
                   <p className="mt-1 text-sm font-bold leading-6 text-amber-800">
                     优先训练 {report.weakestSkills.map((skill) => skillLabels[skill]).join('、')}。
-                    复习队列会先安排低分题的主动回忆、挖空补全和输出复述。
                   </p>
                 </div>
               </div>
