@@ -55,7 +55,15 @@ function completedStepCount(evidence: ReviewCompletionEvidence): number {
 function calculateMasteryScore(currentMastery: number, evidence: ReviewCompletionEvidence): number {
   const completedSteps = completedStepCount(evidence);
   if (completedSteps < 3) return clampScore(currentMastery + completedSteps * 5);
+  if (evidence.redoCorrect === false || evidence.reviewOutcome === 'again') return clampScore(currentMastery + 8);
+  if (evidence.reviewOutcome === 'unclear') return clampScore(currentMastery + 15);
   return clampScore(currentMastery + (currentMastery < 60 ? 25 : 15));
+}
+
+function reviewModeId(item: ReviewItem): 'wrong-question-redo-active-recall' | 'active-recall-cloze-production' {
+  return item.redoQuestion || item.learningMethod === 'wrong-question-redo-active-recall'
+    ? 'wrong-question-redo-active-recall'
+    : 'active-recall-cloze-production';
 }
 
 function nextReviewIntervalDays(masteryScore: number): number {
@@ -81,6 +89,7 @@ function extractMistakeReasons(item: ReviewItem): MistakeReason[] {
 
 function evidenceConfidence(evidence: ReviewCompletionEvidence): 1 | 2 | 3 | 4 | 5 {
   const textLength =
+    (evidence.redoAnswer?.trim().length ?? 0) +
     evidence.recallAnswer.trim().length +
     evidence.clozeAnswer.trim().length +
     evidence.productionAnswer.trim().length;
@@ -103,6 +112,8 @@ export function buildReviewCompletionRecords(input: BuildReviewCompletionRecords
   const sessionId = makeReviewEvidenceId('session-review', input.reviewItem.id, now);
   const questionId = input.reviewItem.targetId ?? input.reviewItem.id;
   const mistakeReasons = extractMistakeReasons(input.reviewItem);
+  const modeId = reviewModeId(input.reviewItem);
+  const reviewPassed = input.evidence.redoCorrect !== false && input.evidence.reviewOutcome !== 'again';
 
   const reviewItem: ReviewItem = {
     ...input.reviewItem,
@@ -119,7 +130,7 @@ export function buildReviewCompletionRecords(input: BuildReviewCompletionRecords
     id: sessionId,
     examId,
     moduleId: 'review',
-    modeId: 'active-recall-cloze-production',
+    modeId,
     startedAt: input.evidence.startedAt ?? now,
     finishedAt: now,
     plannedMinutes: 8,
@@ -133,9 +144,14 @@ export function buildReviewCompletionRecords(input: BuildReviewCompletionRecords
     questionId: String(questionId),
     examId,
     moduleId: 'review',
-    questionTypeId: input.reviewItem.learningMethod ?? 'active-recall-cloze-production',
+    questionTypeId: modeId,
     answer: {
       reviewItemId: input.reviewItem.id,
+      redoAnswer: input.evidence.redoAnswer,
+      redoCorrect: input.evidence.redoCorrect,
+      reviewOutcome: input.evidence.reviewOutcome,
+      redoPrompt: input.reviewItem.redoQuestion?.prompt,
+      referenceRedoAnswer: input.reviewItem.redoQuestion?.correctAnswer,
       recallAnswer: input.evidence.recallAnswer,
       clozeAnswer: input.evidence.clozeAnswer,
       productionAnswer: input.evidence.productionAnswer,
@@ -144,7 +160,7 @@ export function buildReviewCompletionRecords(input: BuildReviewCompletionRecords
       productionPrompt: input.reviewItem.memoryTask?.productionPrompt,
       completedStepCount: completedStepCount(input.evidence),
     },
-    isCorrect: completedStepCount(input.evidence) >= 3,
+    isCorrect: completedStepCount(input.evidence) >= 3 && reviewPassed,
     elapsedSeconds: elapsedSeconds(input.evidence.startedAt, now),
     confidence: evidenceConfidence(input.evidence),
     mistakeReasons,

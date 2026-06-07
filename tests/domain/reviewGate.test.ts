@@ -12,6 +12,17 @@ function reviewItem(overrides: Partial<ReviewItem>): ReviewItem {
     skillArea: 'reading',
     priorityScore: 50,
     nextReviewAt: '2026-05-27T00:00:00.000Z',
+    redoQuestion: {
+      kind: 'single-choice',
+      prompt: 'Which option is supported by the passage?',
+      options: {
+        A: 'Correct answer',
+        B: 'Previous wrong answer',
+      },
+      correctAnswer: 'A',
+      userAnswer: 'B',
+    },
+    learningMethod: 'wrong-question-redo-active-recall',
     ...overrides,
   };
 }
@@ -67,5 +78,29 @@ describe('buildReviewGateStatus', () => {
     expect(status.locked).toBe(false);
     expect(status.dueCount).toBe(0);
     expect(status.requiredToday).toBe(0);
+  });
+
+  it('only counts due wrong-question redo items', () => {
+    const status = buildReviewGateStatus([
+      reviewItem({ id: 'wrong' }),
+      reviewItem({
+        id: 'correct-redo',
+        redoQuestion: {
+          kind: 'single-choice',
+          prompt: 'Which option is supported by the passage?',
+          correctAnswer: 'A',
+          userAnswer: 'A',
+        },
+      }),
+      reviewItem({
+        id: 'memory-only',
+        redoQuestion: undefined,
+        learningMethod: 'active-recall-cloze-production',
+      }),
+    ], '2026-05-27');
+
+    expect(status.locked).toBe(true);
+    expect(status.dueCount).toBe(1);
+    expect(status.dueItems.map((item) => item.id)).toEqual(['wrong']);
   });
 });

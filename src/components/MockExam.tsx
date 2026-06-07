@@ -1,26 +1,35 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowLeft,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
   Clock3,
   FileText,
-  Headphones,
-  ListChecks,
   Loader2,
-  PenLine,
   Sparkles,
-  Volume2,
 } from 'lucide-react';
-import { CET4_MOCK_EXAM_BANK, type Cet4MockChoiceQuestion } from '../questionBank';
+import { CET4_MOCK_EXAM_BANK } from '../questionBank';
 import { buildMockExamReport, MockExamReportResult } from '../domain/practice/mockExam';
+import { CET4_LOCAL_REAL_PAPERS, LocalRealExamPaper } from '../domain/practice/localRealPapers';
 import { DailyPlan, PracticeCompletionReport, SkillProfile } from '../types';
 import { SelectField } from './controls/FormControls';
+import { pausePracticeSpeech, playPracticeSpeech, resumePracticeSpeech, stopPracticeSpeech } from '../lib/practiceSpeech';
+import StandardMockSectionPanel, {
+  TRANSLATION_MIN_WORDS,
+  type Choice,
+  type MockSectionId,
+  type MockSectionStatus,
+  type SpeechPlaybackState,
+} from './mockExam/StandardMockSectionPanel';
+import RealPaperPracticePanel, {
+  getAnswerResourceBadge,
+  getListeningResourceBadge,
+  ResourceBadge,
+  type LocalRealPaperLoadStatus,
+} from './mockExam/RealPaperPracticePanel';
 
-type Choice = 'A' | 'B' | 'C' | 'D';
-type MockSectionId = 'writing' | 'listening' | 'reading' | 'foundation' | 'translation' | 'review';
+type MockExamPageMode = 'standard-mock' | 'real-paper';
 
 interface MockExamProps {
   onBack: () => void;
@@ -31,6 +40,14 @@ interface MockExamProps {
 
 function hashText(value: string): number {
   return value.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+}
+
+function countEnglishWords(value: string): number {
+  return value
+    .trim()
+    .split(/[^\p{L}\p{N}'-]+/u)
+    .filter(Boolean)
+    .length;
 }
 
 function getWeakestMockProfile(skillProfiles: SkillProfile[]): SkillProfile | undefined {
@@ -45,7 +62,14 @@ function getWeakestMockProfile(skillProfiles: SkillProfile[]): SkillProfile | un
 
 function labelWeakSkill(profile?: SkillProfile): string {
   if (!profile) return '尚未完成诊断';
-  if (profile.subSkillId.toLowerCase().includes('cloze')) return '完形/选词填空';
+  const subSkillId = profile.subSkillId.toLowerCase();
+  if (subSkillId.includes('short-news')) return '短篇新闻';
+  if (subSkillId.includes('long-conversation')) return '长对话';
+  if (subSkillId.includes('listening-passage')) return '听力篇章';
+  if (subSkillId.includes('word-bank')) return '选词填空';
+  if (subSkillId.includes('long-matching')) return '长篇匹配';
+  if (subSkillId.includes('careful-reading')) return '仔细阅读';
+  if (subSkillId.includes('cloze')) return '完形/选词填空';
   if (profile.skillArea === 'grammar') return '语法结构';
   if (profile.skillArea === 'vocabulary') return '词汇语境';
   if (profile.skillArea === 'listening') return '听力';
@@ -71,7 +95,7 @@ function buildMockRecommendation(skillProfiles: SkillProfile[], dailyPlan?: Dail
   };
 }
 
-export default function MockExam({ onBack, onComplete, skillProfiles = [], dailyPlan }: MockExamProps) {
+export default function MockExam({ onComplete, skillProfiles = [], dailyPlan }: MockExamProps) {
   const mockRecommendation = useMemo(
     () => buildMockRecommendation(skillProfiles, dailyPlan),
     [dailyPlan, skillProfiles],
@@ -83,36 +107,33 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
   const [translationAnswer, setTranslationAnswer] = useState('');
   const [result, setResult] = useState<MockExamReportResult | null>(null);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [pageMode, setPageMode] = useState<MockExamPageMode>('standard-mock');
   const [selectedPaperId, setSelectedPaperId] = useState(mockRecommendation.paper.id);
   const [hasManualPaperSelection, setHasManualPaperSelection] = useState(false);
+  const [localRealPapers, setLocalRealPapers] = useState<LocalRealExamPaper[]>(CET4_LOCAL_REAL_PAPERS);
+  const [localRealPaperStatus, setLocalRealPaperStatus] = useState<LocalRealPaperLoadStatus>('loading');
+  const [localRealPaperMessage, setLocalRealPaperMessage] = useState('正在扫描本地真题目录...');
+  const [selectedLocalPaperId, setSelectedLocalPaperId] = useState(CET4_LOCAL_REAL_PAPERS[0]?.id ?? '');
+  const [standardListeningPlayback, setStandardListeningPlayback] = useState<SpeechPlaybackState>('idle');
   const paper = CET4_MOCK_EXAM_BANK.find((item) => item.id === selectedPaperId) ?? CET4_MOCK_EXAM_BANK[0];
-
+  const selectedLocalPaper = localRealPapers.find((item) => item.id === selectedLocalPaperId) ?? localRealPapers[0];
   const listeningAnsweredCount = paper.listening.questions.filter((question) => choices[question.id]).length;
   const readingAnsweredCount = paper.reading.questions.filter((question) => choices[question.id]).length;
-  const foundationAnsweredCount = paper.foundation.questions.filter((question) => choices[question.id]).length;
-  const writingCharCount = writingAnswer.trim().length;
-  const translationCharCount = translationAnswer.trim().length;
-  const writingReady = writingCharCount >= 40;
+  const writingWordCount = countEnglishWords(writingAnswer);
+  const translationWordCount = countEnglishWords(translationAnswer);
+  const writingReady = writingWordCount >= paper.writing.minWords;
   const listeningReady = listeningAnsweredCount === paper.listening.questions.length;
   const readingReady = readingAnsweredCount === paper.reading.questions.length;
-  const foundationReady = foundationAnsweredCount === paper.foundation.questions.length;
-  const translationReady = translationCharCount >= 20;
-  const canSubmit = writingReady && listeningReady && readingReady && foundationReady && translationReady;
+  const translationReady = translationWordCount >= TRANSLATION_MIN_WORDS;
+  const canSubmit = writingReady && listeningReady && readingReady && translationReady;
 
-  const sections: Array<{
-    id: MockSectionId;
-    label: string;
-    shortLabel: string;
-    time: string;
-    status: string;
-    ready: boolean;
-  }> = [
+  const sections: MockSectionStatus[] = [
     {
       id: 'writing',
       label: '写作',
       shortLabel: '写作',
       time: '30m',
-      status: writingReady ? '已完成' : `还差 ${Math.max(0, 40 - writingCharCount)} 字符`,
+      status: writingReady ? '已完成' : `还差 ${Math.max(0, paper.writing.minWords - writingWordCount)} 词`,
       ready: writingReady,
     },
     {
@@ -132,19 +153,11 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
       ready: readingReady,
     },
     {
-      id: 'foundation',
-      label: '语法/完形',
-      shortLabel: '语法',
-      time: `${paper.foundation.plannedMinutes}m`,
-      status: `${foundationAnsweredCount}/${paper.foundation.questions.length} 题`,
-      ready: foundationReady,
-    },
-    {
       id: 'translation',
       label: '翻译',
       shortLabel: '翻译',
       time: '30m',
-      status: translationReady ? '已完成' : `还差 ${Math.max(0, 20 - translationCharCount)} 字符`,
+      status: translationReady ? '已完成' : `还差 ${Math.max(0, TRANSLATION_MIN_WORDS - translationWordCount)} 词`,
       ready: translationReady,
     },
     {
@@ -160,14 +173,46 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
   const incompleteSections = sections.filter((section) => section.id !== 'review' && !section.ready);
   const completedSectionCount = sections.filter((section) => section.id !== 'review' && section.ready).length;
   const firstIncompleteSection = incompleteSections[0];
+  const realPaperAnswerStatus = selectedLocalPaper ? getAnswerResourceBadge(selectedLocalPaper).label : '--';
+  const realPaperListeningStatus = selectedLocalPaper ? getListeningResourceBadge(selectedLocalPaper).label : '--';
+  const headerMetrics = pageMode === 'standard-mock'
+    ? [
+        { value: String(paper.plannedMinutes), label: '分钟' },
+        { value: `${completedSectionCount}/${sections.length - 1}`, label: '模块完成' },
+        { value: String(result?.score ?? '--'), label: '模考分' },
+      ]
+    : [
+        { value: String(localRealPapers.length || '--'), label: '真题套数' },
+        { value: realPaperAnswerStatus, label: '答案状态' },
+        { value: realPaperListeningStatus, label: '听力状态' },
+      ];
 
-  const speakListening = () => {
-    if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(paper.listening.transcript);
-    utterance.lang = 'en-US';
-    utterance.rate = 0.88;
-    window.speechSynthesis.speak(utterance);
+  const speakListening = async () => {
+    if (standardListeningPlayback === 'playing') {
+      if (pausePracticeSpeech()) {
+        setStandardListeningPlayback('paused');
+        return;
+      }
+      stopPracticeSpeech();
+      setStandardListeningPlayback('idle');
+      return;
+    }
+
+    if (standardListeningPlayback === 'paused') {
+      const resumed = await resumePracticeSpeech();
+      if (resumed) {
+        setStandardListeningPlayback('playing');
+        return;
+      }
+    }
+
+    await playPracticeSpeech(paper.listening.transcript, {
+      rate: 0.88,
+      preferLocalAudio: true,
+      onStart: () => setStandardListeningPlayback('playing'),
+      onEnd: () => setStandardListeningPlayback('idle'),
+      onError: () => setStandardListeningPlayback('idle'),
+    });
   };
 
   const resetPaperState = (paperId: string) => {
@@ -177,8 +222,13 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
     setWritingAnswer('');
     setTranslationAnswer('');
     setResult(null);
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    stopPracticeSpeech();
+    setStandardListeningPlayback('idle');
   };
+
+  useEffect(() => {
+    return () => stopPracticeSpeech();
+  }, []);
 
   useEffect(() => {
     if (hasManualPaperSelection || result) return;
@@ -186,6 +236,59 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
       resetPaperState(mockRecommendation.paper.id);
     }
   }, [hasManualPaperSelection, mockRecommendation.paper.id, result, selectedPaperId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadLocalRealPapers = async () => {
+      try {
+        const response = await fetch('/api/local-real-papers?exam=cet4');
+        if (!response.ok) {
+          throw new Error(`扫描接口返回 ${response.status}`);
+        }
+
+        const data = await response.json() as {
+          papers?: LocalRealExamPaper[];
+          total?: number;
+        };
+        const papers = Array.isArray(data.papers) ? data.papers : [];
+        if (cancelled) return;
+
+        if (papers.length > 0) {
+          setLocalRealPapers(papers);
+          setLocalRealPaperStatus('ready');
+          setLocalRealPaperMessage(`已从本地目录扫描到 ${data.total ?? papers.length} 套四级真题 PDF。`);
+          return;
+        }
+
+        setLocalRealPapers(CET4_LOCAL_REAL_PAPERS);
+        setLocalRealPaperStatus(CET4_LOCAL_REAL_PAPERS.length > 0 ? 'fallback' : 'empty');
+        setLocalRealPaperMessage('本地扫描目录暂未发现四级 PDF，已显示内置样例资料。');
+      } catch (error) {
+        if (cancelled) return;
+        setLocalRealPapers(CET4_LOCAL_REAL_PAPERS);
+        setLocalRealPaperStatus(CET4_LOCAL_REAL_PAPERS.length > 0 ? 'fallback' : 'error');
+        setLocalRealPaperMessage(`本地扫描暂不可用，已显示内置样例资料：${(error as Error).message}`);
+      }
+    };
+
+    loadLocalRealPapers();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (localRealPapers.length === 0) {
+      if (selectedLocalPaperId) setSelectedLocalPaperId('');
+      return;
+    }
+
+    if (!selectedLocalPaperId || !localRealPapers.some((item) => item.id === selectedLocalPaperId)) {
+      setSelectedLocalPaperId(localRealPapers[0].id);
+    }
+  }, [localRealPapers, selectedLocalPaperId]);
 
   const selectPaper = (paperId: string) => {
     setHasManualPaperSelection(true);
@@ -225,219 +328,106 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
     setActiveSection(next.id);
   };
 
-  const renderActiveSection = () => {
-    switch (activeSection) {
-      case 'writing':
-        return (
-          <section className="rounded-[2rem] border border-[#cfe6f2] bg-white p-5 shadow-sm sm:p-6">
-              <SectionHeader
-                icon={<PenLine className="h-5 w-5" />}
-                eyebrow="Part I"
-                title="写作：先完成可评分输出"
-                detail="30 分钟"
-              />
-            <p className="mt-4 rounded-3xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold leading-7 text-slate-700">
-              {paper.writing.prompt}
-            </p>
-            <textarea
-              data-testid="mock-writing-answer"
-              value={writingAnswer}
-              onChange={(event) => setWritingAnswer(event.target.value)}
-              className="mt-4 min-h-64 w-full rounded-3xl border border-slate-200 bg-[#fbfdff] p-4 text-sm font-semibold leading-7 text-slate-700 outline-none focus:ring-2 focus:ring-[#003178]/25"
-              placeholder="Write your essay here..."
-            />
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-black text-slate-500">
-              <span className="rounded-full bg-slate-100 px-3 py-1">{writingCharCount} 字符</span>
-              <span className={`rounded-full px-3 py-1 ${writingReady ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-                {writingReady ? '写作已达提交条件' : '先写满 40 个字符再进入最终提交'}
-              </span>
-            </div>
-          </section>
-        );
-      case 'listening':
-        return (
-          <section className="rounded-[2rem] border border-[#cfe6f2] bg-white p-5 shadow-sm sm:p-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <SectionHeader
-                icon={<Headphones className="h-5 w-5" />}
-                eyebrow="Part II"
-                title="听力：先听后答"
-                detail="播放后作答"
-              />
-              <button
-                type="button"
-                onClick={speakListening}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-[#003178] px-4 text-xs font-black text-white hover:bg-[#0d47a1]"
-              >
-                <Volume2 className="h-4 w-4" />
-                播放听力材料
-              </button>
-            </div>
-            <details className="mt-4 rounded-3xl border border-slate-100 bg-slate-50 p-4 text-xs font-semibold leading-6 text-slate-500">
-              <summary className="cursor-pointer text-sm font-black text-[#003178]">查看听力转写兜底</summary>
-              <p className="mt-3 whitespace-pre-line">{paper.listening.transcript}</p>
-            </details>
-            <QuestionList
-              questions={paper.listening.questions}
-              choices={choices}
-              onSelect={(questionId, choice) => setChoices((current) => ({ ...current, [questionId]: choice }))}
-            />
-          </section>
-        );
-      case 'reading':
-        return (
-          <section className="rounded-[2rem] border border-[#cfe6f2] bg-white p-5 shadow-sm sm:p-6">
-              <SectionHeader
-                icon={<FileText className="h-5 w-5" />}
-                eyebrow="Part III"
-                title="阅读：读文章后集中作答"
-                detail="读文后作答"
-              />
-            <p className="mt-4 rounded-3xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold leading-7 text-slate-700">
-              {paper.reading.passage}
-            </p>
-            <QuestionList
-              questions={paper.reading.questions}
-              choices={choices}
-              onSelect={(questionId, choice) => setChoices((current) => ({ ...current, [questionId]: choice }))}
-            />
-          </section>
-        );
-      case 'foundation':
-        return (
-          <section className="rounded-[2rem] border border-[#cfe6f2] bg-white p-5 shadow-sm sm:p-6">
-              <SectionHeader
-                icon={<ListChecks className="h-5 w-5" />}
-                eyebrow="Calibration"
-                title={paper.foundation.title}
-                detail="不计入标准分"
-              />
-            <p className="mt-4 rounded-3xl border border-slate-100 bg-amber-50 p-4 text-sm font-semibold leading-7 text-amber-800">
-              {paper.foundation.sourceNotice}
-            </p>
-            <QuestionList
-              questions={paper.foundation.questions}
-              choices={choices}
-              onSelect={(questionId, choice) => setChoices((current) => ({ ...current, [questionId]: choice }))}
-            />
-          </section>
-        );
-      case 'translation':
-        return (
-          <section className="rounded-[2rem] border border-[#cfe6f2] bg-white p-5 shadow-sm sm:p-6">
-              <SectionHeader
-                icon={<PenLine className="h-5 w-5" />}
-                eyebrow="Part IV"
-                title="翻译：最后做输出校准"
-                detail="20 字符以上"
-              />
-            <p className="mt-4 rounded-3xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold leading-7 text-slate-700">
-              {paper.translation.prompt}
-            </p>
-            <textarea
-              data-testid="mock-translation-answer"
-              value={translationAnswer}
-              onChange={(event) => setTranslationAnswer(event.target.value)}
-              className="mt-4 min-h-56 w-full rounded-3xl border border-slate-200 bg-[#fbfdff] p-4 text-sm font-semibold leading-7 text-slate-700 outline-none focus:ring-2 focus:ring-[#003178]/25"
-              placeholder="Translate the paragraph here..."
-            />
-            <div className="mt-3 text-xs font-black text-slate-500">{translationCharCount} 字符</div>
-          </section>
-        );
-      case 'review':
-        return (
-          <section className="rounded-[2rem] border border-[#cfe6f2] bg-white p-5 shadow-sm sm:p-6">
-              <SectionHeader
-                icon={<ListChecks className="h-5 w-5" />}
-                eyebrow="Submit"
-                title="提交前检查"
-                detail="完成全部模块后提交"
-              />
-            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              {sections.filter((section) => section.id !== 'review').map((section) => (
-                <button
-                  key={`review-${section.id}`}
-                  type="button"
-                  onClick={() => setActiveSection(section.id)}
-                  className={`rounded-3xl border p-4 text-left transition ${
-                    section.ready
-                      ? 'border-emerald-100 bg-emerald-50 text-emerald-800'
-                      : 'border-amber-100 bg-amber-50 text-amber-800'
-                  }`}
-                >
-                  <div className="text-sm font-black">{section.label}</div>
-                  <div className="mt-2 text-xs font-bold">{section.status}</div>
-                </button>
-              ))}
-            </div>
-            {incompleteSections.length > 0 ? (
-              <p className="mt-4 rounded-2xl bg-amber-50 px-4 py-3 text-sm font-bold leading-6 text-amber-800">
-                仍需完成：{incompleteSections.map((section) => section.label).join('、')}。点击上方卡片返回对应模块。
-              </p>
-            ) : (
-              <p className="mt-4 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-bold leading-6 text-emerald-800">
-                全部模块均已完成，可以提交并生成阶段模考报告。
-              </p>
-            )}
-          </section>
-        );
-    }
-  };
-
   return (
-    <div className="app-page-surface flex-1 min-h-[calc(100svh-9rem)] lg:h-screen overflow-y-auto bg-[#f7fbff] p-4 sm:p-6 lg:p-8">
-      <div className="mx-auto max-w-6xl space-y-5">
-        <header className="rounded-[2rem] border border-[#cfe6f2] bg-white/92 p-5 shadow-sm sm:p-6">
+    <div className="app-page-surface ui-page">
+      <div className="ui-page-content space-y-5">
+        <header className="ui-page-header">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
-              <button
-                type="button"
-                onClick={onBack}
-                className="mb-4 inline-flex min-h-11 items-center gap-2 rounded-2xl border border-[#cfe6f2] bg-[#eef7fc] px-4 text-xs font-black text-[#003178] hover:bg-white"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                返回今日训练
-              </button>
-              <div className="inline-flex items-center gap-2 rounded-full bg-[#003178]/10 px-3 py-1 text-xs font-black text-[#003178]">
+              <div className="ui-page-eyebrow">
                 <ClipboardCheck className="h-4 w-4" />
                 阶段模考
               </div>
-              <h2 className="mt-3 text-2xl font-black leading-tight text-[#003178] sm:text-3xl">
-                {paper.title}
+              <h2 className="mt-3 text-2xl font-black leading-tight text-[#101828] sm:text-3xl">
+                {pageMode === 'standard-mock' ? paper.title : '本地真题自练'}
               </h2>
               <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
-                完成全部模块后统一评分。
+                {pageMode === 'standard-mock'
+                  ? '按 CET-4 真题笔试结构推进：写作 1、听力 25、阅读 30、翻译 1；不再混入语法/完形等非四级现行题型。'
+                  : '本区只展示你提供的本地真题，按页面版题面自练；它不参与标准模拟考试自动评分。'}
               </p>
-              <details className="mt-2 text-xs font-bold leading-5 text-amber-700">
+              {pageMode === 'standard-mock' && <details className="mt-2 text-xs font-bold leading-5 text-slate-500">
                 <summary className="cursor-pointer">组卷说明</summary>
                 <p className="mt-1">{paper.sourceNotice}</p>
-              </details>
+              </details>}
             </div>
             <div className="grid grid-cols-3 gap-2 text-center text-xs font-black sm:min-w-[320px]">
-              <div className="rounded-2xl bg-[#eef7fc] p-3 text-[#003178]">
-                <div className="text-2xl">{paper.plannedMinutes}</div>
-                <div>分钟</div>
-              </div>
-              <div className="rounded-2xl bg-emerald-50 p-3 text-emerald-700">
-                <div className="text-2xl">{completedSectionCount}/{sections.length - 1}</div>
-                <div>模块完成</div>
-              </div>
-              <div className="rounded-2xl bg-amber-50 p-3 text-amber-700">
-                <div className="text-2xl">{result?.score ?? '--'}</div>
-                <div>模考分</div>
-              </div>
+              {headerMetrics.map((metric) => (
+                <div key={metric.label} className="ui-metric text-[#003178]">
+                  <div className="truncate text-2xl">{metric.value}</div>
+                  <div>{metric.label}</div>
+                </div>
+              ))}
             </div>
           </div>
         </header>
 
         {!result && (
-          <section className="rounded-[2rem] border border-[#cfe6f2] bg-white/85 p-4 shadow-sm sm:p-5">
+          <section className="grid gap-3 md:grid-cols-2" aria-label="阶段模考入口">
+            <button
+              type="button"
+              data-testid="mock-page-mode-standard"
+              onClick={() => setPageMode('standard-mock')}
+              aria-pressed={pageMode === 'standard-mock'}
+              className={`min-h-[180px] rounded-[2rem] border p-5 text-left transition ${
+                pageMode === 'standard-mock'
+                  ? 'border-[#003178] bg-[#f8fbff] text-[#003178] ring-1 ring-[#dcecff]'
+                  : 'border-slate-100 bg-white text-slate-600 hover:border-[#003178]/30'
+              }`}
+            >
+              <div className="flex h-full flex-col justify-between gap-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-black">标准模拟考试</div>
+                    <div className="mt-2 text-xs font-bold leading-5 opacity-75">严格按 CET-4 笔试结构作答，提交后生成能力报告。</div>
+                  </div>
+                  <ClipboardCheck className="h-5 w-5 shrink-0" />
+                </div>
+                <div className="grid grid-cols-4 gap-2 text-center text-[10px] font-black">
+                  <span className="rounded-2xl bg-white px-2 py-2">写作 1</span>
+                  <span className="rounded-2xl bg-white px-2 py-2">听力 25</span>
+                  <span className="rounded-2xl bg-white px-2 py-2">阅读 30</span>
+                  <span className="rounded-2xl bg-white px-2 py-2">翻译 1</span>
+                </div>
+              </div>
+            </button>
+            <button
+              type="button"
+              data-testid="mock-page-mode-real"
+              onClick={() => setPageMode('real-paper')}
+              aria-pressed={pageMode === 'real-paper'}
+              className={`min-h-[180px] rounded-[2rem] border p-5 text-left transition ${
+                pageMode === 'real-paper'
+                  ? 'border-[#003178] bg-[#f8fbff] text-[#003178] ring-1 ring-[#dcecff]'
+                  : 'border-slate-100 bg-white text-slate-600 hover:border-[#003178]/30'
+              }`}
+            >
+              <div className="flex h-full flex-col justify-between gap-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-black">真题自练</div>
+                    <div className="mt-2 text-xs font-bold leading-5 opacity-75">页面版题面自练，PDF、答案和音频状态逐套标注。</div>
+                  </div>
+                  <FileText className="h-5 w-5 shrink-0" />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <ResourceBadge badge={{ label: '页面可做', tone: 'success' }} />
+                  <ResourceBadge badge={{ label: 'PDF 可看', tone: 'neutral' }} />
+                  <ResourceBadge badge={{ label: `扫描 ${localRealPapers.length} 套`, tone: 'info' }} />
+                </div>
+              </div>
+            </button>
+          </section>
+        )}
+
+        {!result && pageMode === 'standard-mock' && (
+          <section className="ui-panel">
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px_360px] xl:items-center">
               <div className="min-w-0">
                 <div className="text-sm font-black text-[#003178]">按卷面顺序推进，最后提交</div>
                 <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-black">
-                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">{mockRecommendation.reason}</span>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-500">关注：{mockRecommendation.weakLabel}</span>
+                  <span className="ui-chip ui-chip-accent">{mockRecommendation.reason}</span>
+                  <span className="ui-chip">关注：{mockRecommendation.weakLabel}</span>
                 </div>
               </div>
               <label className="flex min-w-0 flex-col gap-1 text-xs font-black text-[#003178]">
@@ -452,14 +442,14 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
                   }))}
                 />
               </label>
-              <div className="grid grid-cols-5 gap-1 text-center text-[10px] font-black text-slate-500">
+              <div className="grid grid-cols-4 gap-1 text-center text-[10px] font-black text-slate-500">
                 {sections.filter((section) => section.id !== 'review').map((section, index) => (
                   <button
                     key={`flow-${section.id}`}
                     type="button"
                     onClick={() => setActiveSection(section.id)}
                     className={`rounded-2xl px-2 py-2 transition ${
-                      section.ready ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-50 hover:bg-[#eef7fc] hover:text-[#003178]'
+                      section.ready ? 'bg-[#eef7fc] text-[#003178]' : 'bg-slate-50 hover:bg-[#eef7fc] hover:text-[#003178]'
                     }`}
                   >
                     <span className="block text-xs">{index + 1}</span>
@@ -471,15 +461,25 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
           </section>
         )}
 
+        {!result && pageMode === 'real-paper' && selectedLocalPaper && (
+          <RealPaperPracticePanel
+            papers={localRealPapers}
+            selectedPaper={selectedLocalPaper}
+            loadStatus={localRealPaperStatus}
+            loadMessage={localRealPaperMessage}
+            onSelect={setSelectedLocalPaperId}
+          />
+        )}
+
         {result ? (
-          <section className="rounded-[2rem] border border-emerald-100 bg-white p-5 shadow-sm sm:p-6" data-testid="mock-exam-result">
+          <section className="ui-panel" data-testid="mock-exam-result">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
+                <div className="ui-chip ui-chip-accent">
                   <CheckCircle2 className="h-4 w-4" />
                   模考报告已生成
                 </div>
-                <h3 className="mt-3 text-2xl font-black text-[#003178]">综合模拟得分 {result.score}</h3>
+                <h3 className="mt-3 text-2xl font-black text-[#101828]">综合模拟得分 {result.score}</h3>
                 <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
                   {result.report.attempts.length} 条作答 · {result.report.reviewItems.length} 个复习项 · {result.report.skillProfiles.length} 个画像节点
                 </p>
@@ -489,14 +489,14 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
                 data-testid="mock-exam-persist"
                 onClick={persistResult}
                 disabled={isCompleting}
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[#1b6d24] px-5 text-sm font-black text-white hover:bg-emerald-700 disabled:bg-slate-300"
+                className="ui-button ui-button-primary"
               >
                 {isCompleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                 写入能力图谱与复习队列
               </button>
             </div>
 
-            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {result.sectionScores.map((section) => (
                 <div key={section.moduleId} className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
                   <div className="text-xs font-black text-slate-500">{section.label}</div>
@@ -512,9 +512,9 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
               ))}
             </div>
           </section>
-        ) : (
+        ) : pageMode === 'standard-mock' ? (
           <div className="space-y-5">
-            <nav className="rounded-[2rem] border border-[#cfe6f2] bg-white/95 p-3 shadow-sm">
+            <nav className="ui-panel">
               <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
                 {sections.map((section) => (
                   <button
@@ -524,9 +524,9 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
                     onClick={() => setActiveSection(section.id)}
                     className={`min-h-20 rounded-2xl border p-3 text-left transition ${
                       activeSection === section.id
-                        ? 'border-[#003178] bg-[#003178] text-white shadow-md'
+                        ? 'border-[#003178] bg-[#f8fbff] text-[#003178] shadow-sm'
                         : section.ready
-                          ? 'border-emerald-100 bg-emerald-50 text-emerald-800'
+                          ? 'border-[#cfe6f2] bg-[#eef7fc] text-[#003178]'
                           : 'border-slate-100 bg-slate-50 text-slate-600 hover:border-[#003178]/30'
                     }`}
                   >
@@ -540,16 +540,34 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
               </div>
             </nav>
 
-            {renderActiveSection()}
+            <StandardMockSectionPanel
+              activeSection={activeSection}
+              choices={choices}
+              incompleteSections={incompleteSections}
+              paper={paper}
+              sections={sections}
+              standardListeningPlayback={standardListeningPlayback}
+              translationAnswer={translationAnswer}
+              translationReady={translationReady}
+              translationWordCount={translationWordCount}
+              writingAnswer={writingAnswer}
+              writingReady={writingReady}
+              writingWordCount={writingWordCount}
+              onChoice={(questionId, choice) => setChoices((current) => ({ ...current, [questionId]: choice }))}
+              onSectionChange={setActiveSection}
+              onSpeakListening={speakListening}
+              onTranslationAnswerChange={setTranslationAnswer}
+              onWritingAnswerChange={setWritingAnswer}
+            />
 
-            <div className="sticky bottom-4 z-20 rounded-[2rem] border border-[#cfe6f2] bg-white/95 p-4 shadow-xl backdrop-blur">
+            <div className="ui-panel sticky bottom-4 z-20 backdrop-blur">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={() => goToRelativeSection(-1)}
                     disabled={activeSectionIndex === 0}
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-xs font-black text-[#003178] disabled:cursor-not-allowed disabled:text-slate-300"
+                    className="ui-button ui-button-secondary ui-button-compact disabled:cursor-not-allowed disabled:text-slate-300"
                   >
                     <ChevronLeft className="h-4 w-4" />
                     上一模块
@@ -558,7 +576,7 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
                     type="button"
                     onClick={() => goToRelativeSection(1)}
                     disabled={activeSectionIndex === sections.length - 1}
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-xs font-black text-[#003178] disabled:cursor-not-allowed disabled:text-slate-300"
+                    className="ui-button ui-button-secondary ui-button-compact disabled:cursor-not-allowed disabled:text-slate-300"
                   >
                     下一模块
                     <ChevronRight className="h-4 w-4" />
@@ -569,11 +587,7 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
                   data-testid="mock-exam-submit"
                   onClick={submitMockExam}
                   data-incomplete={canSubmit ? undefined : 'true'}
-                  className={`inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-5 text-sm font-black transition lg:w-auto ${
-                    canSubmit
-                      ? 'bg-[#003178] text-white hover:bg-[#0d47a1]'
-                      : 'border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
-                  }`}
+                  className={`ui-button w-full lg:w-auto ${canSubmit ? 'ui-button-primary' : 'ui-button-secondary'}`}
                 >
                   <ClipboardCheck className="h-4 w-4" />
                   {canSubmit ? '提交阶段模考并生成评分' : '定位未完成模块'}
@@ -586,76 +600,8 @@ export default function MockExam({ onBack, onComplete, skillProfiles = [], daily
               )}
             </div>
           </div>
-        )}
+        ) : null}
       </div>
-    </div>
-  );
-}
-
-function SectionHeader({
-  icon,
-  eyebrow,
-  title,
-  detail,
-}: {
-  icon: React.ReactNode;
-  eyebrow: string;
-  title: string;
-  detail: string;
-}) {
-  return (
-    <div>
-      <div className="inline-flex items-center gap-2 rounded-full bg-[#003178]/10 px-3 py-1 text-xs font-black text-[#003178]">
-        {icon}
-        {eyebrow}
-      </div>
-      <h3 className="mt-3 text-xl font-black text-[#071e27] sm:text-2xl">{title}</h3>
-      <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">{detail}</p>
-    </div>
-  );
-}
-
-function QuestionList({
-  questions,
-  choices,
-  onSelect,
-}: {
-  questions: Cet4MockChoiceQuestion[];
-  choices: Record<string, Choice | undefined>;
-  onSelect: (questionId: string, choice: Choice) => void;
-}) {
-  return (
-    <div className="mt-4 space-y-3">
-      {questions.map((question) => (
-        <article key={question.id} className="rounded-3xl border border-slate-100 bg-white p-4 shadow-2xs">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <span className="rounded-full bg-[#eef7fc] px-2.5 py-1 text-[10px] font-black text-[#003178]">
-                {question.title}
-              </span>
-              <h4 className="mt-3 text-sm font-black text-[#071e27]">{question.prompt}</h4>
-            </div>
-            <span className="text-[10px] font-black text-slate-400">{question.questionTypeId}</span>
-          </div>
-          <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
-            {(['A', 'B', 'C', 'D'] as Choice[]).map((choice) => (
-              <button
-                key={choice}
-                type="button"
-                data-testid={`mock-choice-${question.id}-${choice}`}
-                onClick={() => onSelect(question.id, choice)}
-                className={`min-h-11 rounded-2xl border px-3 py-2 text-left text-xs font-bold transition ${
-                  choices[question.id] === choice
-                    ? 'border-[#003178] bg-[#003178] text-white'
-                    : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-[#003178]/40'
-                }`}
-              >
-                {choice}. {question.options[choice]}
-              </button>
-            ))}
-          </div>
-        </article>
-      ))}
     </div>
   );
 }

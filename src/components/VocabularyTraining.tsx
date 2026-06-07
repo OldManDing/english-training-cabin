@@ -1,29 +1,101 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, CheckCircle2, ChevronRight, Headphones, PauseCircle, Volume2, XCircle } from 'lucide-react';
 import { VocabularyPracticeItem, VOCABULARY_SESSION_SIZE } from '../data';
-import { PracticeCompletionReport } from '../types';
+import { ChoiceOption, PracticeCompletionReport } from '../types';
+import {
+  ChoiceConfidence,
+  ChoicePracticeDraftAnswer,
+  VocabularyPracticeDraft,
+  clampDraftIndex,
+  clearPracticeDraft,
+  loadPracticeDraft,
+  practiceDraftKeys,
+  savePracticeDraft,
+} from '../domain/practice/draftProgress';
 import { buildChoicePracticeReport } from '../domain/practice/reports';
+import { getVocabularyQuestionSupport, getVocabularySentenceSupport } from '../domain/practice/sentenceTranslations';
+import { pausePracticeSpeech, playPracticeSpeech, resumePracticeSpeech, stopPracticeSpeech } from '../lib/practiceSpeech';
 
 interface VocabularyTrainingProps {
   items: VocabularyPracticeItem[];
+  initialQuestionId?: string;
   onBack: () => void;
   onComplete: (score: number, report: PracticeCompletionReport) => void;
 }
 
-type Choice = 'A' | 'B' | 'C' | 'D';
-type Confidence = 'sure' | 'not_sure' | 'guess';
+type Choice = ChoiceOption;
+type Confidence = ChoiceConfidence;
+type VocabularyAnswer = ChoicePracticeDraftAnswer;
+type SpeechTarget = 'word' | 'example' | 'auto';
 
-export default function VocabularyTraining({ items, onBack, onComplete }: VocabularyTrainingProps) {
-  const [packIndex, setPackIndex] = useState(0);
-  const [currentIdx, setCurrentIdx] = useState(0);
-  const [selectedOpt, setSelectedOpt] = useState<Choice | null>(null);
-  const [confidence, setConfidence] = useState<Confidence | null>(null);
-  const [isSubmitted, setIsSubmitted] = useState(false);
+const findVocabularyQuestionLocation = (items: VocabularyPracticeItem[], questionId?: string) => {
+  if (!questionId) return { packIndex: 0, currentIdx: 0 };
+  const targetIndex = items.findIndex((item) => item.id === questionId);
+  if (targetIndex < 0) return { packIndex: 0, currentIdx: 0 };
+
+  return {
+    packIndex: Math.floor(targetIndex / VOCABULARY_SESSION_SIZE),
+    currentIdx: targetIndex % VOCABULARY_SESSION_SIZE,
+  };
+};
+
+const createEmptyVocabularyDraftState = (items: VocabularyPracticeItem[] = [], initialQuestionId?: string) => ({
+  restored: false,
+  startedAt: new Date().toISOString(),
+  ...findVocabularyQuestionLocation(items, initialQuestionId),
+  selectedOpt: null as Choice | null,
+  confidence: null as Confidence | null,
+  isSubmitted: false,
+  answers: [] as VocabularyAnswer[],
+});
+
+const loadVocabularyDraftState = (items: VocabularyPracticeItem[], initialQuestionId?: string) => {
+  const fallback = createEmptyVocabularyDraftState(items, initialQuestionId);
+  if (initialQuestionId) return fallback;
+
+  const draft = loadPracticeDraft<VocabularyPracticeDraft>(practiceDraftKeys.vocabulary);
+  if (!draft || draft.version !== 1 || items.length === 0) return fallback;
+
+  const packCount = Math.max(1, Math.ceil(items.length / VOCABULARY_SESSION_SIZE));
+  const packIndex = clampDraftIndex(draft.packIndex, packCount);
+  const sessionLength = Math.max(
+    1,
+    items.slice(packIndex * VOCABULARY_SESSION_SIZE, (packIndex + 1) * VOCABULARY_SESSION_SIZE).length,
+  );
+  const currentIdx = clampDraftIndex(draft.currentIdx, sessionLength);
+  const answers = Array.isArray(draft.answers) ? draft.answers : [];
+  const savedAnswer = answers[currentIdx];
+  const isSubmitted = Boolean(draft.isSubmitted || savedAnswer);
+
+  return {
+    restored: true,
+    startedAt: draft.startedAt ?? fallback.startedAt,
+    packIndex,
+    currentIdx,
+    selectedOpt: isSubmitted ? savedAnswer?.selected ?? draft.selectedOpt ?? null : draft.selectedOpt ?? null,
+    confidence: isSubmitted ? savedAnswer?.confidence ?? draft.confidence ?? null : draft.confidence ?? null,
+    isSubmitted,
+    answers,
+  };
+};
+
+export default function VocabularyTraining({ items, initialQuestionId, onBack, onComplete }: VocabularyTrainingProps) {
+  const [initialDraft] = useState(() => loadVocabularyDraftState(items, initialQuestionId));
+  const isFirstQuestionSync = useRef(true);
+  const submittedRevealRef = useRef<HTMLDivElement | null>(null);
+  const shouldScrollToSubmittedSupportRef = useRef(false);
+  const [packIndex, setPackIndex] = useState(initialDraft.packIndex);
+  const [currentIdx, setCurrentIdx] = useState(initialDraft.currentIdx);
+  const [selectedOpt, setSelectedOpt] = useState<Choice | null>(initialDraft.selectedOpt);
+  const [confidence, setConfidence] = useState<Confidence | null>(initialDraft.confidence);
+  const [isSubmitted, setIsSubmitted] = useState(initialDraft.isSubmitted);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [activeSpeechTarget, setActiveSpeechTarget] = useState<SpeechTarget | null>(null);
+  const [pausedSpeechTarget, setPausedSpeechTarget] = useState<SpeechTarget | null>(null);
   const [autoSpeakEnabled, setAutoSpeakEnabled] = useState(true);
   const [speechNotice, setSpeechNotice] = useState('自动播报已开启：进入新单词后会自动朗读单词和例句。');
-  const [answers, setAnswers] = useState<({ selected: Choice; correct: boolean; confidence: Confidence })[]>([]);
-  const [startedAt] = useState(() => new Date().toISOString());
+  const [answers, setAnswers] = useState<VocabularyAnswer[]>(initialDraft.answers);
+  const [startedAt] = useState(() => initialDraft.startedAt);
 
   const packCount = Math.max(1, Math.ceil(items.length / VOCABULARY_SESSION_SIZE));
   const sessionItems = items.slice(
@@ -31,7 +103,32 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
     (packIndex + 1) * VOCABULARY_SESSION_SIZE,
   );
   const currentItem = sessionItems[currentIdx] ?? sessionItems[0];
+  const sentenceSupport = currentItem ? getVocabularySentenceSupport(currentItem) : null;
+  const questionSupport = currentItem ? getVocabularyQuestionSupport(currentItem) : null;
   const progress = Math.round(((currentIdx + (isSubmitted ? 1 : 0)) / sessionItems.length) * 100);
+  const draftKey = practiceDraftKeys.vocabulary;
+
+  const persistDraft = (nextState: {
+    packIndex?: number;
+    currentIdx?: number;
+    selectedOpt?: Choice | null;
+    confidence?: Confidence | null;
+    isSubmitted?: boolean;
+    answers?: VocabularyAnswer[];
+    startedAt?: string;
+  }) => {
+    savePracticeDraft<VocabularyPracticeDraft>(draftKey, {
+      version: 1,
+      startedAt: nextState.startedAt ?? startedAt,
+      packIndex: nextState.packIndex ?? packIndex,
+      currentIdx: nextState.currentIdx ?? currentIdx,
+      selectedOpt: Object.prototype.hasOwnProperty.call(nextState, 'selectedOpt') ? nextState.selectedOpt ?? null : selectedOpt,
+      confidence: Object.prototype.hasOwnProperty.call(nextState, 'confidence') ? nextState.confidence ?? null : confidence,
+      isSubmitted: nextState.isSubmitted ?? isSubmitted,
+      answers: nextState.answers ?? answers,
+      updatedAt: new Date().toISOString(),
+    });
+  };
 
   const switchPack = (nextPackIndex: number) => {
     setPackIndex(nextPackIndex);
@@ -40,62 +137,154 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
     setSelectedOpt(null);
     setConfidence(null);
     setIsSubmitted(false);
+    persistDraft({
+      packIndex: nextPackIndex,
+      currentIdx: 0,
+      selectedOpt: null,
+      confidence: null,
+      isSubmitted: false,
+      answers: [],
+      startedAt: new Date().toISOString(),
+    });
   };
 
-  const speak = (text: string, rate = 0.82, source: 'auto' | 'manual' = 'manual') => {
-    if (!('speechSynthesis' in window)) {
-      setSpeechNotice('当前浏览器不支持语音播报，请直接阅读单词和例句完成训练。');
+  const speak = async (text: string, rate = 0.82, source: 'auto' | 'manual' = 'manual', target: SpeechTarget = 'word') => {
+    await playPracticeSpeech(text, {
+      rate,
+      preferLocalAudio: source === 'manual',
+      onStart: () => {
+        setIsSpeaking(true);
+        setActiveSpeechTarget(target);
+        setPausedSpeechTarget(null);
+        setSpeechNotice(source === 'auto' ? '正在自动播报单词和例句...' : '正在准备本地英语朗读...');
+      },
+      onEnd: () => {
+        setIsSpeaking(false);
+        setActiveSpeechTarget(null);
+        setPausedSpeechTarget(null);
+        setSpeechNotice(autoSpeakEnabled ? '自动播报已开启：进入新单词后会自动朗读单词和例句。' : '自动播报已关闭，可手动播放单词或例句。');
+      },
+      onError: (message) => {
+        setIsSpeaking(false);
+        setActiveSpeechTarget(null);
+        setPausedSpeechTarget(null);
+        setSpeechNotice(
+          message.includes('没有可用英文语音')
+            ? message
+            : source === 'auto'
+              ? '自动播报被浏览器拦截，请点击“播放单词”完成本题听音。'
+              : message,
+        );
+      },
+    });
+  };
+
+  const toggleSpeech = async (
+    text: string,
+    rate: number,
+    source: 'auto' | 'manual',
+    target: SpeechTarget,
+  ) => {
+    if (isSpeaking && activeSpeechTarget === target) {
+      if (pausePracticeSpeech()) {
+        setIsSpeaking(false);
+        setPausedSpeechTarget(target);
+        setSpeechNotice('语音已暂停，再次点击可继续播放。');
+      } else {
+        stopPracticeSpeech();
+        setIsSpeaking(false);
+        setActiveSpeechTarget(null);
+        setPausedSpeechTarget(null);
+      }
       return;
     }
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'en-US';
-    utterance.rate = rate;
-    utterance.onend = () => {
-      setIsSpeaking(false);
-      setSpeechNotice(autoSpeakEnabled ? '自动播报已开启：进入新单词后会自动朗读单词和例句。' : '自动播报已关闭，可手动播放单词或例句。');
-    };
-    utterance.onerror = () => {
-      setIsSpeaking(false);
-      setSpeechNotice(source === 'auto'
-        ? '自动播报被浏览器拦截，请点击“播放单词”完成本题听音。'
-        : '浏览器语音播放失败，请直接阅读单词和例句完成训练。');
-    };
-    setIsSpeaking(true);
-    setSpeechNotice(source === 'auto' ? '正在自动播报单词和例句...' : '正在播报...');
-    window.speechSynthesis.speak(utterance);
+
+    if (pausedSpeechTarget === target) {
+      const resumed = await resumePracticeSpeech();
+      if (resumed) {
+        setIsSpeaking(true);
+        setActiveSpeechTarget(target);
+        setPausedSpeechTarget(null);
+        setSpeechNotice('语音继续播放。');
+        return;
+      }
+      setPausedSpeechTarget(null);
+    }
+
+    stopPracticeSpeech();
+    setIsSpeaking(false);
+    setActiveSpeechTarget(null);
+    setPausedSpeechTarget(null);
+    await speak(text, rate, source, target);
   };
 
   useEffect(() => {
-    setSelectedOpt(null);
-    setConfidence(null);
-    setIsSubmitted(false);
-    window.speechSynthesis?.cancel();
+    if (isFirstQuestionSync.current) {
+      isFirstQuestionSync.current = false;
+    } else {
+      const savedAnswer = answers[currentIdx];
+      setSelectedOpt(savedAnswer?.selected ?? null);
+      setConfidence(savedAnswer?.confidence ?? null);
+      setIsSubmitted(Boolean(savedAnswer));
+    }
+    stopPracticeSpeech();
     setIsSpeaking(false);
-  }, [currentIdx]);
+    setActiveSpeechTarget(null);
+    setPausedSpeechTarget(null);
+  }, [currentIdx, packIndex]);
 
   useEffect(() => {
     if (!autoSpeakEnabled || !currentItem) return;
     setSpeechNotice('自动播报已开启：进入新单词后会自动朗读单词和例句。');
     const timer = window.setTimeout(() => {
-      speak(`${currentItem.word}. ${currentItem.example}`, 0.84, 'auto');
+      speak(`${currentItem.word}. ${currentItem.example}`, 0.84, 'auto', 'auto');
     }, 250);
     return () => window.clearTimeout(timer);
   }, [autoSpeakEnabled, currentItem?.id]);
 
   useEffect(() => {
     return () => {
-      window.speechSynthesis?.cancel();
+      stopPracticeSpeech();
     };
   }, []);
+
+  useEffect(() => {
+    if (!isSubmitted || !shouldScrollToSubmittedSupportRef.current) return;
+    shouldScrollToSubmittedSupportRef.current = false;
+    window.requestAnimationFrame(() => {
+      submittedRevealRef.current?.scrollIntoView({
+        behavior: 'auto',
+        block: 'start',
+      });
+    });
+  }, [isSubmitted, currentItem?.id]);
+
+  const handleSelectOption = (nextChoice: Choice) => {
+    if (isSubmitted) return;
+    setSelectedOpt(nextChoice);
+    persistDraft({ selectedOpt: nextChoice, isSubmitted: false });
+  };
+
+  const handleSelectConfidence = (nextConfidence: Confidence) => {
+    if (isSubmitted) return;
+    setConfidence(nextConfidence);
+    persistDraft({ confidence: nextConfidence, isSubmitted: false });
+  };
 
   const handleSubmit = () => {
     if (!selectedOpt || !confidence) return;
     const correct = selectedOpt === currentItem.correctAnswer;
     const nextAnswers = [...answers];
     nextAnswers[currentIdx] = { selected: selectedOpt, correct, confidence };
+    shouldScrollToSubmittedSupportRef.current = true;
     setAnswers(nextAnswers);
     setIsSubmitted(true);
+    persistDraft({
+      selectedOpt,
+      confidence,
+      isSubmitted: true,
+      answers: nextAnswers,
+    });
   };
 
   const finish = (finalAnswers: typeof answers) => {
@@ -112,6 +301,7 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
       questions: sessionItems.map((item) => ({
         id: item.id,
         question: `${item.word} ${item.phonetic}: ${item.example}`,
+        options: item.options,
         correctAnswer: item.correctAnswer,
         type: '词义辨析与听音识别',
         trapType: '关键语块漏听',
@@ -126,27 +316,40 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
         confidence: answer?.confidence,
       })),
     });
+    clearPracticeDraft(draftKey);
     onComplete(score, report);
   };
 
   const handleNext = () => {
     const finalAnswers = answers;
     if (currentIdx < sessionItems.length - 1) {
-      setCurrentIdx(currentIdx + 1);
+      const nextIdx = currentIdx + 1;
+      const savedAnswer = answers[nextIdx];
+      setCurrentIdx(nextIdx);
+      setSelectedOpt(savedAnswer?.selected ?? null);
+      setConfidence(savedAnswer?.confidence ?? null);
+      setIsSubmitted(Boolean(savedAnswer));
+      persistDraft({
+        currentIdx: nextIdx,
+        selectedOpt: savedAnswer?.selected ?? null,
+        confidence: savedAnswer?.confidence ?? null,
+        isSubmitted: Boolean(savedAnswer),
+      });
       return;
     }
     finish(finalAnswers);
   };
 
   return (
-    <main className="app-page-surface flex-1 min-h-[100svh] overflow-y-auto overflow-x-hidden bg-[#f7fbff] p-4 sm:p-6 lg:h-screen lg:p-8">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
-        <header className="rounded-[2rem] border border-sky-100 bg-white/90 p-4 shadow-sm sm:p-6">
+    <main className="app-page-surface ui-page">
+      <div className="ui-page-content flex w-full flex-col gap-5">
+        <header className="ui-page-header">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <button
               type="button"
               onClick={onBack}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-[#003178] transition hover:border-[#003178] sm:w-auto"
+              data-testid="vocabulary-back-to-practice"
+              className="ui-button ui-button-secondary sm:w-auto"
             >
               <ArrowLeft className="h-4 w-4" />
               返回专项练习
@@ -154,6 +357,14 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
             <div className="text-sm font-black text-slate-500">
               CET-4 核心词汇听音练习 · 本组 {currentIdx + 1}/{sessionItems.length} · 词库 {items.length}
             </div>
+            {initialDraft.restored ? (
+              <span
+                data-testid="vocabulary-draft-restored"
+                className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-700"
+              >
+                已恢复到第 {packIndex + 1} 组 / 第 {currentIdx + 1} 个
+              </span>
+            ) : null}
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-2 text-xs font-black text-slate-500">
             <span className="rounded-full bg-slate-100 px-3 py-1">
@@ -163,7 +374,7 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
               type="button"
               disabled={packIndex === 0}
               onClick={() => switchPack(packIndex - 1)}
-              className="min-h-11 rounded-full border border-slate-200 bg-white px-3 py-2 text-[#003178] disabled:cursor-not-allowed disabled:text-slate-300"
+              className="ui-button ui-button-secondary ui-button-compact rounded-full"
             >
               上一组
             </button>
@@ -171,7 +382,7 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
               type="button"
               disabled={packIndex >= packCount - 1}
               onClick={() => switchPack(packIndex + 1)}
-              className="min-h-11 rounded-full border border-slate-200 bg-white px-3 py-2 text-[#003178] disabled:cursor-not-allowed disabled:text-slate-300"
+              className="ui-button ui-button-secondary ui-button-compact rounded-full"
             >
               下一组
             </button>
@@ -182,7 +393,7 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
         </header>
 
         <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
-          <aside className="rounded-[2rem] border border-[#cfe6f2] bg-white p-5 shadow-md sm:p-7">
+          <aside className="ui-panel">
             <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-[#003178]/10 px-3 py-1 text-xs font-black text-[#003178]">
               <Headphones className="h-4 w-4" />
               听音 + 词义 + 语块
@@ -197,19 +408,27 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
             <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
               <button
                 type="button"
-                onClick={() => speak(currentItem.word, 0.78, 'manual')}
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[#003178] px-4 text-sm font-black text-white shadow-sm transition hover:bg-[#0d47a1]"
+                onClick={() => toggleSpeech(currentItem.word, 0.78, 'manual', 'word')}
+                className="ui-button ui-button-primary ui-button-full"
               >
-                <Volume2 className="h-4 w-4" />
-                {isSpeaking ? '正在播报...' : '播放单词'}
+                {isSpeaking && activeSpeechTarget === 'word' ? <PauseCircle className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                {isSpeaking && activeSpeechTarget === 'word'
+                  ? '暂停单词'
+                  : pausedSpeechTarget === 'word'
+                    ? '继续单词'
+                    : '播放单词'}
               </button>
               <button
                 type="button"
-                onClick={() => speak(currentItem.example, 0.86, 'manual')}
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-[#003178]/20 bg-white px-4 text-sm font-black text-[#003178] transition hover:border-[#003178]"
+                onClick={() => toggleSpeech(currentItem.example, 0.86, 'manual', 'example')}
+                className="ui-button ui-button-secondary ui-button-full"
               >
-                <Volume2 className="h-4 w-4" />
-                播放例句
+                {isSpeaking && activeSpeechTarget === 'example' ? <PauseCircle className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                {isSpeaking && activeSpeechTarget === 'example'
+                  ? '暂停例句'
+                  : pausedSpeechTarget === 'example'
+                    ? '继续例句'
+                    : '播放例句'}
               </button>
               <button
                 type="button"
@@ -217,8 +436,10 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
                   setAutoSpeakEnabled((enabled) => {
                     const nextEnabled = !enabled;
                     if (!nextEnabled) {
-                      window.speechSynthesis?.cancel();
+                      stopPracticeSpeech();
                       setIsSpeaking(false);
+                      setActiveSpeechTarget(null);
+                      setPausedSpeechTarget(null);
                       setSpeechNotice('自动播报已关闭，可手动播放单词或例句。');
                     } else {
                       setSpeechNotice('自动播报已开启：进入新单词后会自动朗读单词和例句。');
@@ -226,7 +447,7 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
                     return nextEnabled;
                   });
                 }}
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-black text-slate-600 transition hover:border-[#003178] hover:text-[#003178] sm:col-span-2 lg:col-span-1"
+                className="ui-button ui-button-secondary ui-button-full sm:col-span-2 lg:col-span-1"
               >
                 {autoSpeakEnabled ? <Volume2 className="h-4 w-4" /> : <PauseCircle className="h-4 w-4" />}
                 {autoSpeakEnabled ? '自动播报已开启' : '自动播报已关闭'}
@@ -246,11 +467,30 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
             </div>
           </aside>
 
-          <article className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-md sm:p-7">
+          <article className="ui-panel">
             <h2 className="text-xl font-black text-[#003178]">选择最准确的英文释义</h2>
             <p className="mt-2 text-sm font-semibold text-slate-500">
               先听单词和例句，再选择释义。系统会把低信心或错误项加入复习队列。
             </p>
+            {isSubmitted && questionSupport ? (
+              <div
+                ref={submittedRevealRef}
+                data-testid="vocabulary-question-translation"
+                className="mt-3 rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm font-semibold leading-6 text-[#003178]"
+              >
+                <div className="text-[10px] font-black uppercase tracking-widest text-sky-700">
+                  题干中文
+                </div>
+                <p className="mt-1">{questionSupport.prompt.chineseMeaning}</p>
+              </div>
+            ) : null}
+            <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50/70 p-3 text-sm font-bold leading-6 text-amber-900">
+              <div className="mb-1 text-[10px] font-black uppercase tracking-widest text-amber-700">
+                中文辅助
+              </div>
+              <p>单词中文义：{currentItem.meaning}</p>
+              <p className="mt-1 text-xs text-amber-800">正确答案和解析仍在提交后公布；当前只辅助理解题目，不提前标答案。</p>
+            </div>
 
             <div className="mt-6 grid gap-3">
               {(Object.keys(currentItem.options) as Choice[]).map((optionKey) => {
@@ -258,12 +498,15 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
                 const isCorrect = optionKey === currentItem.correctAnswer;
                 const revealCorrect = isSubmitted && isCorrect;
                 const revealWrong = isSubmitted && isSelected && !isCorrect;
+                const optionTranslation = isSubmitted
+                  ? questionSupport?.optionTranslations.find((option) => option.key === optionKey)
+                  : null;
                 return (
                   <button
                     key={optionKey}
                     type="button"
                     disabled={isSubmitted}
-                    onClick={() => setSelectedOpt(optionKey)}
+                    onClick={() => handleSelectOption(optionKey)}
                     className={`min-h-14 rounded-2xl border px-4 text-left text-sm font-bold transition ${
                       revealCorrect
                         ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
@@ -271,10 +514,26 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
                           ? 'border-rose-300 bg-rose-50 text-rose-800'
                           : isSelected
                             ? 'border-[#003178] bg-[#003178] text-white'
-                            : 'border-slate-200 bg-white text-slate-600 hover:border-[#003178] hover:text-[#003178]'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-[#003178] hover:text-[#003178]'
                     }`}
                   >
-                    {optionKey}. {currentItem.options[optionKey]}
+                    <span className="block">
+                      {optionKey}. {currentItem.options[optionKey]}
+                    </span>
+                    {optionTranslation ? (
+                      <span
+                        data-testid={`vocabulary-option-translation-${optionKey}`}
+                        className={`mt-2 block border-t pt-2 text-xs font-black leading-5 ${
+                          revealCorrect
+                            ? 'border-emerald-200 text-emerald-700'
+                            : revealWrong
+                              ? 'border-rose-200 text-rose-700'
+                              : 'border-slate-100 text-slate-500'
+                        }`}
+                      >
+                        中文：{optionTranslation.chineseMeaning}
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}
@@ -292,7 +551,8 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
                     key={value}
                     type="button"
                     disabled={isSubmitted}
-                    onClick={() => setConfidence(value as Confidence)}
+                    onClick={() => handleSelectConfidence(value as Confidence)}
+                    data-testid={`vocabulary-confidence-${value}`}
                     className={`min-h-11 rounded-xl border px-2 text-xs font-black transition ${
                       confidence === value
                         ? 'border-[#003178] bg-[#003178] text-white'
@@ -306,8 +566,14 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
             </div>
 
             {isSubmitted ? (
-              <div className="mt-6 rounded-2xl border border-sky-100 bg-sky-50 p-4">
-                <div className="flex items-center gap-2 text-sm font-black text-[#003178]">
+              <div
+                data-testid="vocabulary-post-answer-support"
+                className="mt-6 rounded-2xl border border-sky-100 bg-sky-50 p-4"
+              >
+                <div
+                  data-testid="vocabulary-correct-answer"
+                  className="flex items-center gap-2 text-sm font-black text-[#003178]"
+                >
                   {selectedOpt === currentItem.correctAnswer ? (
                     <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                   ) : (
@@ -315,7 +581,24 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
                   )}
                   正确答案：{currentItem.correctAnswer}
                 </div>
-                <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">{currentItem.explanation}</p>
+                {sentenceSupport ? (
+                  <div
+                    data-testid="vocabulary-sentence-translation"
+                    className="mt-4 rounded-2xl border border-white/80 bg-white p-4 text-sm leading-6 text-slate-700"
+                  >
+                    <div className="text-xs font-black uppercase tracking-widest text-[#003178]">
+                      例句翻译
+                    </div>
+                    <p className="mt-2 font-bold text-slate-900">英文原句：{sentenceSupport.sourceText}</p>
+                    <p className="mt-1 font-semibold text-slate-600">中文句意：{sentenceSupport.chineseMeaning}</p>
+                  </div>
+                ) : null}
+                <div className="mt-4 rounded-2xl border border-sky-100 bg-white/80 p-4">
+                  <div className="text-xs font-black uppercase tracking-widest text-sky-700">
+                    解析
+                  </div>
+                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">{currentItem.explanation}</p>
+                </div>
               </div>
             ) : null}
 
@@ -325,7 +608,8 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
                   type="button"
                   disabled={!selectedOpt || !confidence}
                   onClick={handleSubmit}
-                  className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-[#1b6d24] px-6 text-sm font-black text-white shadow-sm transition enabled:hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  data-testid="vocabulary-submit"
+                  className="ui-button ui-button-primary"
                 >
                   提交词汇答案
                 </button>
@@ -333,7 +617,8 @@ export default function VocabularyTraining({ items, onBack, onComplete }: Vocabu
                 <button
                   type="button"
                   onClick={handleNext}
-                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[#003178] px-6 text-sm font-black text-white shadow-sm transition hover:bg-[#0d47a1]"
+                  data-testid="vocabulary-next"
+                  className="ui-button ui-button-primary"
                 >
                   {currentIdx === sessionItems.length - 1 ? '完成词汇练习' : '进入下一个单词'}
                   <ChevronRight className="h-4 w-4" />

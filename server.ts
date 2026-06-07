@@ -1,8 +1,19 @@
 import express, { NextFunction, Request, Response } from 'express';
+import { execFile } from 'node:child_process';
+import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'path';
+import { promisify } from 'node:util';
 import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
+import {
+  CET4_LOCAL_REAL_PAPERS,
+  type LocalRealExamPaper,
+  type LocalRealPaperAnswerReference,
+  type LocalRealPaperContent,
+  type LocalRealPaperContentSection,
+} from './src/domain/practice/localRealPapers';
 import { getExamRegistryEntry, listPublicExamProfiles, normalizeExamId } from './src/exams/registry';
 import {
   CET4_QUESTION_BANK_COVERAGE,
@@ -58,6 +69,15 @@ import {
   verifySessionToken,
 } from './src/server/saas';
 import { createPostgresSaasStore } from './src/server/saas-postgres';
+import {
+  canGenerateLocalRealPaperListeningAudio,
+  findLocalRealPaperFile,
+  listLocalRealPapers,
+  normalizeLocalRealPaperExamId,
+} from './src/server/localRealPapers';
+import { extractPdfText } from './src/server/pdfText';
+
+const execFileAsync = promisify(execFile);
 
 if (process.env.NODE_ENV !== 'test') {
   dotenv.config({ path: ['.env.local', '.env'] });
@@ -75,6 +95,10 @@ function readEnvironmentValue(name: string): string | undefined {
 const PORT = Number(readEnvironmentValue('PORT') ?? 3000);
 const JSON_LIMIT = readEnvironmentValue('JSON_LIMIT') ?? '2mb';
 const AI_TIMEOUT_MS = Number(readEnvironmentValue('AI_TIMEOUT_MS') ?? 20_000);
+const PRACTICE_TTS_MAX_CHARACTERS = 2_500;
+const PRACTICE_TTS_DEFAULT_COMMANDS = ['espeak-ng', 'espeak'];
+const DEFAULT_EDGE_TTS_COMMAND = '/opt/edge-tts/bin/edge-tts';
+const DEFAULT_EDGE_TTS_VOICE = 'en-US-JennyNeural';
 
 function isProductionServerRuntime() {
   return process.env.NODE_ENV === 'production' || path.basename(process.argv[1] ?? '') === 'server.cjs';
@@ -129,6 +153,14 @@ type AiProviderConfig =
       model: string;
     };
 
+type AiFallbackReason =
+  | 'not_configured'
+  | 'usage_limited'
+  | 'timeout'
+  | 'provider_error'
+  | 'invalid_response'
+  | 'unknown';
+
 const rateBuckets = new Map<string, RateBucket>();
 let lastRateBucketPruneAt = 0;
 const observability = {
@@ -141,6 +173,9 @@ const observability = {
   aiFallbacksTotal: 0,
   aiLatencyMsTotal: 0,
   aiLatencySamples: 0,
+  aiFallbacksByReason: new Map<AiFallbackReason, number>(),
+  lastAiFallbackReason: null as AiFallbackReason | null,
+  lastAiFallbackAt: null as string | null,
   eventsByName: new Map<string, number>(),
 };
 
@@ -154,8 +189,11 @@ const ALLOWED_TELEMETRY_EVENTS = new Set([
   'material_generation_failed',
   'material_imported',
   'material_import_failed',
+  'feedback_submitted',
   'client_error',
 ]);
+
+const VALID_FEEDBACK_CATEGORIES = new Set(['bug', 'ui', 'content', 'idea', 'other']);
 
 const VALID_MISTAKE_REASONS: MistakeReason[] = [
   '定位失准',
@@ -175,19 +213,35 @@ const VALID_MISTAKE_REASONS: MistakeReason[] = [
   '中文干扰',
 ];
 
-function incrementCounter(counter: Map<string, number>, key: string) {
+function incrementCounter<Key extends string>(counter: Map<Key, number>, key: Key) {
   counter.set(key, (counter.get(key) ?? 0) + 1);
 }
 
-function toPlainCounter(counter: Map<string, number>) {
+function toPlainCounter<Key extends string>(counter: Map<Key, number>) {
   return Object.fromEntries([...counter.entries()].sort(([left], [right]) => left.localeCompare(right)));
 }
 
-function observeAiResult(startedAt: number, usedFallback: boolean) {
+function classifyAiFallbackReason(error: unknown): AiFallbackReason {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  if (/No AI provider configured|Gemini provider is not configured/i.test(message)) return 'not_configured';
+  if (/USAGE_LIMIT_EXCEEDED|MONTHLY_LIMIT_EXCEEDED|quota|rate limit|HTTP 429|429/i.test(message)) return 'usage_limited';
+  if (/AbortError|aborted|timeout|timed out/i.test(message)) return 'timeout';
+  if (/invalid JSON|empty message|returned invalid|parse/i.test(message)) return 'invalid_response';
+  if (/provider failed|generateContent|HTTP 5\d\d|HTTP 4\d\d/i.test(message)) return 'provider_error';
+  return 'unknown';
+}
+
+function observeAiResult(startedAt: number, usedFallback: boolean, reason?: AiFallbackReason) {
   observability.aiRequestsTotal += 1;
   observability.aiLatencySamples += 1;
   observability.aiLatencyMsTotal += Date.now() - startedAt;
-  if (usedFallback) observability.aiFallbacksTotal += 1;
+  if (usedFallback) {
+    const fallbackReason = reason ?? 'unknown';
+    observability.aiFallbacksTotal += 1;
+    incrementCounter(observability.aiFallbacksByReason, fallbackReason);
+    observability.lastAiFallbackReason = fallbackReason;
+    observability.lastAiFallbackAt = new Date().toISOString();
+  }
 }
 
 function getObservabilitySummary() {
@@ -215,6 +269,9 @@ function getObservabilitySummary() {
       fallbacksTotal: observability.aiFallbacksTotal,
       fallbackRate: aiFallbackRate,
       averageLatencyMs: aiAverageLatencyMs,
+      fallbacksByReason: toPlainCounter(observability.aiFallbacksByReason),
+      lastFallbackReason: observability.lastAiFallbackReason,
+      lastFallbackAt: observability.lastAiFallbackAt,
     },
     productEvents: toPlainCounter(observability.eventsByName),
   };
@@ -264,6 +321,59 @@ function sanitizeText(value: unknown, field: string, maxLength: number): string 
     throw new Error(`${field} is too long`);
   }
   return trimmed;
+}
+
+function sanitizeOptionalText(value: unknown, field: string, maxLength: number): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'string') {
+    throw new SaasApiError(400, `${field}_invalid`, `${field} must be a string.`);
+  }
+  const trimmed = value.trim().replace(/[\u0000-\u001F\u007F]/g, ' ');
+  if (!trimmed) return undefined;
+  if (trimmed.length > maxLength) {
+    throw new SaasApiError(400, `${field}_too_long`, `${field} is too long.`);
+  }
+  return trimmed || undefined;
+}
+
+function getDefaultFeedbackFilePath() {
+  return path.join(process.cwd(), '.data', 'feedback', 'feedback.jsonl');
+}
+
+function validateUserFeedback(value: unknown) {
+  const input = typeof value === 'object' && value ? value as Record<string, unknown> : {};
+  let message = '';
+  try {
+    message = sanitizeText(input.message, 'message', 800);
+  } catch {
+    throw new SaasApiError(400, 'feedback_message_required', '请填写反馈内容。');
+  }
+  if (message.length < 8) {
+    throw new SaasApiError(400, 'feedback_message_too_short', '反馈内容至少需要 8 个字。');
+  }
+
+  const rawCategory = typeof input.category === 'string' ? input.category.trim() : 'other';
+  const category = VALID_FEEDBACK_CATEGORIES.has(rawCategory) ? rawCategory : 'other';
+
+  return {
+    category,
+    message,
+    contact: sanitizeOptionalText(input.contact, 'contact', 120),
+    page: sanitizeOptionalText(input.page, 'page', 240),
+    userAgent: sanitizeOptionalText(input.userAgent, 'userAgent', 240),
+  };
+}
+
+async function appendUserFeedback(filePath: string, feedback: ReturnType<typeof validateUserFeedback>) {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.appendFile(
+    filePath,
+    `${JSON.stringify({
+      ...feedback,
+      receivedAt: new Date().toISOString(),
+    })}\n`,
+    'utf8',
+  );
 }
 
 function validateGoal(value: unknown): Pick<StudyGoal, 'id' | 'examId' | 'examDate' | 'dailyMinutes' | 'prioritySkills'> {
@@ -533,6 +643,40 @@ function getAiProviderStatus() {
   };
 }
 
+function getPublicAiStatus() {
+  const providerStatus = getAiProviderStatus();
+  const ai = getObservabilitySummary().ai;
+  const hasFallbacks = ai.fallbacksTotal > 0;
+  const statusReason = !providerStatus.configured
+    ? 'not_configured'
+    : ai.lastFallbackReason;
+  const hasUsageLimitFallback = statusReason === 'usage_limited';
+  const isMostlyFallback = ai.requestsTotal >= 3 && ai.fallbackRate >= 0.5;
+  const state = !providerStatus.configured
+    ? 'offline-fallback'
+    : hasUsageLimitFallback || isMostlyFallback
+      ? 'degraded'
+      : 'ready';
+
+  return {
+    configured: providerStatus.configured,
+    provider: providerStatus.provider,
+    model: providerStatus.model,
+    state,
+    fallbackAvailable: true,
+    shouldNotifyUser: !providerStatus.configured || isMostlyFallback || hasFallbacks,
+    requestsTotal: ai.requestsTotal,
+    fallbacksTotal: ai.fallbacksTotal,
+    fallbackRate: ai.fallbackRate,
+    averageLatencyMs: ai.averageLatencyMs,
+    fallbacksByReason: ai.fallbacksByReason,
+    lastFallbackReason: ai.lastFallbackReason,
+    lastFallbackAt: ai.lastFallbackAt,
+    statusReason,
+    checkedAt: new Date().toISOString(),
+  };
+}
+
 function getGenAI(): GoogleGenAI {
   const config = getAiProviderConfig();
   if (!config || config.type !== 'gemini') {
@@ -735,10 +879,688 @@ function buildMockSubjectiveAnalysis(moduleId: 'writing' | 'translation', answer
   };
 }
 
+type DiagnosticAiRequestItem = {
+  id: string;
+  skillArea: 'translation' | 'writing' | 'speaking';
+  title: string;
+  context: string;
+  prompt: string;
+  answer: string;
+  minWords: number;
+};
+
+type DiagnosticAiEvaluationPayload = {
+  itemId: string;
+  score: number;
+  mistakeReasons: MistakeReason[];
+  comments: string[];
+  nextActions: string[];
+  evidence: string[];
+  confidence: 'low' | 'medium' | 'high';
+  source: 'ai' | 'fallback';
+};
+
+function validateDiagnosticAiPayload(value: unknown): { examId: string; items: DiagnosticAiRequestItem[] } {
+  const input = typeof value === 'object' && value ? value as Record<string, unknown> : {};
+  const rawItems = Array.isArray(input.items) ? input.items : [];
+  if (rawItems.length === 0) {
+    throw new Error('items must contain at least one subjective diagnostic item');
+  }
+  if (rawItems.length > 3) {
+    throw new Error('items cannot contain more than 3 subjective diagnostic items');
+  }
+
+  const items = rawItems.map((rawItem, index) => {
+    const item = typeof rawItem === 'object' && rawItem ? rawItem as Record<string, unknown> : {};
+    const skillArea = ['translation', 'writing', 'speaking'].includes(String(item.skillArea))
+      ? item.skillArea as DiagnosticAiRequestItem['skillArea']
+      : null;
+    if (!skillArea) {
+      throw new Error(`items[${index}].skillArea must be translation, writing, or speaking`);
+    }
+
+    return {
+      id: sanitizeText(item.id, `items[${index}].id`, 120),
+      skillArea,
+      title: sanitizeText(item.title, `items[${index}].title`, 200),
+      context: sanitizeText(item.context, `items[${index}].context`, 2000),
+      prompt: sanitizeText(item.prompt, `items[${index}].prompt`, 2000),
+      answer: sanitizeText(item.answer, `items[${index}].answer`, 5000),
+      minWords: Math.round(numberInRange(item.minWords, 30, 1, 120)),
+    };
+  });
+
+  return {
+    examId: typeof input.examId === 'string' ? input.examId : 'cet4',
+    items,
+  };
+}
+
+function normalizeDiagnosticAiEvaluation(
+  value: unknown,
+  item: DiagnosticAiRequestItem,
+  source: 'ai' | 'fallback',
+): DiagnosticAiEvaluationPayload {
+  const input = typeof value === 'object' && value ? value as Record<string, unknown> : {};
+  const fallbackReason: MistakeReason =
+    item.skillArea === 'translation' ? '中文干扰' : item.skillArea === 'writing' ? '论证结构松散' : '表达不自然';
+  const confidence = ['low', 'medium', 'high'].includes(String(input.confidence))
+    ? input.confidence as 'low' | 'medium' | 'high'
+    : source === 'ai' ? 'medium' : 'low';
+
+  return {
+    itemId: item.id,
+    score: Math.round(numberInRange(input.score, source === 'ai' ? 66 : 60, 0, 100)),
+    mistakeReasons: normalizeMistakeReasons(input.mistakeReasons, [fallbackReason]),
+    comments: normalizeStringArray(input.comments, ['主观题已完成规则兜底初筛，AI 复核暂不可用。'], 'comments'),
+    nextActions: normalizeStringArray(input.nextActions, ['先按本地规则反馈完成专项训练，再用新题复测。'], 'nextActions'),
+    evidence: normalizeStringArray(input.evidence, ['当前仅使用本地兜底证据。'], 'evidence'),
+    confidence,
+    source,
+  };
+}
+
+function buildFallbackDiagnosticAiEvaluation(item: DiagnosticAiRequestItem): DiagnosticAiEvaluationPayload {
+  const wordCount = item.answer.split(/[^\p{L}\p{N}'-]+/u).filter(Boolean).length;
+  const completionRatio = Math.min(1, wordCount / Math.max(1, item.minWords));
+  const score = Math.round(48 + completionRatio * 22);
+  return normalizeDiagnosticAiEvaluation({
+    score,
+    mistakeReasons: [item.skillArea === 'translation' ? '中文干扰' : item.skillArea === 'writing' ? '论证结构松散' : '表达不自然'],
+    comments: [`AI 暂不可用，已按字数和任务完成度做兜底初筛：${wordCount}/${item.minWords} 词。`],
+    nextActions: ['先补齐题目要求、核心信息和连接结构，再做同类专项复测。'],
+    evidence: [`作答长度 ${wordCount} 词，最低要求 ${item.minWords} 词。`],
+    confidence: 'low',
+  }, item, 'fallback');
+}
+
+function normalizeDiagnosticAiEvaluations(value: unknown, items: DiagnosticAiRequestItem[], source: 'ai' | 'fallback') {
+  const input = typeof value === 'object' && value ? value as Record<string, unknown> : {};
+  const rawEvaluations = Array.isArray(input.evaluations) ? input.evaluations : [];
+  const rawById = new Map(rawEvaluations
+    .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
+    .map((item) => [String(item.itemId), item]));
+
+  return Object.fromEntries(items.map((item) => [
+    item.id,
+    rawById.has(item.id)
+      ? normalizeDiagnosticAiEvaluation(rawById.get(item.id), item, source)
+      : buildFallbackDiagnosticAiEvaluation(item),
+  ]));
+}
+
+function normalizeConfidence(value: unknown, fallback: 'low' | 'medium' | 'high' = 'low'): 'low' | 'medium' | 'high' {
+  return ['low', 'medium', 'high'].includes(String(value)) ? value as 'low' | 'medium' | 'high' : fallback;
+}
+
+function cleanAiText(value: unknown, fallback: string, maxLength: number) {
+  if (typeof value !== 'string') return fallback;
+  const normalized = value.trim().replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ');
+  return normalized ? normalized.slice(0, maxLength) : fallback;
+}
+
+function normalizeLocalPaperAnswerReference(
+  value: unknown,
+  paper: { id: string; title: string },
+): LocalRealPaperAnswerReference {
+  const input = typeof value === 'object' && value ? value as Record<string, unknown> : {};
+  const rawSections = Array.isArray(input.answerSections) ? input.answerSections : [];
+  const answerSections = rawSections
+    .filter((section): section is Record<string, unknown> => typeof section === 'object' && section !== null)
+    .map((section, sectionIndex) => {
+      const rawAnswers = Array.isArray(section.answers) ? section.answers : [];
+      return {
+        section: cleanAiText(section.section, `Section ${sectionIndex + 1}`, 80),
+        answers: rawAnswers
+          .filter((answer): answer is Record<string, unknown> => typeof answer === 'object' && answer !== null)
+          .slice(0, 80)
+          .map((answer, answerIndex) => ({
+            questionNumber: cleanAiText(answer.questionNumber, String(answerIndex + 1), 20),
+            answer: cleanAiText(answer.answer, '不确定', 20),
+            confidence: normalizeConfidence(answer.confidence, 'low'),
+            explanation: cleanAiText(answer.explanation, '', 240) || undefined,
+          })),
+      };
+    })
+    .filter((section) => section.answers.length > 0);
+  const rawListeningPractice = typeof input.listeningPractice === 'object' && input.listeningPractice
+    ? input.listeningPractice as Record<string, unknown>
+    : {};
+  const listeningScript = cleanAiText(rawListeningPractice.script, '', 4000);
+
+  return {
+    paperId: paper.id,
+    paperTitle: paper.title,
+    generatedAt: new Date().toISOString(),
+    source: 'ai-reference',
+    confidence: normalizeConfidence(input.confidence, 'low'),
+    notice: 'AI 参考答案与 AI 听力练习脚本仅供自学核对，不是官方答案或官方音频。',
+    writingReference: cleanAiText(input.writingReference, '', 1600) || undefined,
+    translationReference: cleanAiText(input.translationReference, '', 1600) || undefined,
+    answerSections,
+    listeningPractice: listeningScript
+      ? {
+          mode: 'browser-tts',
+          title: cleanAiText(rawListeningPractice.title, 'AI 听力练习脚本', 120),
+          script: listeningScript,
+          notice: '这是基于试卷题面生成的非官方练习脚本，由浏览器朗读，不等同于真题原音。',
+        }
+      : undefined,
+  };
+}
+
+function getLocalPaperReferenceCachePath(paperId: string) {
+  const safePaperId = paperId.replace(/[^a-zA-Z0-9_-]/g, '-');
+  return path.join(process.cwd(), '.data', 'local-real-paper-references', `${safePaperId}.json`);
+}
+
+async function readCachedLocalPaperReference(paperId: string): Promise<LocalRealPaperAnswerReference | null> {
+  try {
+    const raw = await fs.readFile(getLocalPaperReferenceCachePath(paperId), 'utf8');
+    return JSON.parse(raw) as LocalRealPaperAnswerReference;
+  } catch {
+    return null;
+  }
+}
+
+async function writeCachedLocalPaperReference(reference: LocalRealPaperAnswerReference) {
+  const filePath = getLocalPaperReferenceCachePath(reference.paperId);
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, JSON.stringify(reference, null, 2), 'utf8');
+}
+
+function normalizeExtractedPaperText(value: string) {
+  return value
+    .replace(/https?:\/\/[^\s]+/gi, ' ')
+    .replace(/\b(?:[\w-]+\.)?burningvocabulary\.cn\b/gi, ' ')
+    .replace(/\bzhenti\.[^\s]+/gi, ' ')
+    .replace(/\bwww\.[^\s]+/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+(Part\s+[IVX]+)\s+/gi, '\n\n$1 ')
+    .replace(/\s+(Section\s+[A-C])\s+/gi, '\n\n$1 ')
+    .replace(/\s+(Directions:)\s+/gi, '\n$1 ')
+    .replace(/\s+(Questions?\s+\d+(?:\s+(?:and|to)\s+\d+)?\s+are\s+based)/gi, '\n$1')
+    .replace(/\s+(\d{1,2}\.)\s+/g, '\n$1 ')
+    .replace(/\s+([A-D]\.)\s+/g, '\n$1 ')
+    .trim();
+}
+
+function findHeadingIndex(text: string, patterns: RegExp[]) {
+  return patterns
+    .map((pattern) => {
+      const match = pattern.exec(text);
+      return match?.index ?? -1;
+    })
+    .filter((index) => index >= 0)
+    .sort((left, right) => left - right)[0] ?? -1;
+}
+
+function buildLocalPaperContent(params: {
+  paperId: string;
+  paperTitle: string;
+  pageCount: number;
+  truncated: boolean;
+  pages: Array<{ pageNumber: number; text: string }>;
+  text: string;
+}): LocalRealPaperContent {
+  const normalizedText = normalizeExtractedPaperText(params.text);
+  const sectionDefinitions: Array<{
+    id: LocalRealPaperContentSection['id'];
+    label: string;
+    title: string;
+    patterns: RegExp[];
+  }> = [
+    {
+      id: 'writing',
+      label: '一、写作',
+      title: 'Part I Writing',
+      patterns: [/Part\s*I\s*Writing/i, /写作/u],
+    },
+    {
+      id: 'listening',
+      label: '二、听力',
+      title: 'Part II Listening Comprehension',
+      patterns: [/Part\s*II\s*Listening\s*Comprehension/i, /听力/u],
+    },
+    {
+      id: 'reading',
+      label: '三、阅读理解',
+      title: 'Part III Reading Comprehension',
+      patterns: [/Part\s*III\s*Reading\s*Comprehension/i, /阅读/u],
+    },
+    {
+      id: 'translation',
+      label: '四、翻译',
+      title: 'Part IV Translation',
+      patterns: [/Part\s*IV\s*Translation/i, /翻译/u],
+    },
+  ];
+
+  const positions = sectionDefinitions
+    .map((definition) => ({
+      ...definition,
+      index: findHeadingIndex(normalizedText, definition.patterns),
+    }))
+    .filter((definition) => definition.index >= 0)
+    .sort((left, right) => left.index - right.index);
+
+  const sections = positions.map((definition, index) => {
+    const nextDefinition = positions[index + 1];
+    const text = normalizedText.slice(definition.index, nextDefinition?.index ?? normalizedText.length).trim();
+    return {
+      id: definition.id,
+      label: definition.label,
+      title: definition.title,
+      text,
+    };
+  }).filter((section) => section.text.length > 0);
+
+  return {
+    paperId: params.paperId,
+    paperTitle: params.paperTitle,
+    pageCount: params.pageCount,
+    truncated: params.truncated,
+    generatedAt: new Date().toISOString(),
+    sections: sections.length > 0
+      ? sections
+      : [{ id: 'full-text', label: '全文', title: 'PDF 提取文本', text: normalizedText }],
+    pages: params.pages.map((page) => ({
+      pageNumber: page.pageNumber,
+      text: normalizeExtractedPaperText(page.text),
+    })),
+  };
+}
+
+const GENERATED_LISTENING_AUDIO_VERSION = 'question-focused-v2';
+
+type LocalRealPaperFile = LocalRealExamPaper & {
+  absolutePath: string;
+  answerKeyPath?: string;
+  answerKeyText?: string;
+  answerKeySourcePath?: string;
+  listeningAudioPath?: string;
+  setOrder?: number;
+};
+
+function isLocalRealPaperPathInsideRoot(root: string, candidate: string) {
+  const relative = path.relative(root, candidate);
+  return relative === '' || (Boolean(relative) && !relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function toBundledLocalRealPaper(paper: LocalRealExamPaper, stat?: { size: number; mtime: Date }): LocalRealExamPaper {
+  const supportsBrowserListening = paper.hasListeningContent && paper.listeningSource !== 'missing';
+
+  return {
+    ...paper,
+    pdfUrl: `/api/local-real-papers/${paper.id}/pdf`,
+    sizeBytes: stat?.size ?? paper.sizeBytes,
+    lastModifiedAt: stat?.mtime.toISOString() ?? paper.lastModifiedAt,
+    hasListeningAudio: false,
+    listeningAudioUrl: undefined,
+    listeningSource: supportsBrowserListening ? 'browser-tts' : 'missing',
+    note: supportsBrowserListening
+      ? '内置 PDF 真题；未匹配官方听力原音，页面版听力文本支持浏览器朗读。'
+      : paper.note,
+  };
+}
+
+async function resolveBundledLocalRealPaperFile(paperId: string): Promise<LocalRealPaperFile | null> {
+  const bundledPaper = CET4_LOCAL_REAL_PAPERS.find((paper) => paper.id === paperId);
+  if (!bundledPaper) return null;
+
+  const relativePdfPath = bundledPaper.pdfUrl.replace(/^\/+/, '').split('/').join(path.sep);
+  const candidateRoots = [
+    path.resolve(process.cwd(), 'dist'),
+    path.resolve(process.cwd(), 'public'),
+  ];
+
+  for (const root of candidateRoots) {
+    const absolutePath = path.resolve(root, relativePdfPath);
+    if (!isLocalRealPaperPathInsideRoot(root, absolutePath)) continue;
+
+    try {
+      const stat = await fs.stat(absolutePath);
+      if (!stat.isFile()) continue;
+
+      return {
+        ...toBundledLocalRealPaper(bundledPaper, { size: stat.size, mtime: stat.mtime }),
+        absolutePath,
+        fileName: path.basename(absolutePath),
+        source: 'bundled',
+      };
+    } catch {
+      // Try the next build root.
+    }
+  }
+
+  return null;
+}
+
+async function listBundledLocalRealPapers() {
+  const papers = await Promise.all(
+    CET4_LOCAL_REAL_PAPERS.map(async (paper) => resolveBundledLocalRealPaperFile(paper.id)),
+  );
+
+  return papers
+    .filter((paper): paper is LocalRealPaperFile => Boolean(paper))
+    .map((paper) => {
+      const { absolutePath: _absolutePath, answerKeyPath: _answerKeyPath, answerKeyText: _answerKeyText, answerKeySourcePath: _answerKeySourcePath, listeningAudioPath: _listeningAudioPath, setOrder: _setOrder, ...publicPaper } = paper;
+      return publicPaper;
+    });
+}
+
+function getLocalRealPaperScanOptions(examId: 'cet4') {
+  return {
+    root: readEnvironmentValue('LOCAL_REAL_PAPER_ROOT'),
+    answerRoot: readEnvironmentValue('LOCAL_REAL_PAPER_ANSWER_ROOT'),
+    audioRoot: readEnvironmentValue('LOCAL_REAL_PAPER_AUDIO_ROOT'),
+    examId,
+  };
+}
+
+async function findAnyLocalRealPaperFile(paperId: string): Promise<LocalRealPaperFile | null> {
+  const scannedPaper = await findLocalRealPaperFile({
+    ...getLocalRealPaperScanOptions('cet4'),
+    paperId,
+  });
+
+  return scannedPaper ?? resolveBundledLocalRealPaperFile(paperId);
+}
+
+function getGeneratedListeningAudioRoot() {
+  const configuredRoot = readEnvironmentValue('LOCAL_REAL_PAPER_GENERATED_AUDIO_ROOT');
+  if (configuredRoot) return path.resolve(configuredRoot);
+  return path.join(process.env.LOCALAPPDATA || os.tmpdir(), 'english-training-cabin', 'local-real-listening-audio');
+}
+
+function buildListeningTtsText(content: LocalRealPaperContent) {
+  const listeningSection = content.sections.find((section) => section.id === 'listening');
+  const listeningText = listeningSection?.text.trim() || content.pages.map((page) => page.text).join('\n').trim();
+  const questionFocusedText = listeningText
+    .replace(/\s+/g, ' ')
+    .replace(/Part\s*II\s*Listening\s*Comprehension\s*\(?\d+\s*minutes?\)?/gi, ' ')
+    .replace(/Directions:\s.*?(?=(?:Section\s+[A-C])|(?:Questions?\s+\d)|$)/gi, ' ')
+    .replace(/\bSection\s+A\b/gi, '\nSection A. Short news reports.')
+    .replace(/\bSection\s+B\b/gi, '\nSection B. Long conversations.')
+    .replace(/\bSection\s+C\b/gi, '\nSection C. Listening passages.')
+    .replace(/Questions?\s+(\d+)\s+and\s+(\d+)\s+are\s+based/gi, '\nQuestions $1 and $2 are based')
+    .replace(/Questions?\s+(\d+)\s+to\s+(\d+)\s+are\s+based/gi, '\nQuestions $1 to $2 are based')
+    .replace(/\b([A-D])\.\s+/g, '\nOption $1. ')
+    .replace(/\b(\d{1,2})\.\s+/g, '\nQuestion $1. ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  const body = questionFocusedText.length > 120
+    ? questionFocusedText
+    : 'This PDF does not contain a stable listening transcript. Please use the visible listening questions and choices for review.';
+
+  return [
+    `Question-focused listening practice audio for ${content.paperTitle}.`,
+    'This is not the official CET-4 recording.',
+    'Repeated exam directions have been skipped so each paper starts from its own questions and choices.',
+    body.slice(0, 18_000),
+  ].join('\n\n');
+}
+
+class PracticeTtsUnavailableError extends Error {
+  constructor(message = '服务器当前未安装可用的英语语音引擎，请稍后重试。') {
+    super(message);
+    this.name = 'PracticeTtsUnavailableError';
+  }
+}
+
+function clampPracticeSpeechRate(rate?: number) {
+  if (!Number.isFinite(rate)) return 0.9;
+  return Math.max(0.6, Math.min(1.4, Number(rate)));
+}
+
+function toWindowsSpeechRate(browserRate?: number) {
+  return Math.max(-4, Math.min(4, Math.round((clampPracticeSpeechRate(browserRate) - 1) * 5)));
+}
+
+function toEspeakWordsPerMinute(browserRate?: number) {
+  return Math.max(110, Math.min(260, Math.round(175 * clampPracticeSpeechRate(browserRate))));
+}
+
+function toEdgeTtsRate(browserRate?: number) {
+  const percent = Math.max(-30, Math.min(30, Math.round((clampPracticeSpeechRate(browserRate) - 1) * 45)));
+  return `${percent >= 0 ? '+' : ''}${percent}%`;
+}
+
+function isEdgeTtsEnabled() {
+  const configured = readEnvironmentValue('PRACTICE_EDGE_TTS_ENABLED')?.toLowerCase();
+  return configured !== 'false' && configured !== '0' && configured !== 'no';
+}
+
+function getEdgeTtsCommand() {
+  return readEnvironmentValue('PRACTICE_EDGE_TTS_COMMAND') ?? DEFAULT_EDGE_TTS_COMMAND;
+}
+
+function getEdgeTtsVoice() {
+  return readEnvironmentValue('PRACTICE_EDGE_TTS_VOICE') ?? DEFAULT_EDGE_TTS_VOICE;
+}
+
+export function buildEdgeTtsArguments(text: string, outputPath: string, options: { browserRate?: number } = {}) {
+  return [
+    `--voice=${getEdgeTtsVoice()}`,
+    `--rate=${toEdgeTtsRate(options.browserRate)}`,
+    `--text=${text}`,
+    `--write-media=${outputPath}`,
+  ];
+}
+
+function getConfiguredPracticeTtsCommands() {
+  const configuredCommand = readEnvironmentValue('PRACTICE_TTS_COMMAND');
+  return configuredCommand ? [configuredCommand] : PRACTICE_TTS_DEFAULT_COMMANDS;
+}
+
+function isMissingExecutableError(error: unknown) {
+  return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT');
+}
+
+async function assertGeneratedWaveFile(outputPath: string) {
+  const stat = await fs.stat(outputPath);
+  if (!stat.isFile() || stat.size <= 44) {
+    throw new Error('本机 TTS 音频生成失败。');
+  }
+}
+
+async function assertGeneratedAudioFile(outputPath: string, minimumBytes = 128) {
+  const stat = await fs.stat(outputPath);
+  if (!stat.isFile() || stat.size <= minimumBytes) {
+    throw new Error('本机 TTS 音频生成失败。');
+  }
+}
+
+async function runWindowsSpeechToWave(text: string, outputPath: string, options: { browserRate?: number } = {}) {
+  if (process.platform !== 'win32') {
+    throw new Error('本机 TTS 音频生成当前仅支持 Windows。');
+  }
+
+  const textPath = `${outputPath}.txt`;
+  const scriptPath = `${outputPath}.ps1`;
+  await fs.writeFile(textPath, text, 'utf8');
+  const speechRate = toWindowsSpeechRate(options.browserRate);
+  const script = `
+param(
+  [Parameter(Mandatory = $true)][string]$TextPath,
+  [Parameter(Mandatory = $true)][string]$OutputPath
+)
+Add-Type -AssemblyName System.Speech
+$text = Get-Content -LiteralPath $TextPath -Raw -Encoding UTF8
+$synth = New-Object System.Speech.Synthesis.SpeechSynthesizer
+$englishVoices = $synth.GetInstalledVoices() | Where-Object { $_.VoiceInfo.Culture.Name -like 'en-*' }
+$voice = $englishVoices | Where-Object { $_.VoiceInfo.Name -like '*Zira*' -or $_.VoiceInfo.Name -like '*Jenny*' -or $_.VoiceInfo.Name -like '*Aria*' -or $_.VoiceInfo.Name -like '*David*' } | Select-Object -First 1
+if (-not $voice) { $voice = $englishVoices | Select-Object -First 1 }
+if ($voice) { $synth.SelectVoice($voice.VoiceInfo.Name) }
+$rateValue = 0
+if ($env:ENGLISH_TRAINING_TTS_RATE) { $rateValue = [int]$env:ENGLISH_TRAINING_TTS_RATE }
+$synth.Rate = [Math]::Max(-10, [Math]::Min(10, $rateValue))
+$synth.Volume = 100
+$synth.SetOutputToWaveFile($OutputPath)
+$synth.Speak($text)
+$synth.Dispose()
+`;
+  await fs.writeFile(scriptPath, script, 'utf8');
+
+  try {
+    await execFileAsync('powershell.exe', [
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      scriptPath,
+      textPath,
+      outputPath,
+    ], {
+      timeout: 180_000,
+      windowsHide: true,
+      maxBuffer: 1024 * 1024,
+      env: {
+        ...process.env,
+        ENGLISH_TRAINING_TTS_RATE: String(speechRate),
+      },
+    });
+  } finally {
+    await fs.rm(textPath, { force: true });
+    await fs.rm(scriptPath, { force: true });
+  }
+
+  await assertGeneratedWaveFile(outputPath);
+}
+
+async function tryRunEdgeSpeechToMp3(text: string, outputPath: string, options: { browserRate?: number } = {}) {
+  if (!isEdgeTtsEnabled()) return false;
+
+  try {
+    await execFileAsync(getEdgeTtsCommand(), buildEdgeTtsArguments(text, outputPath, options), {
+      timeout: 60_000,
+      windowsHide: true,
+      maxBuffer: 1024 * 1024,
+    });
+    await assertGeneratedAudioFile(outputPath, 512);
+    return true;
+  } catch (error) {
+    await fs.rm(outputPath, { force: true });
+    if (!isMissingExecutableError(error)) {
+      console.warn('Natural practice TTS failed, falling back to system TTS:', error);
+    }
+    return false;
+  }
+}
+
+async function runEspeakSpeechToWave(text: string, outputPath: string, options: { browserRate?: number } = {}) {
+  const textPath = `${outputPath}.txt`;
+  await fs.writeFile(textPath, text, 'utf8');
+  const speed = toEspeakWordsPerMinute(options.browserRate);
+  const commands = getConfiguredPracticeTtsCommands();
+  const voices = ['en-us', 'en'];
+  let hadInstalledCommandFailure = false;
+
+  try {
+    for (const command of commands) {
+      for (const voice of voices) {
+        try {
+          await execFileAsync(command, [
+            '-v',
+            voice,
+            '-s',
+            String(speed),
+            '-w',
+            outputPath,
+            '-f',
+            textPath,
+          ], {
+            timeout: 180_000,
+            windowsHide: true,
+            maxBuffer: 1024 * 1024,
+          });
+          await assertGeneratedWaveFile(outputPath);
+          return;
+        } catch (error) {
+          if (isMissingExecutableError(error)) break;
+          hadInstalledCommandFailure = true;
+        }
+      }
+    }
+  } finally {
+    await fs.rm(textPath, { force: true });
+  }
+
+  throw new PracticeTtsUnavailableError(
+    hadInstalledCommandFailure
+      ? '服务器英语语音引擎生成音频失败，请稍后重试。'
+      : '服务器当前未安装可用的英语语音引擎，请稍后重试。',
+  );
+}
+
+async function runSystemSpeechToWave(text: string, outputPath: string, options: { browserRate?: number } = {}) {
+  if (process.platform === 'win32') {
+    await runWindowsSpeechToWave(text, outputPath, options);
+    return;
+  }
+
+  await runEspeakSpeechToWave(text, outputPath, options);
+}
+
+async function runPracticeSpeechToAudio(text: string, outputRoot: string, options: { browserRate?: number } = {}) {
+  const outputStem = path.join(outputRoot, `practice-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+
+  if (process.platform !== 'win32') {
+    const naturalAudioPath = `${outputStem}.mp3`;
+    if (await tryRunEdgeSpeechToMp3(text, naturalAudioPath, options)) {
+      return {
+        path: naturalAudioPath,
+        contentType: 'audio/mpeg',
+        fileName: 'practice-tts.mp3',
+      };
+    }
+  }
+
+  const waveAudioPath = `${outputStem}.wav`;
+  try {
+    await runSystemSpeechToWave(text, waveAudioPath, options);
+    return {
+      path: waveAudioPath,
+      contentType: 'audio/wav',
+      fileName: 'practice-tts.wav',
+    };
+  } catch (error) {
+    await fs.rm(waveAudioPath, { force: true });
+    throw error;
+  }
+}
+
+async function ensureGeneratedListeningAudio(paper: LocalRealPaperFile) {
+  const audioRoot = getGeneratedListeningAudioRoot();
+  await fs.mkdir(audioRoot, { recursive: true });
+  const outputPath = path.join(audioRoot, `${paper.id}-${GENERATED_LISTENING_AUDIO_VERSION}.wav`);
+
+  try {
+    const stat = await fs.stat(outputPath);
+    if (stat.isFile() && stat.size > 44) return outputPath;
+  } catch {
+    // Generate the cache file below.
+  }
+
+  const extracted = await extractPdfText(paper.absolutePath, { maxCharacters: 100_000 });
+  const content = buildLocalPaperContent({
+    paperId: paper.id,
+    paperTitle: paper.title,
+    pageCount: extracted.pageCount,
+    truncated: extracted.truncated,
+    pages: extracted.pages,
+    text: extracted.text,
+  });
+  await runSystemSpeechToWave(buildListeningTtsText(content), outputPath);
+  return outputPath;
+}
+
 export interface CreateAppOptions {
   saasStore?: SaasStore;
   saasSessionSecret?: string | null;
   billingWebhookSecret?: string;
+  feedbackFilePath?: string;
 }
 
 type AuthenticatedSaasContext = {
@@ -790,9 +1612,12 @@ export function createApp(options: CreateAppOptions = {}) {
   const aiLimiter = disableRateLimits ? testLimiter : createRateLimiter(20, 60_000);
   const authRateLimitPerMinute = Math.max(15, Math.min(240, Number(readEnvironmentValue('AUTH_RATE_LIMIT_PER_MINUTE') ?? 60)));
   const authLimiter = disableRateLimits ? testLimiter : createRateLimiter(authRateLimitPerMinute, 60_000);
+  const practiceTtsLimiter = disableRateLimits ? testLimiter : createRateLimiter(60, 60_000);
+  const feedbackLimiter = disableRateLimits ? testLimiter : createRateLimiter(12, 60_000);
   const saasStore = options.saasStore ?? createDefaultSaasStore();
   const saasSessionSecret = options.saasSessionSecret ?? getSaasSessionSecret();
   const billingWebhookSecret = options.billingWebhookSecret ?? readEnvironmentValue('BILLING_WEBHOOK_SECRET');
+  const feedbackFilePath = options.feedbackFilePath ?? getDefaultFeedbackFilePath();
 
   const issueAccountSession = async (account: SaasAccountRecord, req?: Request) => {
     const secret = requireSaasSessionSecret(saasSessionSecret);
@@ -855,12 +1680,19 @@ export function createApp(options: CreateAppOptions = {}) {
 
   app.get('/api/health', (_req, res) => {
     const ai = getAiProviderStatus();
+    const aiStatus = getPublicAiStatus();
     res.json({
       status: 'ok',
       app: 'english-training-cabin',
       aiConfigured: ai.configured,
       aiProvider: ai.provider,
       aiModel: ai.model,
+      aiRuntime: {
+        state: aiStatus.state,
+        fallbackAvailable: aiStatus.fallbackAvailable,
+        statusReason: aiStatus.statusReason,
+        lastFallbackReason: aiStatus.lastFallbackReason,
+      },
       saas: {
         enabled: true,
         authConfigured: Boolean(saasSessionSecret),
@@ -875,6 +1707,51 @@ export function createApp(options: CreateAppOptions = {}) {
     });
   });
 
+  app.get('/api/ai/status', (_req, res) => {
+    res.json(getPublicAiStatus());
+  });
+
+  app.post('/api/practice/tts', practiceTtsLimiter, asyncRoute(async (req, res, next) => {
+    const rawText = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+    if (!rawText) {
+      res.status(400).json({ error: 'tts_text_required', message: '请提供需要朗读的英文文本。' });
+      return;
+    }
+    if (rawText.length > PRACTICE_TTS_MAX_CHARACTERS) {
+      res.status(400).json({
+        error: 'tts_text_too_long',
+        message: `练习朗读文本最多支持 ${PRACTICE_TTS_MAX_CHARACTERS} 个字符。`,
+      });
+      return;
+    }
+    const rawRate = Number(req.body?.rate ?? 0.9);
+    const browserRate = Number.isFinite(rawRate) ? Math.max(0.6, Math.min(1.4, rawRate)) : 0.9;
+    const outputRoot = path.join(getGeneratedListeningAudioRoot(), 'practice-tts');
+    await fs.mkdir(outputRoot, { recursive: true });
+    let audio: Awaited<ReturnType<typeof runPracticeSpeechToAudio>>;
+
+    try {
+      audio = await runPracticeSpeechToAudio(rawText, outputRoot, { browserRate });
+    } catch (error) {
+      if (error instanceof PracticeTtsUnavailableError) {
+        res.status(501).json({
+          error: 'practice_tts_unavailable',
+          message: error.message,
+        });
+        return;
+      }
+      throw error;
+    }
+    res.type(audio.contentType);
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Content-Disposition', `inline; filename="${audio.fileName}"`);
+    res.sendFile(audio.path, (error) => {
+      fs.rm(audio.path, { force: true }).catch(() => undefined);
+      if (error && 'code' in error && error.code === 'ECONNABORTED') return;
+      if (error) next(error);
+    });
+  }));
+
   app.get('/api/exams', (_req, res) => {
     res.json({
       exams: listPublicExamProfiles(),
@@ -886,9 +1763,11 @@ export function createApp(options: CreateAppOptions = {}) {
         title: CET4_MOCK_EXAM.title,
         plannedMinutes: CET4_MOCK_EXAM.plannedMinutes,
         sourceNotice: CET4_MOCK_EXAM.sourceNotice,
+        totalQuestionCount: CET4_MOCK_EXAM.listening.questions.length + CET4_MOCK_EXAM.reading.questions.length + 2,
+        writingTaskCount: 1,
         listeningQuestionCount: CET4_MOCK_EXAM.listening.questions.length,
         readingQuestionCount: CET4_MOCK_EXAM.reading.questions.length,
-        foundationQuestionCount: CET4_MOCK_EXAM.foundation.questions.length,
+        translationTaskCount: 1,
       },
       degreeEnglish: {
         outline: {
@@ -914,6 +1793,249 @@ export function createApp(options: CreateAppOptions = {}) {
     });
   });
 
+  app.get('/api/local-real-papers', asyncRoute(async (req, res) => {
+    const examId = normalizeLocalRealPaperExamId(req.query.exam);
+    if (!examId) {
+      res.status(400).json({ error: 'unsupported_exam', message: '目前仅支持扫描大学英语四级本地真题。' });
+      return;
+    }
+
+    const catalog = await listLocalRealPapers(getLocalRealPaperScanOptions(examId));
+    const bundledPapers = catalog.papers.length > 0 ? [] : await listBundledLocalRealPapers();
+    const papers = catalog.papers.length > 0 ? catalog.papers : bundledPapers;
+
+    res.json({
+      ...catalog,
+      papers,
+      total: papers.length,
+      sourceStatus: catalog.papers.length > 0 ? 'local-scan' : 'bundled',
+      answerKeyStatus: papers.some((paper) => paper.hasAnswerKey) ? 'ready' : 'missing',
+      listeningAssetStatus: papers.some((paper) => paper.hasListeningAudio)
+        ? 'ready'
+        : papers.some((paper) => paper.listeningSource === 'browser-tts' || paper.hasListeningContent)
+          ? 'browser-tts'
+          : 'missing',
+    });
+  }));
+
+  app.get('/api/local-real-papers/:paperId/pdf', asyncRoute(async (req, res, next) => {
+    const paper = await findAnyLocalRealPaperFile(req.params.paperId);
+
+    if (!paper) {
+      res.status(404).json({ error: 'local_real_paper_not_found', message: '未找到这套本地真题 PDF。' });
+      return;
+    }
+
+    const encodedFileName = encodeURIComponent(paper.fileName ?? `${paper.id}.pdf`);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${paper.id}.pdf"; filename*=UTF-8''${encodedFileName}`);
+    res.sendFile(paper.absolutePath, (error) => {
+      if (error && 'code' in error && error.code === 'ECONNABORTED') return;
+      if (error) next(error);
+    });
+  }));
+
+  app.get('/api/local-real-papers/:paperId/content', asyncRoute(async (req, res) => {
+    const paper = await findAnyLocalRealPaperFile(req.params.paperId);
+
+    if (!paper) {
+      res.status(404).json({ error: 'local_real_paper_not_found', message: '未找到这套本地真题 PDF。' });
+      return;
+    }
+
+    const extracted = await extractPdfText(paper.absolutePath, { maxCharacters: 100_000 });
+    res.json({
+      content: buildLocalPaperContent({
+        paperId: paper.id,
+        paperTitle: paper.title,
+        pageCount: extracted.pageCount,
+        truncated: extracted.truncated,
+        pages: extracted.pages,
+        text: extracted.text,
+      }),
+    });
+  }));
+
+  app.get('/api/local-real-papers/:paperId/answer-key', asyncRoute(async (req, res, next) => {
+    const paper = await findAnyLocalRealPaperFile(req.params.paperId);
+
+    if (!paper?.answerKeyPath && !paper?.answerKeyText) {
+      res.status(404).json({ error: 'answer_key_not_found', message: '这套真题暂未匹配到本地答案文件。' });
+      return;
+    }
+
+    if (paper.answerKeyText) {
+      res.type('text/markdown');
+      res.send(paper.answerKeyText);
+      return;
+    }
+
+    res.sendFile(paper.answerKeyPath, (error) => {
+      if (error && 'code' in error && error.code === 'ECONNABORTED') return;
+      if (error) next(error);
+    });
+  }));
+
+  app.get('/api/local-real-papers/:paperId/audio', asyncRoute(async (req, res, next) => {
+    const paper = await findAnyLocalRealPaperFile(req.params.paperId);
+
+    if (!paper?.listeningAudioPath) {
+      res.status(404).json({ error: 'listening_audio_not_found', message: '这套真题暂未匹配到本地听力音频。' });
+      return;
+    }
+
+    res.type(path.extname(paper.listeningAudioPath));
+    res.sendFile(paper.listeningAudioPath, (error) => {
+      if (error && 'code' in error && error.code === 'ECONNABORTED') return;
+      if (error) next(error);
+    });
+  }));
+
+  app.get('/api/local-real-papers/:paperId/generated-listening-audio', asyncRoute(async (req, res, next) => {
+    const paper = await findAnyLocalRealPaperFile(req.params.paperId);
+
+    if (!paper) {
+      res.status(404).json({ error: 'local_real_paper_not_found', message: '未找到这套本地真题 PDF。' });
+      return;
+    }
+
+    if (paper.listeningAudioPath) {
+      res.redirect(302, `/api/local-real-papers/${paper.id}/audio`);
+      return;
+    }
+
+    if (!canGenerateLocalRealPaperListeningAudio()) {
+      res.status(404).json({
+        error: 'generated_listening_audio_unavailable',
+        message: '当前运行环境未启用本机 TTS 音频生成，请使用页面版听力文本的浏览器朗读。',
+      });
+      return;
+    }
+
+    const audioPath = await ensureGeneratedListeningAudio(paper);
+    res.type('audio/wav');
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Content-Disposition', `inline; filename="${paper.id}-listening-practice.wav"`);
+    res.sendFile(audioPath, (error) => {
+      if (error && 'code' in error && error.code === 'ECONNABORTED') return;
+      if (error) next(error);
+    });
+  }));
+
+  app.get('/api/local-real-papers/:paperId/ai-reference', requireSaasAuth, asyncRoute(async (req, res) => {
+    const cached = await readCachedLocalPaperReference(req.params.paperId);
+    if (!cached) {
+      res.json({ reference: null, status: 'missing' });
+      return;
+    }
+
+    res.json({ reference: cached, status: 'ready' });
+  }));
+
+  app.post('/api/local-real-papers/:paperId/ai-reference', requireSaasAuth, aiLimiter, asyncRoute(async (req, res) => {
+    const paper = await findAnyLocalRealPaperFile(req.params.paperId);
+
+    if (!paper) {
+      res.status(404).json({ error: 'local_real_paper_not_found', message: '未找到这套本地真题 PDF。' });
+      return;
+    }
+
+    const aiStartedAt = Date.now();
+    try {
+      const extracted = await extractPdfText(paper.absolutePath, { maxCharacters: 42_000 });
+      if (!extracted.text.trim()) {
+        res.status(422).json({ error: 'pdf_text_empty', message: '无法从这份 PDF 提取可用于生成参考答案的文字。' });
+        return;
+      }
+
+      const prompt = `Generate an unofficial CET-4 self-study answer reference from this user-provided PDF text.
+Do not claim these are official answers. If a choice answer cannot be inferred confidently, use "不确定" and confidence "low".
+For writing and translation, provide reference sample responses when the prompt is visible.
+For listening, do not recreate or claim official audio. If no transcript is present, write an original short practice script related to the visible listening context for browser TTS only.
+Keep explanations concise in Chinese.
+
+Paper: ${paper.title}
+PDF pages: ${extracted.pageCount}
+Text was ${extracted.truncated ? 'truncated' : 'not truncated'} for token safety.
+
+Extracted text:
+${extracted.text}
+
+Return JSON only with this shape:
+{
+  "confidence":"low|medium|high",
+  "writingReference":"...",
+  "translationReference":"...",
+  "answerSections":[
+    {"section":"Listening Section A","answers":[{"questionNumber":"1","answer":"A","confidence":"medium","explanation":"..."}]}
+  ],
+  "listeningPractice":{"title":"...","script":"..."}
+}`;
+
+      const data = await generateStructuredJson({
+        prompt,
+        systemInstruction:
+          'You generate cautious, clearly unofficial CET-4 self-study references from user-provided material. Never state or imply official answer provenance. Return valid JSON only.',
+        geminiSchema: {
+          type: Type.OBJECT,
+          properties: {
+            confidence: { type: Type.STRING },
+            writingReference: { type: Type.STRING },
+            translationReference: { type: Type.STRING },
+            answerSections: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  section: { type: Type.STRING },
+                  answers: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        questionNumber: { type: Type.STRING },
+                        answer: { type: Type.STRING },
+                        confidence: { type: Type.STRING },
+                        explanation: { type: Type.STRING },
+                      },
+                      required: ['questionNumber', 'answer', 'confidence'],
+                    },
+                  },
+                },
+                required: ['section', 'answers'],
+              },
+            },
+            listeningPractice: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                script: { type: Type.STRING },
+              },
+            },
+          },
+          required: ['confidence', 'answerSections'],
+        },
+      });
+
+      const reference = normalizeLocalPaperAnswerReference(data, paper);
+      await writeCachedLocalPaperReference(reference);
+      observeAiResult(aiStartedAt, false);
+      res.json({ reference, extracted: { pageCount: extracted.pageCount, truncated: extracted.truncated } });
+    } catch (error) {
+      console.error('Local real paper AI reference failed:', error);
+      const fallbackReason = classifyAiFallbackReason(error);
+      observeAiResult(aiStartedAt, true, fallbackReason);
+      const errorMessage = (error as Error).message;
+      const isUsageLimited = fallbackReason === 'usage_limited' || /USAGE_LIMIT_EXCEEDED|MONTHLY_LIMIT_EXCEEDED|429/.test(errorMessage);
+      res.status(isUsageLimited ? 429 : 502).json({
+        error: isUsageLimited ? 'ai_usage_limited' : 'ai_reference_failed',
+        message: isUsageLimited
+          ? 'AI 月度额度已用完，暂时不能生成 AI 参考答案。你可以先放入本地答案/音频文件，系统会自动匹配。'
+          : 'AI 参考答案生成失败，请稍后重试或检查 AI 配置。',
+      });
+    }
+  }));
+
   app.get('/api/observability/summary', requireSaasAuth, (_req, res) => {
     res.json(getObservabilitySummary());
   });
@@ -928,6 +2050,13 @@ export function createApp(options: CreateAppOptions = {}) {
     incrementCounter(observability.eventsByName, eventName);
     res.status(204).end();
   });
+
+  app.post('/api/feedback', feedbackLimiter, asyncRoute(async (req, res) => {
+    const feedback = validateUserFeedback(req.body);
+    await appendUserFeedback(feedbackFilePath, feedback);
+    incrementCounter(observability.eventsByName, 'feedback_submitted');
+    res.status(201).json({ status: 'received' });
+  }));
 
   app.post('/api/auth/register', authLimiter, asyncRoute(async (req, res) => {
     const account = await registerSaasAccount(saasStore, req.body);
@@ -1411,7 +2540,7 @@ Return JSON only with this shape: {"title":"...","content":"...","questions":[{"
       res.json(normalizePassage(data, { defaultSourceType: 'ai-generated' }));
     } catch (error) {
       console.error('Passage generation failed, using mock fallback:', error);
-      observeAiResult(aiStartedAt, true);
+      observeAiResult(aiStartedAt, true, classifyAiFallbackReason(error));
       res.status(200).json(normalizePassage(buildMockPassage(targetTopic), { defaultSourceType: 'ai-generated' }));
     }
   };
@@ -1456,7 +2585,7 @@ Return JSON only with this shape: {"originalTextWithMarkings":"...","improvedTex
       res.json(data);
     } catch (error) {
       console.error('Speech analysis failed, using mock fallback:', error);
-      observeAiResult(aiStartedAt, true);
+      observeAiResult(aiStartedAt, true, classifyAiFallbackReason(error));
       res.status(200).json(buildMockSpeechAnalysis(originalSpeech));
     }
   };
@@ -1508,14 +2637,89 @@ Use Chinese for comments and nextActions.`;
       res.json(normalizeSubjectiveAnalysis(data, moduleId));
     } catch (error) {
       console.error('Subjective evaluation failed, using mock fallback:', error);
-      observeAiResult(aiStartedAt, true);
+      observeAiResult(aiStartedAt, true, classifyAiFallbackReason(error));
       res.status(200).json(buildMockSubjectiveAnalysis(moduleId, answerText));
+    }
+  };
+
+  const handleEvaluateDiagnostic = async (req: Request, res: Response) => {
+    let payload: ReturnType<typeof validateDiagnosticAiPayload>;
+    try {
+      payload = validateDiagnosticAiPayload(req.body);
+    } catch (error) {
+      res.status(400).json({ error: 'invalid_diagnostic_ai_request', message: (error as Error).message });
+      return;
+    }
+
+    const aiStartedAt = Date.now();
+    try {
+      const prompt = `Evaluate these CET-4 onboarding diagnostic subjective answers.
+Use the CET-4 rubric, but do not claim the result is an official score.
+Return JSON only with this shape:
+{"evaluations":[{"itemId":"...","score":70,"mistakeReasons":["语法错误"],"comments":["..."],"nextActions":["..."],"evidence":["quote or concrete observation"],"confidence":"medium"}]}
+
+Allowed mistakeReasons: ${VALID_MISTAKE_REASONS.join(', ')}.
+Score range: 0-100. Use Chinese for comments, nextActions, and evidence.
+Keep each comment/action concise and evidence-based. If evidence is weak, set confidence to low.
+
+Items:
+${JSON.stringify(payload.items.map((item) => ({
+  itemId: item.id,
+  skillArea: item.skillArea,
+  title: item.title,
+  context: item.context,
+  prompt: item.prompt,
+  minWords: item.minWords,
+  studentAnswer: item.answer,
+})), null, 2)}`;
+
+      const data = await generateStructuredJson({
+        prompt,
+        systemInstruction:
+          'You are a cautious CET-4 diagnostic evaluator. Return structured JSON only. Score subjective answers against the given task, cite concrete evidence, and mark uncertainty honestly.',
+        geminiSchema: {
+          type: Type.OBJECT,
+          properties: {
+            evaluations: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  itemId: { type: Type.STRING },
+                  score: { type: Type.INTEGER },
+                  mistakeReasons: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  comments: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  nextActions: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  evidence: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  confidence: { type: Type.STRING },
+                },
+                required: ['itemId', 'score', 'mistakeReasons', 'comments', 'nextActions', 'evidence', 'confidence'],
+              },
+            },
+          },
+          required: ['evaluations'],
+        },
+      });
+
+      observeAiResult(aiStartedAt, false);
+      res.json({
+        usedFallback: false,
+        evaluations: normalizeDiagnosticAiEvaluations(data, payload.items, 'ai'),
+      });
+    } catch (error) {
+      console.error('Diagnostic AI evaluation failed, using rule fallback:', error);
+      observeAiResult(aiStartedAt, true, classifyAiFallbackReason(error));
+      res.status(200).json({
+        usedFallback: true,
+        evaluations: Object.fromEntries(payload.items.map((item) => [item.id, buildFallbackDiagnosticAiEvaluation(item)])),
+      });
     }
   };
 
   app.post('/api/ai/generate-passage', aiLimiter, requireSaasAuth, handleGeneratePassage);
   app.post('/api/ai/analyze-speech', aiLimiter, requireSaasAuth, handleAnalyzeSpeech);
   app.post('/api/ai/evaluate-subjective', aiLimiter, requireSaasAuth, handleEvaluateSubjective);
+  app.post('/api/ai/evaluate-diagnostic', aiLimiter, requireSaasAuth, handleEvaluateDiagnostic);
   // Backward-compatible aliases for older builds and saved clients.
   app.post('/api/gemini/generate-passage', aiLimiter, requireSaasAuth, handleGeneratePassage);
   app.post('/api/gemini/analyze-speech', aiLimiter, requireSaasAuth, handleAnalyzeSpeech);

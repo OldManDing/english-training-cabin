@@ -1,28 +1,97 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, CheckCircle2, XCircle, ChevronRight, HelpCircle, Volume2, Headphones, Sparkles } from 'lucide-react';
-import { Passage, PracticeCompletionReport, Question, SkillArea } from '../types';
+import { ChoiceOption, Passage, PracticeCompletionReport, Question, SkillArea } from '../types';
+import { getReadingChineseSupport } from '../domain/practice/chineseSupport';
+import {
+  ChoiceConfidence,
+  ChoicePracticeDraftAnswer,
+  ReadingPracticeDraft,
+  clampDraftIndex,
+  clearPracticeDraft,
+  loadPracticeDraft,
+  practiceDraftKeys,
+  savePracticeDraft,
+} from '../domain/practice/draftProgress';
 import { buildChoicePracticeReport } from '../domain/practice/reports';
+import { getQuestionSentenceSupport } from '../domain/practice/sentenceTranslations';
+import { pausePracticeSpeech, playPracticeSpeech, resumePracticeSpeech, stopPracticeSpeech } from '../lib/practiceSpeech';
 
 interface ReadingTrainingProps {
   passage: Passage;
+  initialQuestionId?: string;
   onBack: () => void;
   onComplete: (score: number, report: PracticeCompletionReport) => void;
 }
 
-export default function ReadingTraining({ passage, onBack, onComplete }: ReadingTrainingProps) {
-  const [currentIdx, setCurrentIdx] = useState(0);
-  const [selectedOpt, setSelectedOpt] = useState<'A' | 'B' | 'C' | 'D' | null>(null);
-  const [confidence, setConfidence] = useState<'sure' | 'not_sure' | 'guess' | null>(null);
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  const [userAnswers, setUserAnswers] = useState<({ selected: 'A' | 'B' | 'C' | 'D', correct: boolean, confidence: 'sure' | 'not_sure' | 'guess' })[]>([]);
+type ReadingAnswer = ChoicePracticeDraftAnswer;
+
+const findQuestionIndexById = (passage: Passage, questionId?: string) => {
+  if (!questionId) return 0;
+  const targetIndex = passage.questions.findIndex((question) => String(question.id) === questionId);
+  return targetIndex >= 0 ? targetIndex : 0;
+};
+
+const createEmptyReadingDraftState = (passage: Passage, initialQuestionId?: string) => ({
+  restored: false,
+  startedAt: new Date().toISOString(),
+  currentIdx: findQuestionIndexById(passage, initialQuestionId),
+  selectedOpt: null as ChoiceOption | null,
+  confidence: null as ChoiceConfidence | null,
+  isSubmitted: false,
+  answers: [] as ReadingAnswer[],
+});
+
+const loadReadingDraftState = (passage: Passage, initialQuestionId?: string) => {
+  const fallback = createEmptyReadingDraftState(passage, initialQuestionId);
+  const draft = loadPracticeDraft<ReadingPracticeDraft>(practiceDraftKeys.reading(passage.id));
+  if (!draft || draft.version !== 1 || draft.passageId !== passage.id || passage.questions.length === 0) {
+    return fallback;
+  }
+
+  const answers = Array.isArray(draft.answers) ? draft.answers : [];
+  const currentIdx = initialQuestionId
+    ? findQuestionIndexById(passage, initialQuestionId)
+    : clampDraftIndex(draft.currentIdx, passage.questions.length);
+  const savedAnswer = answers[currentIdx];
+  const isSubmitted = Boolean(draft.isSubmitted || savedAnswer);
+
+  return {
+    restored: !initialQuestionId,
+    startedAt: draft.startedAt ?? fallback.startedAt,
+    currentIdx,
+    selectedOpt: isSubmitted ? savedAnswer?.selected ?? draft.selectedOpt ?? null : draft.selectedOpt ?? null,
+    confidence: isSubmitted ? savedAnswer?.confidence ?? draft.confidence ?? null : draft.confidence ?? null,
+    isSubmitted,
+    answers,
+  };
+};
+
+export default function ReadingTraining({ passage, initialQuestionId, onBack, onComplete }: ReadingTrainingProps) {
+  const [initialDraft] = useState(() => loadReadingDraftState(passage, initialQuestionId));
+  const draftKey = practiceDraftKeys.reading(passage.id);
+  const isFirstQuestionSync = useRef(true);
+  const [currentIdx, setCurrentIdx] = useState(initialDraft.currentIdx);
+  const [selectedOpt, setSelectedOpt] = useState<ChoiceOption | null>(initialDraft.selectedOpt);
+  const [confidence, setConfidence] = useState<ChoiceConfidence | null>(initialDraft.confidence);
+  const [isSubmitted, setIsSubmitted] = useState(initialDraft.isSubmitted);
+  const [userAnswers, setUserAnswers] = useState<ReadingAnswer[]>(initialDraft.answers);
   const [isPlayingText, setIsPlayingText] = useState(false);
-  const [speechUtterance, setSpeechUtterance] = useState<SpeechSynthesisUtterance | null>(null);
-  const [startedAt] = useState(() => new Date().toISOString());
+  const [isTextPaused, setIsTextPaused] = useState(false);
+  const [startedAt] = useState(() => initialDraft.startedAt);
 
   const currentQuestion: Question = passage.questions[currentIdx];
+  const currentIndexedSentence = currentQuestion.highlightTextIndices?.correct
+    ? passage.content.substring(currentQuestion.highlightTextIndices.correct[0], currentQuestion.highlightTextIndices.correct[1])
+    : undefined;
+  const currentSourceSentence = currentQuestion.correctSentence || currentIndexedSentence;
+  const currentSentenceSupport = getQuestionSentenceSupport({
+    sentence: currentSourceSentence,
+    explanation: currentQuestion.explanation,
+  });
   const practiceModuleId = passage.moduleId ?? 'reading';
   const practiceQuestionTypeId = currentQuestion.questionTypeId ?? passage.questions[0]?.questionTypeId ?? 'careful-reading';
   const practiceSkillArea: SkillArea = practiceModuleId === 'grammar' ? 'grammar' : 'reading';
+  const chineseSupport = getReadingChineseSupport(passage.id, currentQuestion);
   const trainingTitle = practiceModuleId === 'grammar'
     ? '语法与完形填空训练舱'
     : practiceQuestionTypeId === 'word-bank'
@@ -31,42 +100,99 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
     ? '长篇匹配训练舱'
     : '仔细阅读训练舱';
 
+  const persistDraft = (nextState: {
+    currentIdx?: number;
+    selectedOpt?: ChoiceOption | null;
+    confidence?: ChoiceConfidence | null;
+    isSubmitted?: boolean;
+    answers?: ReadingAnswer[];
+  }) => {
+    savePracticeDraft<ReadingPracticeDraft>(draftKey, {
+      version: 1,
+      passageId: passage.id,
+      startedAt,
+      currentIdx: nextState.currentIdx ?? currentIdx,
+      selectedOpt: Object.prototype.hasOwnProperty.call(nextState, 'selectedOpt') ? nextState.selectedOpt ?? null : selectedOpt,
+      confidence: Object.prototype.hasOwnProperty.call(nextState, 'confidence') ? nextState.confidence ?? null : confidence,
+      isSubmitted: nextState.isSubmitted ?? isSubmitted,
+      answers: nextState.answers ?? userAnswers,
+      updatedAt: new Date().toISOString(),
+    });
+  };
+
   // Reset states on question change
   useEffect(() => {
-    setSelectedOpt(null);
-    setConfidence(null);
-    setIsSubmitted(false);
+    if (isFirstQuestionSync.current) {
+      isFirstQuestionSync.current = false;
+    } else {
+      const savedAnswer = userAnswers[currentIdx];
+      setSelectedOpt(savedAnswer?.selected ?? null);
+      setConfidence(savedAnswer?.confidence ?? null);
+      setIsSubmitted(Boolean(savedAnswer));
+    }
     if (isPlayingText) {
-      window.speechSynthesis.cancel();
+      stopPracticeSpeech();
       setIsPlayingText(false);
+      setIsTextPaused(false);
     }
   }, [currentIdx]);
 
+  useEffect(() => {
+    return () => {
+      stopPracticeSpeech();
+    };
+  }, []);
+
   // Speech Helper
-  const handleVoicePlay = (text: string) => {
-    if ('speechSynthesis' in window) {
-      if (isPlayingText) {
-        window.speechSynthesis.cancel();
-        setIsPlayingText(false);
+  const handleVoicePlay = async (text: string) => {
+    if (isPlayingText) {
+      if (pausePracticeSpeech()) {
+        setIsTextPaused(true);
+      } else {
+        stopPracticeSpeech();
+        setIsTextPaused(false);
+      }
+      setIsPlayingText(false);
+      return;
+    }
+
+    if (isTextPaused) {
+      const resumed = await resumePracticeSpeech();
+      if (resumed) {
+        setIsPlayingText(true);
+        setIsTextPaused(false);
         return;
       }
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'en-US';
-      utterance.rate = 0.9; // clear, comfortable speaker speed
-      utterance.onend = () => {
-        setIsPlayingText(false);
-      };
-      setSpeechUtterance(utterance);
-      setIsPlayingText(true);
-      window.speechSynthesis.speak(utterance);
-    } else {
-      console.warn('您的浏览器不支持语音播放（SpeechSynthesis）。');
+      setIsTextPaused(false);
     }
+
+    await playPracticeSpeech(text, {
+      rate: 0.9,
+      onStart: () => {
+        setIsPlayingText(true);
+        setIsTextPaused(false);
+      },
+      onEnd: () => {
+        setIsPlayingText(false);
+        setIsTextPaused(false);
+      },
+      onError: () => {
+        setIsPlayingText(false);
+        setIsTextPaused(false);
+      },
+    });
   };
 
   const handleOptionClick = (opt: 'A' | 'B' | 'C' | 'D') => {
     if (isSubmitted) return;
     setSelectedOpt(opt);
+    persistDraft({ selectedOpt: opt, isSubmitted: false });
+  };
+
+  const handleConfidenceChange = (nextConfidence: ChoiceConfidence) => {
+    if (isSubmitted) return;
+    setConfidence(nextConfidence);
+    persistDraft({ confidence: nextConfidence, isSubmitted: false });
   };
 
   const handleSubmit = () => {
@@ -83,12 +209,30 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
       confidence
     };
     setUserAnswers(newAnswers);
+    persistDraft({
+      selectedOpt,
+      confidence,
+      isSubmitted: true,
+      answers: newAnswers,
+    });
   };
 
   const handleNext = () => {
     if (currentIdx < passage.questions.length - 1) {
-      setCurrentIdx(currentIdx + 1);
+      const nextIdx = currentIdx + 1;
+      const savedAnswer = userAnswers[nextIdx];
+      setCurrentIdx(nextIdx);
+      setSelectedOpt(savedAnswer?.selected ?? null);
+      setConfidence(savedAnswer?.confidence ?? null);
+      setIsSubmitted(Boolean(savedAnswer));
+      persistDraft({
+        currentIdx: nextIdx,
+        selectedOpt: savedAnswer?.selected ?? null,
+        confidence: savedAnswer?.confidence ?? null,
+        isSubmitted: Boolean(savedAnswer),
+      });
     } else {
+      clearPracticeDraft(draftKey);
       // Calculate overall score
       const correctCount = userAnswers.filter(ans => ans?.correct).length;
       const finalScore = Math.round((correctCount / passage.questions.length) * 100);
@@ -103,6 +247,7 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
         questions: passage.questions.map((question) => ({
           id: question.id,
           question: question.question,
+          options: question.options,
           correctAnswer: question.correctAnswer,
           type: question.type,
           moduleId: question.moduleId,
@@ -260,8 +405,9 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
         <div className="flex items-center space-x-3 sm:space-x-4 min-w-0">
           <button
             onClick={onBack}
+            data-testid="reading-back-to-practice"
             aria-label="返回专项练习"
-            className="p-2 hover:bg-[#dbf1fe] text-[#003178] rounded-xl transition-colors cursor-pointer pointer-events-auto"
+            className="ui-button ui-button-secondary ui-button-icon"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
@@ -269,6 +415,14 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
           <h3 className="font-extrabold text-sm text-[#003178] tracking-tight truncate max-w-xs sm:max-w-md">
             {trainingTitle}：{passage.title}
           </h3>
+          {initialDraft.restored ? (
+            <span
+              data-testid="reading-draft-restored"
+              className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-700"
+            >
+              已恢复第 {currentIdx + 1} 题
+            </span>
+          ) : null}
         </div>
 
         <div className="flex items-center space-x-2 overflow-x-auto pb-1 sm:pb-0">
@@ -306,6 +460,15 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
             <article className="prose max-w-none text-justify">
               {renderHighlightedContent()}
             </article>
+
+            {chineseSupport?.context ? (
+              <div className="mt-6 rounded-2xl border border-amber-100 bg-amber-50/70 p-4 text-sm font-bold leading-7 text-amber-900">
+                <div className="mb-1 text-[10px] font-black uppercase tracking-widest text-amber-700">
+                  中文材料摘要
+                </div>
+                <p>{chineseSupport.context}</p>
+              </div>
+            ) : null}
 
             {/* Custom Interactive Legend (Only visible after submittng response) */}
             {isSubmitted && (
@@ -347,6 +510,14 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
             <h3 className="text-base font-extrabold text-[#071e27] leading-snug">
               {currentQuestion.question}
             </h3>
+            {isSubmitted && chineseSupport?.question ? (
+              <p
+                data-testid="reading-question-translation"
+                className="rounded-2xl bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-800"
+              >
+                中文题意：{chineseSupport.question}
+              </p>
+            ) : null}
 
             {/* Answer Cards */}
             <div className="space-y-3">
@@ -388,8 +559,16 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
                     <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center font-bold text-xs shrink-0 ${indicatorStyle}`}>
                       {opt}
                     </div>
-                    <div className="text-sm font-bold text-[#071e27]">
-                      {currentQuestion.options[opt]}
+                    <div className={`min-w-0 text-sm font-bold ${isCurrentSelected && !isSubmitted ? 'text-white' : 'text-[#071e27]'}`}>
+                      <span className="block">{currentQuestion.options[opt]}</span>
+                      {isSubmitted && chineseSupport?.options?.[opt] ? (
+                        <span
+                          data-testid={`reading-option-translation-${opt}`}
+                          className={`mt-1 block text-xs font-semibold leading-5 ${isCurrentSelected && !isSubmitted ? 'text-white/80' : 'text-slate-500'}`}
+                        >
+                          {chineseSupport.options[opt]}
+                        </span>
+                      ) : null}
                     </div>
                   </button>
                 );
@@ -409,13 +588,17 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
                     { id: 'not_sure', label: '不太确定', color: 'peer-checked:bg-amber-100 peer-checked:text-amber-800 peer-checked:border-amber-600' },
                     { id: 'guess', label: '纯属盲猜', color: 'peer-checked:bg-red-100 peer-checked:text-red-800 peer-checked:border-red-600' },
                   ].map((item) => (
-                    <label key={item.id} className="flex min-h-11 flex-1 cursor-pointer text-center">
+                    <label
+                      key={item.id}
+                      data-testid={`reading-confidence-${item.id}`}
+                      className="flex min-h-11 flex-1 cursor-pointer text-center"
+                    >
                       <input
                         type="radio"
                         name="confidence"
                         value={item.id}
                         checked={confidence === item.id}
-                        onChange={() => setConfidence(item.id as any)}
+                        onChange={() => handleConfidenceChange(item.id as ChoiceConfidence)}
                         className="sr-only peer"
                       />
                       <div className="flex min-h-11 w-full items-center justify-center rounded-xl border border-gray-200 bg-white px-1 py-2 text-xs font-semibold text-gray-500 transition-all transition-colors hover:bg-gray-50 peer-checked:border-2">
@@ -429,7 +612,7 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
 
             {/* AI Diagnosis and Explanations Area (After Submit) */}
             {isSubmitted && currentFeedback && (
-              <div className="space-y-4 animate-fadeIn">
+              <div data-testid="reading-post-answer-support" className="space-y-4 animate-fadeIn">
                 
                 {/* AI Behavioral Diagnostic Panel */}
                 <div className="bg-[#f3faff] border border-[#cfe6f2] rounded-2xl p-4">
@@ -457,18 +640,28 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
                     {/* Voice Synth trigger */}
                     <button
                       onClick={() => {
-                        const targetText = (currentQuestion as any).correctSentence || currentQuestion.explanation;
+                        const targetText = currentSourceSentence || currentQuestion.explanation;
                         handleVoicePlay(targetText);
                       }}
-                      className="flex min-h-11 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-[11px] font-bold text-gray-600 transition-all hover:border-[#003178] hover:text-[#003178]"
+                      className="ui-button ui-button-secondary ui-button-compact"
                     >
                       <Volume2 className="h-3.5 w-3.5" />
-                      <span>{isPlayingText ? '轻触停止' : '朗读线索原句'}</span>
+                      <span>{isPlayingText ? '暂停朗读' : isTextPaused ? '继续朗读' : '朗读线索原句'}</span>
                     </button>
                   </div>
                   <p className="text-xs text-gray-600 leading-relaxed font-semibold whitespace-pre-line bg-white p-3 rounded-xl border border-gray-100">
                     {currentQuestion.explanation}
                   </p>
+                  {currentSentenceSupport ? (
+                    <div
+                      data-testid="reading-sentence-translation"
+                      className="mt-3 rounded-xl border border-[#cfe6f2] bg-white p-3 text-xs leading-5"
+                    >
+                      <div className="font-extrabold text-[#003178]">答后句子翻译</div>
+                      <p className="mt-2 font-bold text-slate-900">英文原句：{currentSentenceSupport.sourceText}</p>
+                      <p className="mt-1 font-semibold text-slate-600">中文句意：{currentSentenceSupport.chineseMeaning}</p>
+                    </div>
+                  ) : null}
                 </div>
 
               </div>
@@ -485,19 +678,17 @@ export default function ReadingTraining({ passage, onBack, onComplete }: Reading
             {!isSubmitted ? (
               <button
                 onClick={handleSubmit}
+                data-testid="reading-submit"
                 disabled={!selectedOpt || !confidence}
-                className={`w-full sm:w-auto px-6 sm:px-8 py-3 rounded-xl font-bold text-sm shadow-md transition-all ${
-                  selectedOpt && confidence
-                    ? 'bg-[#003178] hover:bg-[#0d47a1] text-white hover:translate-y-[-1px] cursor-pointer pointer-events-auto'
-                    : 'bg-gray-200 text-gray-400 cursor-not-allowed text-xs'
-                }`}
+                className="ui-button ui-button-primary ui-button-full sm:w-auto"
               >
                 提交此题并查看错因诊断
               </button>
             ) : (
               <button
                 onClick={handleNext}
-                className="w-full sm:w-auto justify-center px-6 sm:px-8 py-3 bg-[#1b6d24] hover:bg-[#1b6d24]/90 text-white font-bold text-sm rounded-xl hover:-translate-y-0.5 shadow-md flex items-center gap-2 transition-all cursor-pointer pointer-events-auto"
+                data-testid="reading-next"
+                className="ui-button ui-button-primary ui-button-full sm:w-auto"
               >
                 <span>
                   {currentIdx === passage.questions.length - 1 ? '完成训练，提交今日总战报' : '进入第 ' + (currentIdx + 2) + ' 题'}

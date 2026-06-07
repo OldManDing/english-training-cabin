@@ -11,6 +11,21 @@ async function expectNoHorizontalOverflow(page: Page) {
   expect(overflow.document).toBeLessThanOrEqual(1);
 }
 
+async function expectLocatorWithinViewport(page: Page, testId: string) {
+  const box = await page.getByTestId(testId).boundingBox();
+  const viewport = page.viewportSize();
+  const visibleHeight = Math.min(
+    box?.height ?? 0,
+    Math.max(0, (viewport?.height ?? 0) - (box?.y ?? 0)),
+  );
+
+  expect(box).toBeTruthy();
+  expect(viewport).toBeTruthy();
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.y).toBeLessThan((viewport?.height ?? 0));
+  expect(visibleHeight).toBeGreaterThanOrEqual(120);
+}
+
 async function expectMobilePrimaryNavReadable(page: Page) {
   const metrics = await page.locator('nav').first().evaluate((nav) => {
     const buttonWidths = Array.from(nav.querySelectorAll('button')).map((button) => button.getBoundingClientRect().width);
@@ -25,20 +40,47 @@ async function expectMobilePrimaryNavReadable(page: Page) {
   expect(metrics.scrollWidth).toBeGreaterThan(metrics.clientWidth);
 }
 
+const universalDiagnosticTextAnswer =
+  'With the development of online learning, more college students can arrange their study time flexibly. To reduce exam pressure, students should divide review tasks into several small steps. In my opinion, regular review and AI tools are useful because students can get feedback. For example, I often make grammar mistakes in English practice, so next time I will correct them carefully and explain my answer more naturally.';
+
+async function clickDiagnosticOptions(page: Page, optionNames: RegExp[]) {
+  let clicked = 0;
+  for (const optionName of optionNames) {
+    const options = page.getByRole('button', { name: optionName });
+    const count = await options.count();
+    for (let index = 0; index < count; index += 1) {
+      await options.nth(index).click();
+      clicked += 1;
+    }
+  }
+
+  if (clicked === 0) {
+    throw new Error(`Diagnostic option not found: ${optionNames.map(String).join(', ')}`);
+  }
+}
+
+async function fillDiagnosticTextItems(page: Page) {
+  const textareas = page.locator('textarea');
+  const count = await textareas.count();
+  for (let index = 0; index < count; index += 1) {
+    await textareas.nth(index).fill(universalDiagnosticTextAnswer);
+  }
+}
+
 async function answerMobileDiagnostic(page: Page) {
-  await page.getByRole('button', { name: /B\. They have become flexible learning hubs/ }).click();
-  await page.getByRole('button', { name: /C\. Join the online workshop/ }).click();
-  await page.getByRole('button', { name: /A\. suitable/ }).click();
-  await page.getByRole('button', { name: /C\. to review/ }).click();
-  await page.getByLabel('翻译句法转换作答').fill(
-    'With the development of online learning, more college students can arrange their study time more flexibly.',
-  );
-  await page.getByLabel('写作结构与论证作答').fill(
-    'In my opinion, students can use AI tools wisely because they can receive quick feedback. For example, AI can point out grammar problems. However, students should revise the answer themselves.',
-  );
-  await page.getByLabel('口语连贯表达初筛作答').fill(
-    'One habit that helps me learn English is reading aloud every morning. It works because I can practice pronunciation. For example, I repeat useful sentences, so I become more confident.',
-  );
+  await clickDiagnosticOptions(page, [
+    /B\. They have become flexible learning hubs/,
+    /B\. Closing the book, recalling key ideas, and checking missed points/,
+    /C\. Keeping the main idea, one example, and one question/,
+  ]);
+  await clickDiagnosticOptions(page, [
+    /C\. Join the online workshop and submit outlines before Friday/,
+    /D\. Check his email and join the workshop online/,
+    /B\. Meet at one thirty in the café near the gate/,
+  ]);
+  await clickDiagnosticOptions(page, [/A\. suitable/, /B\. accessible/, /C\. relevant/]);
+  await clickDiagnosticOptions(page, [/C\. to review$/, /B\. reviewing$/, /A\. write$/]);
+  await fillDiagnosticTextItems(page);
 }
 
 test('mobile viewport can reach the learning cockpit and launch disclosure', async ({ page }) => {
@@ -86,7 +128,10 @@ test('narrow phone reaches every primary workspace without horizontal clipping',
 
   await page.getByRole('button', { name: '设置' }).click();
   await expect(page.getByRole('heading', { name: '目标与计划设置' })).toBeVisible();
-  await expect(page.getByText('云端账号与团队协作')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '账户' })).toBeVisible();
+  await expect(page.getByText('同步与团队')).toBeVisible();
+  await expect(page.getByRole('button', { name: '同步到云端' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '从云端恢复' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 
@@ -104,12 +149,14 @@ test('narrow phone completes the responsive diagnostic layouts', async ({ page }
 
   await page.getByRole('button', { name: '进入真实诊断' }).click();
   await expect(page.getByRole('heading', { name: '真实小题诊断' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '播放听力材料' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '播放男女声听力材料' }).first()).toBeVisible();
   await answerMobileDiagnostic(page);
   await expectNoHorizontalOverflow(page);
 
-  await page.getByRole('button', { name: '提交诊断并生成画像' }).click();
-  await expect(page.getByRole('heading', { name: '您的能力画像已生成' })).toBeVisible({ timeout: 7_000 });
+  await page.getByRole('button', { name: '提交诊断并生成基线' }).click();
+  await expect(page.getByRole('heading', { name: '您的客观基线已生成' })).toBeVisible({ timeout: 7_000 });
+  await expect(page.getByTestId('diagnostic-nonofficial-notice')).toContainText('非官方诊断');
+  await expect(page.getByTestId('diagnostic-evidence-reading')).toContainText('证据');
   await expectNoHorizontalOverflow(page);
 });
 
@@ -131,6 +178,20 @@ test('narrow phone uses listening feedback and translation workstations', async 
   await page.getByRole('button', { name: '专项练习' }).click();
   await page.getByRole('button', { name: '开始翻译训练' }).click();
   await expect(page.getByRole('heading', { name: '段落翻译训练' })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
+test('narrow phone keeps vocabulary answer translations inside the viewport after submit', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 740 });
+  await registerAndEnterApp(page, 'mobile-vocabulary-translation');
+
+  await page.getByRole('button', { name: '专项练习' }).click();
+  await page.getByRole('button', { name: '开始单词练习' }).click();
+  await page.locator('article.ui-panel button').filter({ hasText: /^A\.|^B\.|^C\.|^D\./ }).first().click();
+  await page.getByRole('button', { name: '有把握' }).click();
+  await page.getByRole('button', { name: '提交词汇答案' }).click();
+  await expect(page.getByTestId('vocabulary-question-translation')).toBeVisible();
+  await expectLocatorWithinViewport(page, 'vocabulary-question-translation');
   await expectNoHorizontalOverflow(page);
 });
 

@@ -81,45 +81,6 @@ export const CET4_EXAM_PROFILE: ExamProfile = {
       ],
     },
     {
-      id: 'vocabulary',
-      name: '核心词汇',
-      skillArea: 'vocabulary',
-      durationMinutes: 12,
-      scoreWeight: 0,
-      questionTypes: [
-        {
-          id: 'cet4-core-vocabulary',
-          name: '词义辨析与听音识别',
-          answerMode: 'single-choice',
-          defaultTimeLimitSeconds: 45,
-          supportedReviewReasons: ['关键词漏听', '低信心', '盲猜'],
-        },
-      ],
-    },
-    {
-      id: 'grammar',
-      name: '语法与完形',
-      skillArea: 'grammar',
-      durationMinutes: 15,
-      scoreWeight: 0,
-      questionTypes: [
-        {
-          id: 'grammar-structure',
-          name: '语法结构与固定搭配',
-          answerMode: 'single-choice',
-          defaultTimeLimitSeconds: 60,
-          supportedReviewReasons: ['语法错误', '搭配错误', '时态语态错误', '低信心'],
-        },
-        {
-          id: 'cloze-choice',
-          name: '完形/选词填空语境判断',
-          answerMode: 'single-choice',
-          defaultTimeLimitSeconds: 60,
-          supportedReviewReasons: ['搭配错误', '中文干扰', '低信心', '盲猜'],
-        },
-      ],
-    },
-    {
       id: 'translation',
       name: '翻译',
       skillArea: 'translation',

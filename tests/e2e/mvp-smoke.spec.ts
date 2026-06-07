@@ -1,43 +1,81 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { CET4_VOCABULARY_BANK, VOCABULARY_SESSION_SIZE } from '../../src/data';
-import { CET4_MOCK_EXAM, CET4_MOCK_EXAM_BANK } from '../../src/questionBank';
+import {
+  CET4_GRAMMAR_PRACTICE_QUESTIONS,
+  CET4_LISTENING_PRACTICE_QUESTIONS,
+  CET4_MOCK_EXAM,
+  CET4_MOCK_EXAM_BANK,
+  CET4_READING_BANK,
+  CET4_WRITING_PROMPT_BANK,
+} from '../../src/questionBank';
 import { registerAndEnterApp, registerApiAccount } from './helpers/auth';
 
+const universalDiagnosticTextAnswer =
+  'With the development of online learning, more college students can arrange their study time flexibly. To reduce exam pressure, students should divide review tasks into several small steps. In my opinion, regular review and AI tools are useful because students can get feedback. For example, I often make grammar mistakes in English practice, so next time I will correct them carefully and explain my answer more naturally.';
+
+async function clickDiagnosticOptions(page: Page, optionNames: RegExp[]) {
+  let clicked = 0;
+  for (const optionName of optionNames) {
+    const options = page.getByRole('button', { name: optionName });
+    const count = await options.count();
+    for (let index = 0; index < count; index += 1) {
+      await options.nth(index).click();
+      clicked += 1;
+    }
+  }
+
+  if (clicked === 0) {
+    throw new Error(`Diagnostic option not found: ${optionNames.map(String).join(', ')}`);
+  }
+}
+
+async function fillDiagnosticTextItems(page: Page) {
+  const textareas = page.locator('textarea');
+  const count = await textareas.count();
+  for (let index = 0; index < count; index += 1) {
+    await textareas.nth(index).fill(universalDiagnosticTextAnswer);
+  }
+}
+
 async function answerOnboardingDiagnostic(page: Page) {
-  await page.getByRole('button', { name: /A\. They mainly protect old books/ }).click();
-  await page.getByRole('button', { name: /C\. Join the online workshop/ }).click();
-  await page.getByRole('button', { name: /A\. suitable/ }).click();
-  await page.getByRole('button', { name: /C\. to review/ }).click();
-  await page.getByLabel('翻译句法转换作答').fill(
-    'With the development of online learning, more college students can arrange their study time more flexibly.',
-  );
-  await page.getByLabel('写作结构与论证作答').fill(
-    'In my opinion, students can use AI tools wisely because they can receive quick feedback. For example, when I write an English paragraph, AI can point out grammar problems and suggest better expressions. However, students should revise the answer themselves instead of copying it.',
-  );
-  await page.getByLabel('口语连贯表达初筛作答').fill(
-    'One habit that helps me learn English is reading aloud every morning. It works because I can practice pronunciation and remember useful expressions. For example, I repeat one short paragraph three times, so I become more confident.',
-  );
+  await clickDiagnosticOptions(page, [
+    /A\. They mainly protect old books/,
+    /A\. Reading notes passively/,
+    /A\. Copying the full lecture word for word/,
+  ]);
+  await clickDiagnosticOptions(page, [
+    /C\. Join the online workshop/,
+    /D\. Check his email and join the workshop online/,
+    /B\. Meet at one thirty in the café near the gate/,
+  ]);
+  await clickDiagnosticOptions(page, [/A\. suitable/, /B\. accessible/, /C\. relevant/]);
+  await clickDiagnosticOptions(page, [/C\. to review$/, /B\. reviewing$/, /A\. write$/]);
+  await fillDiagnosticTextItems(page);
 }
 
 async function answerGrammarWeakDiagnostic(page: Page) {
-  await page.getByRole('button', { name: /B\. They have become flexible learning hubs/ }).click();
-  await page.getByRole('button', { name: /C\. Join the online workshop/ }).click();
-  await page.getByRole('button', { name: /A\. suitable/ }).click();
-  await page.getByRole('button', { name: /A\. review$/ }).click();
-  await page.getByLabel('翻译句法转换作答').fill(
-    'With the development of online learning, more college students can arrange their study time more flexibly.',
-  );
-  await page.getByLabel('写作结构与论证作答').fill(
-    'In my opinion, students can use AI tools wisely because they can receive quick feedback. For example, AI can point out grammar problems and suggest better expressions. However, students should revise the answer themselves instead of copying it.',
-  );
-  await page.getByLabel('口语连贯表达初筛作答').fill(
-    'One habit that helps me learn English is reading aloud every morning. It works because I can practice pronunciation and remember useful expressions. For example, I repeat one paragraph three times, so I become more confident.',
-  );
+  await clickDiagnosticOptions(page, [
+    /B\. They have become flexible learning hubs/,
+    /B\. Closing the book, recalling key ideas, and checking missed points/,
+    /C\. Keeping the main idea, one example, and one question/,
+  ]);
+  await clickDiagnosticOptions(page, [
+    /C\. Join the online workshop and submit outlines before Friday/,
+    /D\. Check his email and join the workshop online/,
+    /B\. Meet at one thirty in the café near the gate/,
+  ]);
+  await clickDiagnosticOptions(page, [/A\. suitable/, /B\. accessible/, /C\. relevant/]);
+  await clickDiagnosticOptions(page, [/A\. review$/, /B\. writing$/]);
+  await fillDiagnosticTextItems(page);
 }
 
 async function resetLocalLearningData(page: Page) {
   await page.evaluate(async () => {
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith('english-training-cabin:practice-draft'))
+      .forEach((key) => localStorage.removeItem(key));
+
     function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
       return new Promise((resolve, reject) => {
         request.onsuccess = () => resolve(request.result);
@@ -67,6 +105,10 @@ async function resetLocalLearningData(page: Page) {
 }
 
 async function installSpeechSynthesisMock(page: Page) {
+  await page.route('**/api/practice/tts', async (route) => {
+    await route.abort('failed');
+  });
+
   await page.addInitScript(() => {
     const calls: string[] = [];
     (window as any).__speechSynthesisCalls = calls;
@@ -77,16 +119,95 @@ async function installSpeechSynthesisMock(page: Page) {
       this.onend = null;
       this.onerror = null;
     };
+    let endTimer: number | undefined;
+    let activeUtterance: any = null;
     Object.defineProperty(window, 'speechSynthesis', {
       configurable: true,
       value: {
-        cancel() {},
+        speaking: false,
+        paused: false,
+        cancel() {
+          if (endTimer) window.clearTimeout(endTimer);
+          endTimer = undefined;
+          activeUtterance = null;
+          this.speaking = false;
+          this.paused = false;
+        },
+        pause() {
+          if (!this.speaking) return;
+          this.speaking = false;
+          this.paused = true;
+        },
+        resume() {
+          if (!this.paused) return;
+          this.speaking = true;
+          this.paused = false;
+        },
         getVoices() {
           return [];
         },
+        addEventListener() {},
+        removeEventListener() {},
         speak(utterance: any) {
           calls.push(String(utterance.text ?? ''));
-          window.setTimeout(() => utterance.onend?.(new Event('end')), 0);
+          activeUtterance = utterance;
+          this.speaking = true;
+          this.paused = false;
+          endTimer = window.setTimeout(() => {
+            if (this.paused || activeUtterance !== utterance) return;
+            this.speaking = false;
+            activeUtterance = null;
+            utterance.onend?.(new Event('end'));
+          }, 5_000);
+        },
+      },
+    });
+  });
+}
+
+async function installFailingSpeechSynthesisMock(page: Page) {
+  await page.route('**/api/practice/tts', async (route) => {
+    await route.fulfill({
+      status: 501,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'practice_tts_unavailable' }),
+    });
+  });
+
+  await page.addInitScript(() => {
+    const calls: string[] = [];
+    (window as any).__speechSynthesisCalls = calls;
+    (window as any).SpeechSynthesisUtterance = function MockSpeechSynthesisUtterance(this: any, text: string) {
+      this.text = text;
+      this.lang = '';
+      this.rate = 1;
+      this.voice = null;
+      this.onend = null;
+      this.onerror = null;
+    };
+    Object.defineProperty(window, 'speechSynthesis', {
+      configurable: true,
+      value: {
+        speaking: false,
+        paused: false,
+        cancel() {
+          this.speaking = false;
+          this.paused = false;
+        },
+        pause() {
+          return undefined;
+        },
+        resume() {
+          return undefined;
+        },
+        getVoices() {
+          return [];
+        },
+        addEventListener() {},
+        removeEventListener() {},
+        speak(utterance: any) {
+          calls.push(String(utterance.text ?? ''));
+          utterance.onerror?.({ error: 'synthesis-failed' });
         },
       },
     });
@@ -109,9 +230,18 @@ test('MVP critical reading flow persists local learning evidence', async ({ page
   await page.getByRole('button', { name: /开始仔细阅读训练/ }).first().click();
 
   for (let index = 0; index < 5; index += 1) {
+    await expect(page.getByTestId('reading-post-answer-support')).toHaveCount(0);
+    await expect(page.getByTestId('reading-question-translation')).toHaveCount(0);
+    await expect(page.getByTestId('reading-option-translation-A')).toHaveCount(0);
+    await expect(page.getByTestId('reading-sentence-translation')).toHaveCount(0);
     await page.getByRole('button', { name: /^A / }).click();
     await page.getByText('非常有把握').click();
     await page.getByRole('button', { name: '提交此题并查看错因诊断' }).click();
+    await expect(page.getByTestId('reading-post-answer-support')).toBeVisible();
+    await expect(page.getByTestId('reading-question-translation')).toBeVisible();
+    await expect(page.getByTestId('reading-question-translation')).not.toContainText('正确答案和定位解析提交后公布');
+    await expect(page.getByTestId('reading-option-translation-A')).toBeVisible();
+    await expect(page.getByTestId('reading-sentence-translation')).toBeVisible();
     await page.getByRole('button', { name: index === 4 ? /完成训练/ : /进入第/ }).click();
   }
 
@@ -147,17 +277,29 @@ test('MVP critical reading flow persists local learning evidence', async ({ page
   expect(counts.reviewItems).toBeGreaterThan(0);
   expect(counts.skillProfiles).toBe(1);
 
+  const readingQuestionTotal = CET4_READING_BANK.reduce((sum, passage) => sum + passage.questions.length, 0);
+  await page.getByRole('button', { name: '专项练习' }).click();
+  await expect(page.getByText(`已练 5/${readingQuestionTotal}`)).toBeVisible();
+  await expect(page.getByText(`${CET4_READING_BANK.length} 组材料 / ${readingQuestionTotal} 题`)).toBeVisible();
+  await page.getByTestId('practice-module-select-reading').click();
+  await expect(page.getByTestId('practice-question-status-reading')).toContainText(`已答 5 / ${readingQuestionTotal}`);
+  await expect(page.getByTestId('practice-question-status-reading')).toContainText(`未答 ${readingQuestionTotal - 5}`);
+  await expect(page.getByTestId('practice-question-status-reading-1')).toHaveAttribute('aria-label', /已答/);
+  await expect(page.getByTestId('practice-question-status-reading-6')).toHaveAttribute('aria-label', /未答/);
+  const sixthReadingQuestion = CET4_READING_BANK
+    .flatMap((passage) => passage.questions)
+    .at(5);
+  expect(sixthReadingQuestion).toBeTruthy();
+  await page.getByTestId('practice-question-status-reading-6').click();
+  await expect(page.getByText(sixthReadingQuestion!.question)).toBeVisible();
+  await page.getByTestId('reading-back-to-practice').click();
+
   await page.getByRole('button', { name: '复习队列' }).click();
-  await page.getByRole('button', { name: '开始复习' }).click();
-  await expect(page.getByRole('heading', { name: '第 1 步：主动回忆' })).toBeVisible();
-  await page.getByTestId('review-recall-answer').fill('I remember the key sentence and the mistake reason.');
-  await page.getByRole('button', { name: /完成主动回忆，进入挖空/ }).click();
-  await expect(page.getByRole('heading', { name: '第 2 步：挖空补全' })).toBeVisible();
-  await page.getByTestId('review-cloze-answer').fill('key phrase');
-  await page.getByRole('button', { name: /完成挖空，进入输出/ }).click();
-  await expect(page.getByRole('heading', { name: '第 3 步：语境化输出' })).toBeVisible();
-  await page.getByTestId('review-production-answer').fill('Active recall improves long-term learning when students use it in context.');
-  await page.getByRole('button', { name: /完成复习并安排下次间隔/ }).click();
+  await expect(page.getByRole('heading', { name: '复习队列' })).toBeVisible();
+  await expect(page.getByTestId('review-direct-card')).toBeVisible();
+  await page.getByTestId('review-redo-choice-A').click();
+  await expect(page.getByTestId('review-direct-feedback')).toBeVisible();
+  await page.getByTestId('review-outcome-mastered').click();
   await expect(page.getByRole('heading', { name: '复习队列' })).toBeVisible();
 
   const reviewedEvidence = await page.evaluate(async () => {
@@ -193,22 +335,179 @@ test('MVP critical reading flow persists local learning evidence', async ({ page
   });
   expect(reviewedEvidence.reviewSession).toMatchObject({
     moduleId: 'review',
-    modeId: 'active-recall-cloze-production',
+    modeId: 'wrong-question-redo-active-recall',
     status: 'completed',
   });
   expect(reviewedEvidence.reviewAttempt).toMatchObject({
     moduleId: 'review',
-    questionTypeId: 'active-recall-cloze-production',
-    isCorrect: true,
+    questionTypeId: 'wrong-question-redo-active-recall',
   });
-  expect(reviewedEvidence.reviewAttempt.answer).toMatchObject({
-    recallAnswer: 'I remember the key sentence and the mistake reason.',
-    clozeAnswer: 'key phrase',
-    productionAnswer: 'Active recall improves long-term learning when students use it in context.',
+  expect(reviewedEvidence.reviewAttempt.answer.redoAnswer).toBe('A');
+  expect(reviewedEvidence.reviewAttempt.answer.redoPrompt).toBeTruthy();
+  expect(typeof reviewedEvidence.reviewAttempt.answer.redoCorrect).toBe('boolean');
+  expect(reviewedEvidence.reviewAttempt.answer.recallAnswer).toContain('我错在');
+  expect(reviewedEvidence.reviewAttempt.answer.clozeAnswer).toBeTruthy();
+  expect(reviewedEvidence.reviewAttempt.answer.reviewOutcome).toBe('mastered');
+  expect(reviewedEvidence.reviewAttempt.answer.productionAnswer).toContain('本次自评：已掌握');
+});
+
+test('unfinished reading practice resumes from the saved draft position', async ({ page }) => {
+  await registerAndEnterApp(page, 'mvp-reading-draft');
+  await resetLocalLearningData(page);
+  await page.reload();
+  const readingQuestionTotal = CET4_READING_BANK.reduce((sum, passage) => sum + passage.questions.length, 0);
+
+  await page.getByRole('button', { name: '专项练习' }).click();
+  await page.getByRole('button', { name: /开始仔细阅读训练/ }).first().click();
+
+  await page.getByRole('button', { name: /^A / }).click();
+  await page.getByText('非常有把握').click();
+  await page.getByRole('button', { name: /提交此题/ }).click();
+  await page.getByRole('button', { name: /进入第/ }).click();
+  await page.getByRole('button', { name: /返回专项练习/ }).click();
+
+  await page.getByRole('button', { name: /开始仔细阅读训练/ }).first().click();
+  await expect(page.getByText('已恢复第 2 题')).toBeVisible();
+
+  await page.getByTestId('reading-back-to-practice').click();
+  await expect(page.getByTestId('practice-module-progress-reading')).toContainText(`1/${readingQuestionTotal}`);
+
+  const draft = await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((item) => item.startsWith('english-training-cabin:practice-draft:reading:'));
+    return key ? JSON.parse(localStorage.getItem(key) ?? 'null') : null;
+  });
+  expect(draft).toMatchObject({
+    currentIdx: 1,
+    isSubmitted: false,
   });
 });
 
-test('review gate blocks new practice until the daily spaced-review minimum is completed', async ({ page }) => {
+test('unfinished vocabulary and listening practice resume from saved drafts', async ({ page }) => {
+  await installSpeechSynthesisMock(page);
+  await registerAndEnterApp(page, 'mvp-specialty-drafts');
+  await resetLocalLearningData(page);
+  await page.reload();
+  const listeningQuestionTotal = CET4_LISTENING_PRACTICE_QUESTIONS
+    .filter((question) => question.questionTypeId === 'long-conversation')
+    .length;
+
+  await page.getByRole('button', { name: '专项练习' }).click();
+  await page.getByRole('button', { name: '开始单词练习' }).click();
+  await expect(page.getByTestId('vocabulary-post-answer-support')).toHaveCount(0);
+  await expect(page.getByTestId('vocabulary-question-translation')).toHaveCount(0);
+  await expect(page.getByTestId('vocabulary-option-translation-A')).toHaveCount(0);
+  await expect(page.getByTestId('vocabulary-sentence-translation')).toHaveCount(0);
+    await page.getByRole('button', { name: /^A\. / }).click();
+    await page.getByRole('button', { name: '有把握' }).click();
+    await page.getByRole('button', { name: '提交词汇答案' }).click();
+    await expect(page.getByTestId('vocabulary-post-answer-support')).toBeVisible();
+    await expect(page.getByTestId('vocabulary-question-translation')).toBeVisible();
+    await expect(page.getByTestId('vocabulary-question-translation')).toContainText('听单词和例句后，选择最准确的英文释义');
+    await expect(page.getByTestId('vocabulary-option-translation-A')).toBeVisible();
+    await expect(page.getByRole('button', { name: /^A\. / })).toContainText('中文：');
+    await expect(page.getByTestId('vocabulary-sentence-translation')).toBeVisible();
+    await page.getByRole('button', { name: '进入下一个单词' }).click();
+  await page.getByRole('button', { name: '返回专项练习' }).click();
+
+  await page.getByRole('button', { name: '开始单词练习' }).click();
+  await expect(page.getByText('已恢复到第 1 组 / 第 2 个')).toBeVisible();
+  await page.getByRole('button', { name: '返回专项练习' }).click();
+
+  await page.getByRole('button', { name: '开始听力训练' }).click();
+  await expect(page.getByTestId('listening-post-answer-support')).toHaveCount(0);
+  await expect(page.getByTestId('listening-question-translation')).toHaveCount(0);
+  await expect(page.getByTestId('listening-option-translation-A')).toHaveCount(0);
+  await expect(page.getByTestId('listening-sentence-translation')).toHaveCount(0);
+  await page.getByRole('button', { name: /^A / }).first().click();
+  await page.getByRole('button', { name: '高' }).click();
+  await page.getByRole('button', { name: '提交答案' }).click();
+  await expect(page.getByTestId('listening-post-answer-support')).toBeVisible();
+  await expect(page.getByTestId('listening-question-translation')).toBeVisible();
+  await expect(page.getByTestId('listening-question-translation')).not.toContainText('正确答案和错因解析提交后公布');
+  await expect(page.getByTestId('listening-option-translation-A')).toBeVisible();
+  await expect(page.getByTestId('listening-sentence-translation')).toBeVisible();
+  await page.getByRole('button', { name: '下一题' }).click();
+  await page.getByRole('button', { name: '返回专项练习' }).click();
+
+  await page.getByRole('button', { name: '开始听力训练' }).click();
+  await expect(page.getByText('已恢复第 2 题')).toBeVisible();
+
+  await page.getByTestId('listening-back-to-practice').click();
+  await expect(page.getByTestId('practice-module-progress-vocabulary')).toContainText(`1/${CET4_VOCABULARY_BANK.length}`);
+  await expect(page.getByTestId('practice-module-progress-listening')).toContainText(`1/${listeningQuestionTotal}`);
+
+  const drafts = await page.evaluate(() => {
+    const readDraft = (suffix: string) => {
+      const key = Object.keys(localStorage).find((item) => item.endsWith(suffix));
+      return key ? JSON.parse(localStorage.getItem(key) ?? 'null') : null;
+    };
+    return {
+      vocabulary: readDraft(':vocabulary'),
+      listening: readDraft(':listening-long-conversation'),
+    };
+  });
+  expect(drafts.vocabulary).toMatchObject({ packIndex: 0, currentIdx: 1 });
+  expect(drafts.listening).toMatchObject({ currentQuestionIndex: 1 });
+});
+
+test('practice question status numbers open the selected module question', async ({ page }) => {
+  await installSpeechSynthesisMock(page);
+  await registerAndEnterApp(page, 'mvp-practice-status-jump');
+  await resetLocalLearningData(page);
+  await page.reload();
+
+  await page.getByRole('button', { name: '专项练习' }).click();
+
+  await page.getByTestId('practice-module-select-vocabulary').click();
+  await page.getByTestId('practice-question-status-vocabulary-2').click();
+  await expect(page.getByRole('heading', { name: CET4_VOCABULARY_BANK[1].word })).toBeVisible();
+  await page.getByTestId('vocabulary-back-to-practice').click();
+
+  await page.getByTestId('practice-module-select-listening').click();
+  await page.getByTestId('practice-question-status-listening-2').click();
+  await expect(page.getByText('Question 2')).toBeVisible();
+  await page.getByTestId('listening-back-to-practice').click();
+
+  await page.getByTestId('practice-module-select-grammar').click();
+  await page.getByTestId('practice-question-status-grammar-2').click();
+  await expect(page.getByText(CET4_GRAMMAR_PRACTICE_QUESTIONS[1].prompt)).toBeVisible();
+  await page.getByTestId('reading-back-to-practice').click();
+
+  await page.getByTestId('practice-module-select-writing').click();
+  await page.getByTestId('practice-question-status-writing-2').click();
+  await expect(page.getByText(CET4_WRITING_PROMPT_BANK[1].title, { exact: true })).toBeVisible();
+});
+
+/* test.skip('practice hub reflects in-progress draft counts before a module is fully completed', async ({ page }) => {
+  await installSpeechSynthesisMock(page);
+  await registerAndEnterApp(page, 'mvp-practice-draft-progress');
+  await resetLocalLearningData(page);
+  await page.reload();
+
+  const listeningQuestionTotal = CET4_LISTENING_PRACTICE_QUESTIONS
+    .filter((question) => question.questionTypeId === 'long-conversation')
+    .length;
+
+  await page.getByRole('button', { name: '涓撻項缁冧範' }).click();
+  await page.getByTestId('practice-module-action-vocabulary').click();
+  await page.locator('article.ui-panel button').filter({ hasText: /^A\.|^B\.|^C\.|^D\./ }).first().click();
+  await page.getByRole('button', { name: '鏈夋妸鎻? }).click();
+  await page.locator('article.ui-panel').getByRole('button', { name: /鎻愪氦/ }).click();
+  await page.locator('article.ui-panel').getByRole('button', { name: /涓嬩竴/ }).click();
+  await page.locator('header button').first().click();
+  await expect(page.getByTestId('practice-module-progress-vocabulary')).toContainText(`1/${CET4_VOCABULARY_BANK.length}`);
+
+  await page.getByTestId('practice-module-action-listening').click();
+  await page.getByRole('button', { name: /^A / }).first().click();
+  await page.locator('div.grid.w-full.grid-cols-3 button').last().click();
+  await page.getByRole('button', { name: /鎻愪氦/ }).click();
+  await expect(page.getByTestId('listening-sentence-translation')).toBeVisible();
+  await page.getByRole('button', { name: /涓嬩竴/ }).click();
+  await page.locator('header button').first().click();
+  await expect(page.getByTestId('practice-module-progress-listening')).toContainText(`1/${listeningQuestionTotal}`);
+}); */
+
+test('due review reminder does not block grammar practice', async ({ page }) => {
   await registerAndEnterApp(page, 'mvp-review-gate');
   await resetLocalLearningData(page);
   await page.reload();
@@ -230,7 +529,7 @@ test('review gate blocks new practice until the daily spaced-review minimum is c
     const tx = db.transaction(['reviewItems'], 'readwrite');
     await requestToPromise(tx.objectStore('reviewItems').put({
       id: 'gate-review-1',
-      title: '同义替换错因强制复习',
+      title: '同义替换错因复习',
       category: '错题',
       detail: '先用自己的话回忆同义替换线索，再进入新题训练。',
       daysAgo: 0,
@@ -244,28 +543,29 @@ test('review gate blocks new practice until the daily spaced-review minimum is c
       reviewIntervalDays: 1,
       nextReviewAt: new Date(Date.now() - 86_400_000).toISOString(),
       createdAt: new Date().toISOString(),
+      redoQuestion: {
+        kind: 'single-choice',
+        prompt: 'Which option best matches the passage?',
+        options: {
+          A: 'The correct paraphrase',
+          B: 'The previous wrong choice',
+        },
+        correctAnswer: 'A',
+        userAnswer: 'B',
+      },
+      learningMethod: 'wrong-question-redo-active-recall',
     }));
     db.close();
   });
 
   await page.reload();
   await expect(page.getByTestId('review-gate-banner')).toBeVisible();
-
-  await page.getByRole('button', { name: '专项练习' }).click();
-  await expect(page.getByRole('heading', { name: /先完成到期复习/ })).toBeVisible();
-  await page.getByRole('button', { name: '开始强制复习' }).click();
-  await expect(page.getByTestId('review-gate-status')).toBeVisible();
-
-  await page.getByRole('button', { name: '开始复习' }).click();
-  await page.getByTestId('review-recall-answer').fill('I remember the synonym replacement mistake.');
-  await page.getByRole('button', { name: /完成主动回忆，进入挖空/ }).click();
-  await page.getByTestId('review-cloze-answer').fill('synonym replacement');
-  await page.getByRole('button', { name: /完成挖空，进入输出/ }).click();
-  await page.getByTestId('review-production-answer').fill('I will locate synonym replacement before choosing the answer.');
-  await page.getByRole('button', { name: /完成复习并安排下次间隔/ }).click();
+  await expect(page.getByTestId('review-gate-banner')).toContainText('不会阻止你进入语法');
 
   await page.getByRole('button', { name: '专项练习' }).click();
   await expect(page.getByRole('heading', { name: /专项练习/ })).toBeVisible();
+  await page.getByRole('button', { name: '开始语法训练' }).click();
+  await expect(page.getByRole('heading', { name: '语法与完形填空训练舱' })).toBeVisible();
 });
 
 test('listening practice starts automatic speech playback', async ({ page }) => {
@@ -285,6 +585,7 @@ test('listening practice starts automatic speech playback', async ({ page }) => 
 });
 
 test('MVP critical speaking retell flow persists review and ability evidence', async ({ page }) => {
+  await installSpeechSynthesisMock(page);
   await page.route('**/api/ai/analyze-speech', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
@@ -314,6 +615,12 @@ test('MVP critical speaking retell flow persists review and ability evidence', a
 
   await expect(page.getByRole('heading', { name: /口语重说 - AI 反馈与改写/ })).toBeVisible();
   await expect(page.getByText('renewable energy facilities')).toBeVisible();
+  await page.getByRole('button', { name: '朗读改写版本' }).click();
+  await expect(page.getByRole('button', { name: '暂停朗读' })).toBeVisible();
+  await page.getByRole('button', { name: '暂停朗读' }).click();
+  await expect(page.getByRole('button', { name: '继续朗读' })).toBeVisible();
+  await page.getByRole('button', { name: '继续朗读' }).click();
+  await expect(page.getByRole('button', { name: '暂停朗读' })).toBeVisible();
   await page.getByRole('button', { name: '开始第二次重说' }).click();
   await expect(page.getByText('第二次重说转写')).toBeVisible();
   await page.locator('textarea').fill('The picture shows renewable energy facilities, which can reduce pollution and support sustainable development.');
@@ -354,6 +661,7 @@ test('MVP critical speaking retell flow persists review and ability evidence', a
 });
 
 test('onboarding diagnostic persists the initial ability portrait before entering daily training', async ({ page }) => {
+  await installSpeechSynthesisMock(page);
   await registerAndEnterApp(page, 'mvp-diagnostic');
   await resetLocalLearningData(page);
   await page.reload();
@@ -369,14 +677,33 @@ test('onboarding diagnostic persists the initial ability portrait before enterin
   await page.getByRole('button', { name: '开始诊断' }).click();
   await page.getByRole('button', { name: '进入真实诊断' }).click();
   await expect(page.getByRole('heading', { name: '真实小题诊断' })).toBeVisible();
+  await expect(page.getByTestId('diagnostic-speaking-start-recording')).toBeVisible();
+  await expect(page.getByText('录音只保存在当前页面')).toBeVisible();
+  await expect(page.getByTestId('diagnostic-listening-voice-status').first()).toBeVisible();
+  await expect(page.getByTestId('diagnostic-unanswered-warning')).toContainText('还有 11 题未作答');
+  await expect(page.getByRole('button', { name: '提交诊断并生成基线' })).toBeEnabled();
+  await expect(page.getByText('中文辅助')).toHaveCount(0);
+  await expect(page.getByText('中文题意')).toHaveCount(0);
+  await page.getByRole('button', { name: '播放男女声听力材料' }).first().click();
+  await expect(page.getByRole('button', { name: '暂停男女声听力材料' })).toBeVisible();
+  await page.getByRole('button', { name: '暂停男女声听力材料' }).click();
+  await expect(page.getByRole('button', { name: '继续男女声听力材料' })).toBeVisible();
+  await page.getByRole('button', { name: '继续男女声听力材料' }).click();
+  await expect(page.getByRole('button', { name: '暂停男女声听力材料' })).toBeVisible();
   await page.getByRole('button', { name: '上一步' }).click();
   await expect(page.getByRole('heading', { name: '学习目标设置' })).toBeVisible();
   await page.getByRole('button', { name: '进入真实诊断' }).click();
   await answerOnboardingDiagnostic(page);
-  await page.getByRole('button', { name: '提交诊断并生成画像' }).click();
+  await page.getByRole('button', { name: '提交诊断并生成基线' }).click();
 
-  await expect(page.getByRole('heading', { name: '您的能力画像已生成' })).toBeVisible({ timeout: 7_000 });
+  await expect(page.getByRole('heading', { name: '您的客观基线已生成' })).toBeVisible({ timeout: 7_000 });
+  await expect(page.getByTestId('diagnostic-nonofficial-notice')).toContainText('非官方诊断');
+  await expect(page.getByTestId('diagnostic-nonofficial-notice')).toContainText('有效客观证据');
+  await expect(page.getByTestId('diagnostic-post-answer-support')).toContainText('答后中文辅助与解析');
+  await expect(page.getByRole('button', { name: '返回修改答案' })).toHaveCount(0);
   await expect(page.getByTestId('diagnostic-score-reading')).toContainText('42');
+  await expect(page.getByTestId('diagnostic-evidence-reading')).toContainText('证据 2/2');
+  await expect(page.getByTestId('diagnostic-next-action-reading')).toContainText('下一步');
   await page.getByRole('button', { name: /开启今日训练/ }).click();
   await expect(page.getByRole('heading', { name: '今日训练' })).toBeVisible();
   await expect(page.getByText(/阅读|复习|同义替换|入门诊断/).first()).toBeVisible();
@@ -410,12 +737,12 @@ test('onboarding diagnostic persists the initial ability portrait before enterin
     dailyMinutes: 45,
   });
   expect(result.sessions).toBe(1);
-  expect(result.attempts).toBe(7);
+  expect(result.attempts).toBe(11);
   expect(result.reviewItems).toBeGreaterThanOrEqual(1);
-  expect(result.skillProfiles).toHaveLength(7);
+  expect(result.skillProfiles).toHaveLength(4);
   expect(result.skillProfiles.find((profile: { skillArea: string }) => profile.skillArea === 'reading')).toMatchObject({
     score: 42,
-    evidenceCount: 1,
+    evidenceCount: 2,
   });
 });
 
@@ -428,9 +755,9 @@ test('diagnostic weakness updates the daily primary task and routes into the mat
   await page.getByRole('button', { name: '开始诊断' }).click();
   await page.getByRole('button', { name: '进入真实诊断' }).click();
   await answerGrammarWeakDiagnostic(page);
-  await page.getByRole('button', { name: '提交诊断并生成画像' }).click();
+  await page.getByRole('button', { name: '提交诊断并生成基线' }).click();
 
-  await expect(page.getByRole('heading', { name: '您的能力画像已生成' })).toBeVisible({ timeout: 7_000 });
+  await expect(page.getByRole('heading', { name: '您的客观基线已生成' })).toBeVisible({ timeout: 7_000 });
   await expect(page.getByTestId('diagnostic-score-grammar')).toContainText('42');
   await page.getByRole('button', { name: /开启今日训练/ }).click();
 
@@ -445,12 +772,13 @@ test('diagnostic weakness updates the daily primary task and routes into the mat
 });
 
 test('target exam filters visible question bank and mock exam guides incomplete submissions', async ({ page }) => {
+  await installSpeechSynthesisMock(page);
   await registerAndEnterApp(page, 'mvp-ui-logic');
   await resetLocalLearningData(page);
   await page.reload();
 
   await page.getByRole('button', { name: '专项练习' }).click();
-  await expect(page.getByText('大学英语四级 专项训练工作台')).toBeVisible();
+  await expect(page.getByText('大学英语四级 专项训练')).toBeVisible();
   await expect(page.getByText('题库范围')).toBeVisible();
   await expect(page.getByText('大学英语四级 · 原创模拟')).toBeVisible();
   await expect(page.getByText('学位英语结构')).toHaveCount(0);
@@ -464,7 +792,59 @@ test('target exam filters visible question bank and mock exam guides incomplete 
   await expect(paperSelect).toContainText(CET4_MOCK_EXAM_BANK[0].title);
   await chooseComboboxOption(page, '选择模拟卷', new RegExp(CET4_MOCK_EXAM_BANK[1].title));
   await expect(page.getByRole('heading', { name: CET4_MOCK_EXAM_BANK[1].title })).toBeVisible();
+  await expect(page.getByTestId('local-real-paper-panel')).toHaveCount(0);
+  await expect(page.getByTestId('mock-page-mode-standard')).toHaveAttribute('aria-pressed', 'true');
 
+  await page.getByTestId('mock-page-mode-real').click();
+  await expect(page.getByRole('heading', { name: '本地真题自练' })).toBeVisible();
+  await expect(page.getByTestId('mock-page-mode-real')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('mock-page-mode-standard')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByTestId('local-real-paper-panel')).toContainText('本地真题 PDF 卷');
+  await expect(page.getByTestId('local-real-paper-count')).toContainText(/当前 \d+ 套|正在扫描/);
+  await expect(page.getByTestId('local-real-paper-selected-resources')).toContainText('PDF 可看');
+  await expect(page.getByTestId('local-real-paper-page-status')).toContainText(/页面可做|页面转换中|仅 PDF 可看/);
+  await expect(page.getByTestId('local-real-paper-answer-status')).toContainText(/有答案|AI 参考答案|缺答案/);
+  await expect(page.getByTestId('local-real-paper-audio-status')).toContainText(/有原音频|TTS 音频|浏览器朗读|缺音频/);
+  if (process.env.E2E_REQUIRE_LOCAL_REAL_PAPERS === 'true') {
+    await expect(page.getByTestId('local-real-paper-count')).toContainText('当前 57 套');
+    await expect(page.getByTestId('local-real-paper-panel')).toContainText('2025 年 12 月英语四级真题（第 1 套）');
+    await expect(page.getByTestId('local-real-paper-answer-status')).toContainText('有答案');
+    await expect(page.getByTestId('local-real-paper-audio-status')).toContainText(/TTS 音频|浏览器朗读/);
+  } else {
+    await expect(page.getByTestId('local-real-paper-panel')).toContainText(
+      /2025 年 12 月英语四级真题（第 1 套）|2023 年 6 月英语四级真题（第 1 套）/,
+    );
+  }
+  await expect(page.getByTestId('local-real-paper-content')).toContainText('页面版真题');
+  await expect(page.getByTestId('local-real-paper-content')).toContainText(/Part I Writing|写作/, { timeout: 20_000 });
+  const localRealPaperAudioStatus = await page.getByTestId('local-real-paper-audio-status').textContent();
+  if (/有原音频|TTS 音频/.test(localRealPaperAudioStatus ?? '')) {
+    await expect(page.getByTestId('local-real-paper-play-audio')).toBeVisible();
+    await expect(page.getByTestId('local-real-paper-audio')).toBeVisible();
+    await expect(page.getByTestId('local-real-paper-open-audio')).toBeVisible();
+  } else {
+    await expect(page.getByTestId('local-real-paper-speak-reference')).toBeVisible();
+    await expect(page.getByTestId('local-real-paper-speak-reference')).toBeEnabled();
+  }
+  await page.getByRole('button', { name: '二、听力' }).click();
+  await expect(page.getByTestId('local-real-paper-question-1')).toBeVisible();
+  await expect(page.getByTestId('local-real-paper-question-1')).toContainText(/A\./);
+  await page.getByTestId('local-real-paper-choice-listening-1-A').click();
+  await expect(page.getByTestId('local-real-paper-choice-listening-1-A')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('local-real-paper-answer-progress')).toContainText(/选择题 1\/\d+/);
+  await page.getByRole('button', { name: '一、写作' }).click();
+  await page.getByTestId('local-real-paper-writing-answer').fill('This is my local real paper practice answer.');
+  await expect(page.getByTestId('local-real-paper-writing-answer')).toHaveValue('This is my local real paper practice answer.');
+
+  await page.getByTestId('mock-page-mode-standard').click();
+  await expect(page.getByRole('heading', { name: CET4_MOCK_EXAM_BANK[1].title })).toBeVisible();
+  await page.getByTestId('mock-section-listening').click();
+  await page.getByRole('button', { name: '播放听力材料' }).click();
+  await expect(page.getByRole('button', { name: '暂停听力材料' })).toBeVisible();
+  await page.getByRole('button', { name: '暂停听力材料' }).click();
+  await expect(page.getByRole('button', { name: '继续听力材料' })).toBeVisible();
+  await page.getByRole('button', { name: '继续听力材料' }).click();
+  await expect(page.getByRole('button', { name: '暂停听力材料' })).toBeVisible();
   await page.getByTestId('mock-section-review').click();
   await expect(page.getByRole('heading', { name: '提交前检查' })).toBeVisible();
   await expect(page.getByTestId('mock-exam-submit')).toBeEnabled();
@@ -552,16 +932,31 @@ test('vocabulary practice plays audio controls, scores answers, and persists rev
   const firstSpeechText = await page.evaluate(() => (window as any).__speechSynthesisCalls?.[0] ?? '');
   expect(firstSpeechText).toContain(CET4_VOCABULARY_BANK[0].word);
   await page.getByRole('button', { name: '播放例句' }).click();
+  await expect(page.getByRole('button', { name: '暂停例句' })).toBeVisible();
+  await page.getByRole('button', { name: '暂停例句' }).click();
+  await expect(page.getByRole('button', { name: '继续例句' })).toBeVisible();
 
   const vocabularySessionItems = CET4_VOCABULARY_BANK.slice(0, VOCABULARY_SESSION_SIZE);
 
   for (const item of vocabularySessionItems) {
     await expect(page.getByRole('heading', { name: item.word })).toBeVisible();
+    await expect(page.getByTestId('vocabulary-post-answer-support')).toHaveCount(0);
+    await expect(page.getByTestId('vocabulary-question-translation')).toHaveCount(0);
+    await expect(page.getByTestId(`vocabulary-option-translation-${item.correctAnswer}`)).toHaveCount(0);
+    await expect(page.getByTestId('vocabulary-sentence-translation')).toHaveCount(0);
     const answerButton = page.getByRole('button', { name: new RegExp(`^${item.correctAnswer}\\. `) });
     await answerButton.click();
     await page.getByRole('button', { name: '有把握' }).click();
     await page.getByRole('button', { name: '提交词汇答案' }).click();
-    await expect(page.getByText(`正确答案：${item.correctAnswer}`)).toBeVisible();
+    await expect(page.getByTestId('vocabulary-post-answer-support')).toBeVisible();
+    await expect(page.getByTestId('vocabulary-correct-answer')).toContainText(item.correctAnswer);
+    await expect(page.getByTestId('vocabulary-question-translation')).toContainText('题干中文');
+    await expect(page.getByTestId('vocabulary-question-translation')).toContainText(item.meaning);
+    await expect(page.getByTestId(`vocabulary-option-translation-${item.correctAnswer}`)).toBeVisible();
+    await expect(answerButton).toContainText('中文：');
+    await expect(page.getByTestId('vocabulary-sentence-translation')).toContainText(item.example);
+    await expect(page.getByTestId('vocabulary-sentence-translation')).not.toContainText('中文译文暂缺');
+    await expect(page.getByTestId('vocabulary-sentence-translation')).not.toContainText('请以英文原句');
     await page.getByRole('button', { name: item === vocabularySessionItems.at(-1) ? '完成词汇练习' : '进入下一个单词' }).click();
   }
 
@@ -595,18 +990,40 @@ test('vocabulary practice plays audio controls, scores answers, and persists rev
     score: 100,
     evidenceCount: vocabularySessionItems.length,
   });
+
+  await page.getByRole('button', { name: '专项练习' }).click();
+  await page.getByRole('button', { name: '开始单词练习' }).click();
+  await expect(page.getByRole('heading', { name: CET4_VOCABULARY_BANK[VOCABULARY_SESSION_SIZE].word })).toBeVisible();
+});
+
+test('vocabulary practice keeps a visible message when browser speech synthesis fails', async ({ page }) => {
+  await installFailingSpeechSynthesisMock(page);
+  await registerAndEnterApp(page, 'mvp-vocabulary-speech-failure');
+  await resetLocalLearningData(page);
+  await page.reload();
+
+  await page.getByRole('button', { name: '专项练习' }).click();
+  await page.getByRole('button', { name: '开始单词练习' }).click();
+  await expect(page.getByRole('heading', { name: CET4_VOCABULARY_BANK[0].word })).toBeVisible();
+  await expect(page.getByTestId('vocabulary-auto-speech-status')).toContainText('没有可用英文语音');
+
+  await page.getByRole('button', { name: '播放单词' }).click();
+  await expect.poll(async () => page.evaluate(() => (window as any).__speechSynthesisCalls?.length ?? 0)).toBeGreaterThanOrEqual(2);
+  await expect(page.getByTestId('vocabulary-auto-speech-status')).toContainText('没有可用英文语音');
+  await expect(page.getByRole('button', { name: '播放单词' })).toBeVisible();
 });
 
 test('staged mock exam covers CET-4 modules and persists score evidence', async ({ page }) => {
+  const mockWritingEssay =
+    'Consistent practice matters in English learning because real ability grows only when students use knowledge again and again in meaningful tasks. When learners write, listen, and review on a fixed schedule, they notice mistakes earlier and build stronger memory. For example, I write a short paragraph after class, read it aloud, and then check whether my topic sentence, reasons, and examples are clear. This routine may look simple, but it helps me turn passive vocabulary into active language and stops me from depending on last minute memorization. It also gives teachers enough evidence to offer specific feedback. In my view, the biggest value of consistent practice is that it makes progress visible, keeps confidence stable, and supports long term improvement before the CET-4 exam.';
+
   await registerAndEnterApp(page, 'mvp-mock');
   await resetLocalLearningData(page);
   await page.reload();
 
   await page.getByRole('button', { name: /^阶段模考$/ }).click();
   await expect(page.getByRole('heading', { name: CET4_MOCK_EXAM.title })).toBeVisible();
-  await page.getByTestId('mock-writing-answer').fill(
-    'Consistent practice is useful because students can receive feedback and improve step by step. For example, I write a short paragraph every day and review grammar mistakes after class.',
-  );
+  await page.getByTestId('mock-writing-answer').fill(mockWritingEssay);
   await page.getByTestId('mock-section-listening').click();
   for (const question of CET4_MOCK_EXAM.listening.questions) {
     await page.getByTestId(`mock-choice-${question.id}-${question.correctAnswer}`).click();
@@ -615,13 +1032,9 @@ test('staged mock exam covers CET-4 modules and persists score evidence', async 
   for (const question of CET4_MOCK_EXAM.reading.questions) {
     await page.getByTestId(`mock-choice-${question.id}-${question.correctAnswer}`).click();
   }
-  await page.getByTestId('mock-section-foundation').click();
-  for (const question of CET4_MOCK_EXAM.foundation.questions) {
-    await page.getByTestId(`mock-choice-${question.id}-${question.correctAnswer}`).click();
-  }
   await page.getByTestId('mock-section-translation').click();
   await page.getByTestId('mock-translation-answer').fill(
-    'More and more college students use digital tools to learn English. Effective tools should not only give answers, but also help students find mistakes, actively recall knowledge and review at the right time.',
+    'More and more college students use digital tools to learn English. Effective tools should not only give answers, but also help students find mistakes, actively recall knowledge, and return to weak points at the right time through regular review.',
   );
   await page.getByTestId('mock-section-review').click();
   await page.getByTestId('mock-exam-submit').click();
@@ -656,16 +1069,19 @@ test('staged mock exam covers CET-4 modules and persists score evidence', async 
   expect(result.attempts).toBe(
     CET4_MOCK_EXAM.listening.questions.length
       + CET4_MOCK_EXAM.reading.questions.length
-      + CET4_MOCK_EXAM.foundation.questions.length
       + 2,
   );
-  expect(result.skillProfiles.map((profile: { skillArea: string }) => profile.skillArea).sort()).toEqual([
-    'grammar',
-    'grammar',
-    'listening',
-    'reading',
-    'translation',
-    'writing',
+  expect(result.skillProfiles.map((profile: { subSkillId: string }) => profile.subSkillId).sort()).toEqual([
+    'mock-careful-reading',
+    'mock-listening-mixed',
+    'mock-listening-passage',
+    'mock-long-conversation',
+    'mock-long-matching',
+    'mock-paragraph-translation',
+    'mock-reading-mixed',
+    'mock-short-essay',
+    'mock-short-news',
+    'mock-word-bank',
   ]);
 });
 
@@ -686,6 +1102,13 @@ test('application shell loads without browser console errors', async ({ page }) 
 test('API health, planning, and AI contracts are reachable from production build', async ({ request }) => {
   const health = await request.get('/api/health');
   expect(health.ok()).toBeTruthy();
+
+  const aiStatus = await request.get('/api/ai/status');
+  expect(aiStatus.ok()).toBeTruthy();
+  const aiStatusBody = await aiStatus.json();
+  expect(aiStatusBody.fallbackAvailable).toBe(true);
+  expect(['ready', 'degraded', 'offline-fallback']).toContain(aiStatusBody.state);
+
   const { token } = await registerApiAccount(request, 'mvp-api');
 
   const plan = await request.post('/api/study/daily-plan', {
@@ -763,7 +1186,7 @@ test('all MVP sections render their primary controls', async ({ page }) => {
 
   await page.getByRole('button', { name: '复习队列' }).click();
   await expect(page.getByRole('heading', { name: '复习队列' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /开始复习|先完成训练生成错因/ })).toBeVisible();
+  await expect(page.getByText(/暂无要复习的错题/)).toBeVisible();
 
   await page.getByRole('button', { name: '口语重说' }).click();
   await expect(page.getByRole('heading', { name: /口语重说/ })).toBeVisible();

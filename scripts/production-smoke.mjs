@@ -51,15 +51,53 @@ if (process.env.REQUIRE_AI_CONFIGURED !== 'false') {
 }
 checks.push(`health ok (${health.aiProvider}/${health.aiModel}, store=${health.saas?.store})`);
 
+const aiStatus = await requestJson('/api/ai/status');
+assert(aiStatus.provider === health.aiProvider, 'AI status provider does not match health');
+assert(aiStatus.model === health.aiModel, 'AI status model does not match health');
+assert(aiStatus.fallbackAvailable === true, 'AI fallback is not advertised as available');
+assert(['ready', 'degraded', 'offline-fallback'].includes(aiStatus.state), 'AI status state is not recognized');
+checks.push(`ai status ok (${aiStatus.state})`);
+
 const exams = await requestJson('/api/exams');
 assert(Array.isArray(exams.exams) && exams.exams.length > 0, 'exam registry is empty');
 assert(exams.activeExamIds?.includes('cet4'), 'CET-4 is not marked as the active trainable exam');
 assert(exams.roadmapExamIds?.includes('ielts') && exams.roadmapExamIds?.includes('toefl'), 'roadmap exams are not published as metadata');
-assert(exams.mockExam?.plannedMinutes === 137, 'standard mock exam metadata is not published');
+assert(exams.mockExam?.plannedMinutes === 125, 'standard mock exam metadata is not published');
+assert(exams.mockExam?.totalQuestionCount === 57, 'standard mock exam question count is not published');
 assert(exams.mockExam?.listeningQuestionCount === 25, 'listening mock count is not standard');
 assert(exams.mockExam?.readingQuestionCount === 30, 'reading mock count is not standard');
-assert(exams.mockExam?.foundationQuestionCount === 8, 'foundation calibration count is not published');
+assert(exams.mockExam?.writingTaskCount === 1, 'writing mock task count is not standard');
+assert(exams.mockExam?.translationTaskCount === 1, 'translation mock task count is not standard');
 checks.push('exam registry ok');
+
+const localRealPapers = await requestJson('/api/local-real-papers?exam=cet4');
+assert(Array.isArray(localRealPapers.papers), 'local real-paper catalog did not return a papers array');
+assert(Number(localRealPapers.total ?? localRealPapers.papers.length) === localRealPapers.papers.length, 'local real-paper total does not match papers length');
+const requireLocalRealPapers = process.env.SMOKE_REQUIRE_LOCAL_REAL_PAPERS === 'true';
+const requireLocalRealAnswers = process.env.SMOKE_REQUIRE_LOCAL_REAL_ANSWERS === 'true' || requireLocalRealPapers;
+const minLocalRealPapers = Number(process.env.SMOKE_MIN_LOCAL_REAL_PAPERS || (requireLocalRealPapers ? 4 : 0));
+if (requireLocalRealPapers) {
+  assert(localRealPapers.sourceStatus === 'local-scan', `local real-paper source fell back to ${localRealPapers.sourceStatus}`);
+}
+if (minLocalRealPapers > 0) {
+  assert(localRealPapers.papers.length >= minLocalRealPapers, `expected at least ${minLocalRealPapers} local real papers, got ${localRealPapers.papers.length}`);
+}
+if (requireLocalRealAnswers) {
+  assert(localRealPapers.answerKeyStatus === 'ready', `local real-paper answers are not ready: ${localRealPapers.answerKeyStatus}`);
+  assert(localRealPapers.papers.some((paper) => paper.hasAnswerKey), 'no local real paper exposes an answer key');
+}
+checks.push(`local real papers ok (${localRealPapers.sourceStatus}, ${localRealPapers.papers.length} papers, answers=${localRealPapers.answerKeyStatus})`);
+
+const feedback = await requestJson('/api/feedback', {
+  method: 'POST',
+  body: JSON.stringify({
+    category: 'other',
+    message: `production smoke feedback ${smokeRunId}`,
+    page: '/smoke',
+  }),
+});
+assert(feedback.status === 'received', 'feedback endpoint did not acknowledge submission');
+checks.push('feedback intake ok');
 
 const registerEmail = `smoke-${smokeRunId}@${smokeAccountDomain}`;
 const register = await requestJson('/api/auth/register', {

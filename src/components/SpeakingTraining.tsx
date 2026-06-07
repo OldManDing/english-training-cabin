@@ -23,6 +23,7 @@ import { PracticeCompletionReport } from '../types';
 import { buildSpeakingPracticeReport } from '../domain/practice/reports';
 import { trackTelemetry } from '../lib/telemetry';
 import { apiRequest } from '../lib/api';
+import { pausePracticeSpeech, playPracticeSpeech, resumePracticeSpeech, stopPracticeSpeech } from '../lib/practiceSpeech';
 
 interface SpeakingTrainingProps {
   onUpdateProgress: (scoreChange: { from: number; to: number }) => void;
@@ -57,6 +58,7 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
   const [countdown, setCountdown] = useState<number | null>(null); // For starting recording 3s countdown
   const [recordTimer, setRecordTimer] = useState(42); // Step 2 countdown timer: counts from 60s down to 0, matching screenshots showing 00:42 / 01:00
   const [isSpeakingSample, setIsSpeakingSample] = useState<string | null>(null); // Track browser speaking state
+  const [isSpeakingPaused, setIsSpeakingPaused] = useState(false);
   const [addedToQueue, setAddedToQueue] = useState(false); // Step 4複習队列 state
   const [toast, setToast] = useState<string | null>(null); // Custom premium toast notification
   const [speechStartedAt] = useState(() => new Date().toISOString());
@@ -130,29 +132,47 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
 
   useEffect(() => {
     return () => {
+      stopPracticeSpeech();
       if (recordedAudioUrl) URL.revokeObjectURL(recordedAudioUrl);
       mediaRecorderRef.current?.stream.getTracks().forEach((track) => track.stop());
     };
   }, [recordedAudioUrl]);
 
-  // Simulates HTML5 Speech Text-to-Speech synthesizer
-  const handleTTS = (text: string, id: string) => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      if (isSpeakingSample === id) {
-        setIsSpeakingSample(null);
+  const handleTTS = async (text: string, id: string) => {
+    if (isSpeakingSample === id) {
+      if (!isSpeakingPaused && pausePracticeSpeech()) {
+        setIsSpeakingPaused(true);
         return;
       }
-      setIsSpeakingSample(id);
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'en-US';
-      utterance.rate = 0.9;
-      utterance.onend = () => setIsSpeakingSample(null);
-      utterance.onerror = () => setIsSpeakingSample(null);
-      window.speechSynthesis.speak(utterance);
-    } else {
-      triggerToast('暂无系统语音合成模块支持');
+
+      if (isSpeakingPaused && await resumePracticeSpeech()) {
+        setIsSpeakingPaused(false);
+        return;
+      }
+
+      stopPracticeSpeech();
+      setIsSpeakingSample(null);
+      setIsSpeakingPaused(false);
+      return;
     }
+
+    await playPracticeSpeech(text, {
+      rate: 0.9,
+      preferLocalAudio: false,
+      onStart: () => {
+        setIsSpeakingSample(id);
+        setIsSpeakingPaused(false);
+      },
+      onEnd: () => {
+        setIsSpeakingSample(null);
+        setIsSpeakingPaused(false);
+      },
+      onError: (message) => {
+        setIsSpeakingSample(null);
+        setIsSpeakingPaused(false);
+        triggerToast(message);
+      },
+    });
   };
 
   // Soundwave painter
@@ -428,7 +448,7 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
   ];
 
   return (
-    <div className="app-page-surface flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto overflow-x-hidden bg-slate-50 flex flex-col justify-between min-h-[calc(100svh-9rem)] lg:h-screen relative selection:bg-[#003178]/10 selection:text-[#003178]">
+    <div className="app-page-surface ui-page relative selection:bg-[#003178]/10 selection:text-[#003178]">
       
       {/* Floating high fidelity custom premium Toast */}
       {toast && (
@@ -459,8 +479,8 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
       )}
 
       {/* HEADER SECTION - Dynamically adaptive based on the steps */}
-      <div className="shrink-0">
-        <header className="mb-6 pb-4 border-b border-slate-200/80 flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
+      <div className="ui-page-content shrink-0">
+        <header className="ui-page-header-compact mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <h2 className="text-xl sm:text-2xl font-black text-[#003178] flex items-center gap-2">
               <Speech className="h-6 w-6 sm:h-7 sm:w-7 text-[#003178] shrink-0" />
@@ -480,7 +500,7 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
             {step === 2 && (
               <button
                 onClick={() => setStep(1)}
-                className="text-xs font-black text-rose-500 hover:text-rose-700 bg-rose-50 border border-rose-100 hover:border-rose-200 px-3.5 py-2.5 rounded-2xl flex items-center gap-1 transition-all cursor-pointer"
+                className="ui-button ui-button-danger ui-button-compact"
               >
                 <X className="h-4 w-4" /> 放弃任务
               </button>
@@ -645,7 +665,7 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
                   <button
                     onClick={handleRunMicTest}
                     disabled={isTestingMic}
-                    className="text-[10px] text-[#003178] bg-[#eef7fc] hover:bg-[#dbf1fe] border border-[#cfe6f2] font-black px-2.5 py-1 rounded transition-colors cursor-pointer pointer-events-auto"
+                    className="ui-button ui-button-secondary ui-button-compact"
                   >
                     {isTestingMic ? '检测中...' : '重新测试'}
                   </button>
@@ -690,7 +710,7 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
 
                 <button
                   onClick={handleStartRecording}
-                  className="w-full py-4.5 bg-emerald-700 hover:bg-emerald-800 text-white font-black rounded-2xl shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer pointer-events-auto text-sm border-b-4 border-emerald-900"
+                  className="ui-button ui-button-primary ui-button-full"
                 >
                   <span className="w-2.5 h-2.5 bg-white rounded-full animate-ping" />
                   <span>开始录音</span>
@@ -824,14 +844,14 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
                     setRecordTimer(60);
                     triggerToast('计时已重新重置！');
                   }}
-                  className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-600 text-xs font-black rounded-2xl transition-all active:scale-[0.97] flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="ui-button ui-button-secondary ui-button-full flex-1"
                 >
                   <RotateCw className="h-4 w-4" /> 重新录制
                 </button>
                 <button
                   onClick={handleFinishRecording}
                   disabled={isAnalyzingSpeech || !speechDraft.trim()}
-                  className="flex-[#1.3] py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-black rounded-2xl shadow-md transition-all active:scale-[0.97] hover:-translate-y-0.5 flex items-center justify-center gap-1.5 cursor-pointer pointer-events-auto border-b-4 border-emerald-900"
+                  className="ui-button ui-button-primary ui-button-full flex-[1.3]"
                 >
                   <CheckCircle className="h-4.5 w-4.5" /> {isAnalyzingSpeech ? '分析中...' : '完成录音'}
                 </button>
@@ -961,10 +981,16 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
                   </p>
                   <button
                     onClick={() => handleTTS(speechAnalysis?.improvedTextWithConnectors ?? DEFAULT_SPEECH_DRAFT, 'improved-answer')}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-[11px] font-black text-emerald-800 hover:bg-emerald-50"
+                    className="ui-button ui-button-secondary ui-button-compact"
                   >
                     <Volume2 className="h-3.5 w-3.5" />
-                    <span>{isSpeakingSample === 'improved-answer' ? '停止朗读' : '朗读改写版本'}</span>
+                    <span>
+                      {isSpeakingSample === 'improved-answer'
+                        ? isSpeakingPaused
+                          ? '继续朗读'
+                          : '暂停朗读'
+                        : '朗读改写版本'}
+                    </span>
                   </button>
                 </div>
               </div>
@@ -987,7 +1013,7 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
               <button
                 onClick={isSecondAttemptStarted ? handleCompleteSecondAttempt : handleStartSecondAttempt}
                 disabled={isPersistingReport}
-                className="w-full py-4.5 bg-emerald-700 hover:bg-emerald-800 text-white font-black rounded-2xl shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer pointer-events-auto text-sm border-b-4 border-emerald-950"
+                className="ui-button ui-button-primary ui-button-full"
               >
                 <RotateCw className="h-4.5 w-4.5 stroke-[3] animate-spin-slow" />
                 <span>{isPersistingReport ? '正在保存训练证据...' : isSecondAttemptStarted ? '完成第二次重说并生成对比报告' : '开始第二次重说'}</span>
@@ -1011,11 +1037,7 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
               <button
                 onClick={handleAddToReviewQueue}
                 disabled={addedToQueue || isPersistingReport}
-                className={`w-full justify-center sm:w-auto px-5 py-3 sm:py-2.5 rounded-2xl text-xs font-black shadow-2xs hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer pointer-events-auto flex items-center gap-1.5 ${
-                  addedToQueue
-                    ? 'bg-slate-300 text-slate-500 cursor-not-allowed border border-slate-300'
-                    : 'bg-[#003178] hover:bg-[#072551] text-white border border-[#cfe6f2]'
-                }`}
+                className="ui-button ui-button-primary ui-button-full sm:w-auto"
               >
                 <FolderPlus className="h-4 w-4" />
                 <span>{isPersistingReport ? '写入中...' : addedToQueue ? '已加入复习队列' : '加入复习队列'}</span>

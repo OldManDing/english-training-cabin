@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Flag, LayoutGrid, Target, Calendar, Check, Lock, Sparkles, Sliders, ChevronDown, Save, Sparkle, RefreshCw, Database, Download, Upload } from 'lucide-react';
 import { exportLearningData, importLearningData } from '../lib/storage/db';
 import SaasAccountPanel from './SaasAccountPanel';
+import UserFeedbackPanel from './UserFeedbackPanel';
+import LegalLinks from './LegalLinks';
 import { listPublicExamProfiles } from '../exams/registry';
 import { DateField, SelectField } from './controls/FormControls';
 
@@ -188,7 +190,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
   } else if (dailyTargetMinutes >= 90) {
     intensityText = "强力";
     intensityPercent = 95;
-    intensityColor = "bg-rose-600 animate-pulse";
+    intensityColor = "bg-rose-600";
     intensityStrategy = "高强度限时训练与错因复盘方案";
   } else if (dailyTargetMinutes >= 60) {
     intensityText = "中等";
@@ -198,25 +200,25 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
   }
 
   return (
-    <div className="app-page-surface flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto overflow-x-hidden bg-[#f7fbff] min-h-[calc(100svh-9rem)] lg:h-screen flex flex-col justify-between relative select-none">
+    <div className="app-page-surface ui-page relative select-none">
       
       {/* Sliding Toast mechanism at top center */}
       {toastMessage && (
-        <div className="fixed top-4 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 bg-[#003178] text-white px-4 sm:px-6 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 z-50 text-xs font-bold border border-[#cfe6f2] animate-bounce">
+        <div className="fixed top-4 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 bg-[#003178] text-white px-4 sm:px-6 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 z-50 text-xs font-bold border border-[#cfe6f2]">
           <Sparkle className="h-4.5 w-4.5 text-emerald-300 fill-emerald-300 shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
 
       {/* Primary Header Group */}
-      <div className="shrink-0 mb-6">
-        <header className="pb-4 border-b border-[#cfe6f2] flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="ui-page-content shrink-0 mb-6">
+        <header className="ui-page-header-compact flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-2xl font-black text-[#003178] tracking-tight">
+            <h2 className="text-2xl font-black tracking-tight text-[#101828]">
               目标与计划设置
             </h2>
-            <p className="text-xs text-[#434652] opacity-80 mt-1">
-              目标、时间和数据。
+            <p className="text-sm font-semibold text-slate-500 sm:text-base mt-2">
+              调整目标、时间和本地数据。
             </p>
           </div>
           <button
@@ -229,15 +231,14 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
         </header>
       </div>
 
-      {/* Main Responsive Grid Layout closely mirroring the uploaded UI design */}
-      <div className="flex-1 overflow-y-auto space-y-6 lg:space-y-8 lg:pr-2 pb-12">
+      <div className="ui-page-content flex-1 overflow-y-auto space-y-6 pb-12 lg:space-y-8 lg:pr-2">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-8 items-start">
           
           {/* LEFT 2 COLS: Standard forms and sub-section blocks */}
           <div className="lg:col-span-2 space-y-6">
             
             {/* Card 1: 考试目标 */}
-            <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-4 sm:p-6.5 shadow-sm space-y-5">
+            <div className="ui-panel space-y-5">
               <h3 className="text-sm font-black text-[#003178] flex items-center gap-2">
                 <Flag className="h-4 w-4 text-[#003178]" />
                 考试目标
@@ -272,7 +273,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                   type="button"
                   aria-pressed={prepareSpeaking}
                   onClick={() => setPrepareSpeaking(!prepareSpeaking)}
-                  className="flex items-center gap-2.5 text-xs text-[#003178] font-bold select-none cursor-pointer group"
+                  className="ui-button ui-button-muted w-full justify-start text-left sm:w-auto"
                 >
                   <div className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${
                     prepareSpeaking 
@@ -281,13 +282,13 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                   }`}>
                     {prepareSpeaking && <Check className="h-3.5 w-3.5 stroke-[3]" />}
                   </div>
-                  <span>是否同时准备 CET-4 口语考试</span>
+                  <span>准备 CET-4 口语</span>
                 </button>
               </div>
             </div>
 
             {/* Sub-block Container: "当前基础" Header on Left column, "目标分数" on Right column under same row */}
-            <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-4 sm:p-6.5 shadow-sm">
+            <div className="ui-panel">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 
                 {/* Sub-item Left: 当前基础 */}
@@ -374,7 +375,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
             </div>
 
             {/* Card 3: 学习参数 */}
-            <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-4 sm:p-6.5 shadow-sm space-y-5">
+            <div className="ui-panel space-y-5">
               <h3 className="text-sm font-black text-[#003178] flex items-center gap-2">
                 <Sliders className="h-4 w-4 text-[#003178]" />
                 学习参数
@@ -399,7 +400,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                 <div className="pt-3 border-t border-gray-100 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex flex-col">
                     <span className="text-xs font-bold text-[#003178]">口语录音质量提醒</span>
-                    <span className="text-[10px] text-gray-400 mt-0.5">开启后会在口语训练中提示尽量使用安静环境和清晰麦克风。</span>
+                    <span className="text-[10px] text-gray-400 mt-0.5">训练前提醒安静环境和清晰麦克风。</span>
                   </div>
                   <button
                     type="button"
@@ -420,7 +421,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
               </div>
             </div>
 
-            <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-6.5 shadow-sm space-y-4">
+            <div className="ui-panel space-y-4">
               <h3 className="text-sm font-black text-[#003178] flex items-center gap-2">
                 <Database className="h-4 w-4 text-[#003178]" />
                 本地数据保险箱
@@ -456,16 +457,18 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
               onDataRestored={onDataRestored}
             />
 
+            <UserFeedbackPanel pageContext="settings" />
+
           </div>
 
           {/* RIGHT 1 COL: 计划预期 Card matching perfectly with screenshot style */}
           <div className="space-y-6">
             
-            <div className="bg-[#eef7fc] border border-[#d2e2ec] rounded-3xl p-6.5 shadow-xs space-y-6">
+            <div className="ui-panel space-y-6">
               <div>
                 <h3 className="text-base font-black text-[#003178]">计划预期</h3>
                 <p className="text-[11px] text-gray-400 mt-1 font-semibold">
-                  基于当前设置的实时模拟
+                  基于当前设置估算
                 </p>
               </div>
 
@@ -475,7 +478,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                   [`${targetScore}+`, '目标分'],
                   [`${dailyTargetMinutes}m`, '每日'],
                 ].map(([value, label]) => (
-                  <div key={label} className="rounded-2xl border border-[#cbecfe] bg-white/80 px-3 py-2 text-center">
+                  <div key={label} className="ui-metric">
                     <div className="text-sm font-black text-[#003178]">{value}</div>
                     <div className="text-[10px] font-bold text-slate-400">{label}</div>
                   </div>
@@ -527,12 +530,12 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                   {isGeneratingPlan ? (
                     <>
                       <RefreshCw className="h-4 w-4 animate-spin" />
-                      <span>正在重构中...</span>
+                      <span>正在更新...</span>
                     </>
                   ) : (
                     <>
-                      <Sparkles className="h-4 w-4 text-emerald-300 fill-emerald-300 animate-pulse" />
-                      <span>生成专属学习计划</span>
+                      <Sparkles className="h-4 w-4 text-emerald-300 fill-emerald-300" />
+                      <span>更新今日计划</span>
                     </>
                   )}
                 </button>
@@ -550,39 +553,11 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
         </div>
       </div>
 
-      {/* Clean elegant footer copyright notes aligned with bottom screenshot */}
       <footer className="shrink-0 pt-4 border-t border-[#cfe6f2] flex flex-col sm:flex-row items-center justify-between text-[11px] text-[#434652] opacity-75 sm:py-2 select-none">
         <div>
             © 2026 英语训练舱 English Training System
         </div>
-        <div className="flex items-center space-x-4 mt-2 sm:mt-0 font-bold">
-          <a href="#privacy" onClick={(e) => { 
-            e.preventDefault(); 
-            if (onTriggerModal) {
-              onTriggerModal("隐私保障协议", "英语训练舱重视您的数据隐私：\n\n1. 练习记录、错题复习队列、目标设置和能力画像默认保存在当前浏览器 IndexedDB 中；更换浏览器、清空浏览器数据或更换设备后可能无法自动恢复。\n\n2. 口语录音文件不上传；若您点击口语 AI 分析，页面会把口语文本发送到本服务端并转交已配置的 AI 供应商处理。请不要输入身份证号、手机号、学校账号密码等敏感信息。");
-            } else {
-              triggerToast("隐私协议：学习记录默认保存在当前浏览器，AI 分析会发送必要文本。");
-            }
-          }} className="hover:text-[#003178] transition-colors">隐私协议</a>
-          <span>•</span>
-          <a href="#terms" onClick={(e) => { 
-            e.preventDefault(); 
-            if (onTriggerModal) {
-              onTriggerModal("服务条款说明", "欢迎使用英语训练舱：\n\n1. 本训练舱通过自适应计划、错因复习和 AI 反馈，辅助用户完成英语听说读写训练。\n\n2. 用户在使用影子跟读、口语重说等模块时，建议使用安静环境和清晰麦克风以获得更稳定的反馈。");
-            } else {
-              triggerToast("服务条款：本系统为大学英语训练提供自适应练习和反馈。");
-            }
-          }} className="hover:text-[#003178] transition-colors">服务条款</a>
-          <span>•</span>
-          <a href="#developer" onClick={(e) => { 
-            e.preventDefault(); 
-            if (onTriggerModal) {
-              onTriggerModal("开发者资源中心", "英语训练舱采用 React、TypeScript、Vite、Dexie 与 Express 构建，当前重点是验证本地优先学习闭环、错因复习、材料导入和 AI 反馈接口。后续可继续扩展账号、云同步、多考试配置和更完整的内容授权体系。");
-            } else {
-              triggerToast("开发者中心：当前版本聚焦本地优先学习闭环与 AI 反馈接口。");
-            }
-          }} className="hover:text-[#003178] transition-colors">开发者中心</a>
-        </div>
+        <LegalLinks onOpen={onTriggerModal} compact className="mt-2 sm:mt-0" />
       </footer>
 
     </div>

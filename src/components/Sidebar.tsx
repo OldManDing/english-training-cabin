@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpen, Sparkles, FolderSync, Mic, BarChart3, DownloadCloud, Settings, HelpCircle, ClipboardCheck } from 'lucide-react';
+import { BookOpen, Sparkles, FolderSync, Mic, BarChart3, DownloadCloud, Settings, HelpCircle, ClipboardCheck, History } from 'lucide-react';
 import { ActiveTab } from '../types';
 
 interface SidebarProps {
@@ -15,31 +15,29 @@ export default function Sidebar({ activeTab, setActiveTab, examCountdown, onTrig
     { id: 'practice', label: '专项练习', icon: Sparkles },
     { id: 'mock', label: '阶段模考', icon: ClipboardCheck },
     { id: 'review', label: '复习队列', icon: FolderSync },
+    { id: 'history', label: '已答题目', icon: History },
     { id: 'speaking', label: '口语重说', icon: Mic },
     { id: 'progress', label: '能力进展', icon: BarChart3 },
     { id: 'import', label: '材料导入', icon: DownloadCloud },
   ] as const;
 
   return (
-    <aside className="app-page-surface w-full lg:w-64 bg-[#ebf4f9] border-b lg:border-b-0 lg:border-r border-[#c3c6d4] flex flex-col lg:justify-between h-auto lg:h-screen sticky top-0 z-40 shrink-0 select-none">
+    <aside className="app-page-surface ui-sidebar sticky top-0 z-40 flex h-auto w-full shrink-0 flex-col border-b lg:h-screen lg:w-64 lg:justify-between lg:border-b-0 lg:border-r select-none">
       <div className="flex flex-col">
-        {/* Profile Branding Header as shown in the screenshot */}
-        <div className="p-3 lg:p-6 lg:pb-5 flex items-center space-x-3">
-          <div className="w-9 h-9 lg:w-10 lg:h-10 rounded-full bg-[#003178] hover:bg-[#0d47a1] text-white font-semibold flex items-center justify-center text-sm shadow-sm shrink-0">
+        <div className="flex items-center space-x-3 p-3 lg:px-6 lg:pb-5 lg:pt-6">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#003178] text-sm font-semibold text-white shadow-sm lg:h-10 lg:w-10">
             学
           </div>
           <div className="overflow-hidden">
-            <h1 className="font-bold text-sm text-[#003178] tracking-tight truncate">英语训练舱</h1>
-            <p className="hidden sm:block text-[11px] text-[#434652] font-medium mt-0.5">本地学习中</p>
+            <h1 className="truncate text-sm font-bold tracking-tight text-[#003178]">英语训练舱</h1>
+            <p className="mt-0.5 hidden text-[11px] font-medium text-[#64748b] sm:block">本地学习中</p>
           </div>
         </div>
 
-        {/* Separator */}
         <div className="hidden lg:block px-4 mb-2">
-          <div className="h-[1px] bg-[#d5e7f2] w-full" />
+          <div className="h-[1px] w-full bg-[#e2e8f0]" />
         </div>
 
-        {/* Navigation Items */}
         <nav className="px-3 pb-3 lg:p-3 flex lg:block gap-2 lg:space-y-1 overflow-x-auto overscroll-x-contain">
           {menuItems.map((item) => {
             const Icon = item.icon;
@@ -48,35 +46,29 @@ export default function Sidebar({ activeTab, setActiveTab, examCountdown, onTrig
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`shrink-0 min-w-[116px] min-h-11 lg:min-w-0 lg:w-full flex items-center space-x-2 lg:space-x-3 px-3 lg:px-4 py-2.5 lg:py-3 rounded-xl transition-all duration-150 relative group text-left ${
-                  isActive
-                    ? 'bg-[#dbf1fe]/80 text-[#003178] font-bold'
-                    : 'text-[#434652] hover:bg-[#dbf1fe]/40 hover:text-[#003178]'
+                className={`ui-sidebar-item shrink-0 min-w-[116px] px-3 py-2.5 text-left text-xs font-semibold lg:w-full lg:min-w-0 lg:px-4 lg:py-3 ${
+                  isActive ? 'ui-sidebar-item-active font-bold' : ''
                 }`}
               >
-                {isActive && (
-                  <div className="hidden lg:block absolute right-0 top-3 bottom-3 w-[3px] bg-[#0d47a1] rounded-l" />
-                )}
-                <Icon className={`h-[18px] w-[18px] shrink-0 ${isActive ? 'text-[#003178]' : 'text-[#434652] group-hover:text-[#003178]'}`} />
-                <span className="text-xs font-semibold whitespace-nowrap">{item.label}</span>
+                <div className="flex items-center space-x-2 lg:space-x-3">
+                  <Icon className={`h-[18px] w-[18px] shrink-0 ${isActive ? 'text-[#003178]' : 'text-[#64748b]'}`} />
+                  <span className="whitespace-nowrap">{item.label}</span>
+                </div>
               </button>
             );
           })}
         </nav>
       </div>
 
-      {/* Footer Settings Area matching the screenshot */}
       <div className="px-3 pb-3 lg:p-3 lg:pb-6">
         <div className="flex lg:block gap-2 lg:space-y-1 overflow-x-auto overscroll-x-contain">
           <button
             onClick={() => setActiveTab('settings')}
-            className={`min-w-fit min-h-11 lg:w-full flex items-center space-x-2 lg:space-x-3 px-3 lg:px-4 py-2.5 lg:py-3 text-xs rounded-xl transition-all relative text-left ${
-              activeTab === 'settings'
-                ? 'bg-[#dbf1fe]/80 text-[#003178] font-bold lg:border-r-[3px] lg:border-[#0d47a1] lg:rounded-r-none'
-                : 'text-[#434652] hover:bg-[#dbf1fe]/40'
+            className={`ui-sidebar-item min-w-fit px-3 py-2.5 text-left text-xs font-semibold lg:w-full lg:px-4 lg:py-3 ${
+              activeTab === 'settings' ? 'ui-sidebar-item-active font-bold' : ''
             }`}
           >
-            <Settings className={`h-4.5 w-4.5 ${activeTab === 'settings' ? 'text-[#003178]' : 'text-[#434652]'}`} />
+            <Settings className={`h-4.5 w-4.5 ${activeTab === 'settings' ? 'text-[#003178]' : 'text-[#64748b]'}`} />
             <span className="font-semibold whitespace-nowrap">设置</span>
           </button>
           
@@ -86,13 +78,13 @@ export default function Sidebar({ activeTab, setActiveTab, examCountdown, onTrig
               if (onTriggerModal) {
                 onTriggerModal(
                   "使用帮助",
-                  "英语训练舱当前聚焦 CET-4 首发场景，并按多考试训练系统预留架构。\n\n1. 点击今日标题旁的“入门能力诊断”建立初始能力画像。\n\n2. 点击左侧导航在专项练习、精听长对话、口语纠错重说和错题复习间切换。\n\n学习记录默认保存在当前浏览器 IndexedDB 中；启用 AI 分析时会发送必要文本用于生成反馈。"
+                  "英语训练舱当前聚焦 CET-4 首发场景，并按多考试训练系统预留架构。\n\n1. 点击今日标题旁的“入门能力诊断”建立初始能力画像。\n\n2. 点击左侧导航在专项练习、精听长对话、口语纠错重说、错题复习和已答题目间切换。\n\n学习记录默认保存在当前浏览器 IndexedDB 中；启用 AI 分析时会发送必要文本用于生成反馈。"
                 );
               }
             }}
-            className="min-w-fit min-h-11 lg:w-full flex items-center space-x-2 lg:space-x-3 px-3 lg:px-4 py-2.5 lg:py-3 text-xs text-[#434652] hover:bg-[#dbf1fe]/40 rounded-xl transition-all text-left"
+            className="ui-sidebar-item min-w-fit px-3 py-2.5 text-left text-xs font-semibold lg:w-full lg:px-4 lg:py-3"
           >
-            <HelpCircle className="h-4.5 w-4.5 text-[#434652]" />
+            <HelpCircle className="h-4.5 w-4.5 text-[#64748b]" />
             <span className="font-semibold whitespace-nowrap">帮助</span>
           </button>
         </div>

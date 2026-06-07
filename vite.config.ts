@@ -21,10 +21,26 @@ export default defineConfig(() => {
     build: {
       rollupOptions: {
         output: {
-          manualChunks: {
-            react: ['react', 'react-dom'],
-            icons: ['lucide-react'],
-            storage: ['dexie'],
+          manualChunks(id) {
+            const normalizedId = id.replace(/\\/g, '/');
+            if (normalizedId.includes('/node_modules/react') || normalizedId.includes('/node_modules/react-dom')) {
+              return 'react';
+            }
+            if (normalizedId.includes('/node_modules/lucide-react')) {
+              return 'icons';
+            }
+            if (normalizedId.includes('/node_modules/dexie')) {
+              return 'storage';
+            }
+            if (normalizedId.endsWith('/src/questionBank.ts')) {
+              return 'question-bank';
+            }
+            if (normalizedId.endsWith('/src/data.ts')) {
+              return 'learning-data';
+            }
+            if (normalizedId.includes('/src/domain/diagnostic/')) {
+              return 'diagnostic-core';
+            }
           },
         },
       },

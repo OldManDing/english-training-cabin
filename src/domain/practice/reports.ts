@@ -14,6 +14,7 @@ type ChoiceAnswer = 'A' | 'B' | 'C' | 'D';
 export interface ChoicePracticeQuestion {
   id: number | string;
   question: string;
+  options?: Partial<Record<ChoiceAnswer, string>>;
   correctAnswer: ChoiceAnswer;
   type?: string;
   trapType?: string;
@@ -74,6 +75,7 @@ export interface SubjectivePracticeAnalysis {
 export interface BuildSubjectivePracticeReportInput {
   examId?: string;
   moduleId: 'writing' | 'translation';
+  questionId?: string;
   questionTypeId: string;
   modeId: string;
   plannedMinutes: number;
@@ -247,7 +249,17 @@ function buildReviewItem(params: {
     sourceAttemptId: params.attempt.id,
     createdAt: params.attempt.createdAt,
     memoryTask,
-    learningMethod: 'active-recall-cloze-production',
+    redoQuestion: {
+      kind: 'single-choice',
+      prompt: params.question.question,
+      options: params.question.options,
+      correctAnswer: params.question.correctAnswer,
+      userAnswer: String(params.attempt.answer ?? ''),
+      explanation: params.question.explanation,
+      context: params.question.correctSentence,
+      sourceLabel: labels.contextLabel,
+    },
+    learningMethod: 'wrong-question-redo-active-recall',
     retrievalCount: 0,
   };
 }
@@ -446,7 +458,7 @@ export function buildSubjectivePracticeReport(input: BuildSubjectivePracticeRepo
     : score < 85
     ? ['表达不自然' as MistakeReason]
     : [];
-  const questionId = `${input.moduleId}-${input.questionTypeId}`;
+  const questionId = input.questionId ?? `${input.moduleId}-${input.questionTypeId}`;
 
   const attempt: Attempt = {
     id: makeId(`attempt-${input.moduleId}`),

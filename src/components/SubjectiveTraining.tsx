@@ -1,7 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, CheckCircle2, FileText, Languages, Loader2, RefreshCw, Sparkles } from 'lucide-react';
 import { PracticeCompletionReport } from '../types';
 import { buildSubjectivePracticeReport, SubjectivePracticeAnalysis } from '../domain/practice/reports';
+import {
+  SubjectivePracticeDraft,
+  clampDraftIndex,
+  clearPracticeDraft,
+  loadPracticeDraft,
+  practiceDraftKeys,
+  savePracticeDraft,
+} from '../domain/practice/draftProgress';
 import { trackTelemetry } from '../lib/telemetry';
 import { apiRequest } from '../lib/api';
 import { CET4_TRANSLATION_PROMPT_BANK, CET4_WRITING_PROMPT_BANK } from '../questionBank';
@@ -10,6 +18,7 @@ type SubjectiveMode = 'writing' | 'translation';
 
 interface SubjectiveTrainingProps {
   mode: SubjectiveMode;
+  initialPromptId?: string;
   onBack: () => void;
   onComplete: (score: number, report: PracticeCompletionReport) => void;
 }
@@ -37,29 +46,120 @@ const TASKS: Record<SubjectiveMode, {
   },
 };
 
-export default function SubjectiveTraining({ mode, onBack, onComplete }: SubjectiveTrainingProps) {
+const WRITING_PROMPT_CN: Record<string, string> = {
+  'writing-consistent-practice': '围绕“英语学习中持续练习的价值”写短文，需要有明确观点、理由和例子。',
+  'writing-campus-volunteering': '围绕“大学生是否应该参加校园志愿活动”写短文，需要表明观点并至少给出一个例子。',
+  'writing-digital-tools': '围绕“学生如何理性使用数字工具”写短文，需要同时讨论好处和可能风险。',
+  'writing-sustainable-campus': '围绕“学生如何建设可持续校园”写短文，需要写出具体行动及其影响。',
+  'writing-time-management': '围绕“大学生时间管理的重要性”写短文，需要说明问题并提出一种方法。',
+  'writing-public-services': '围绕“技术如何改善公共服务”写短文，需要提到一个好处和一个担忧。',
+  'writing-reading-habits': '围绕“大学生如何养成良好阅读习惯”写短文，需要给出实用建议。',
+  'writing-food-waste': '围绕“减少校园食物浪费”写短文，需要说明意义和学生可采取的行动。',
+  'writing-mental-health': '围绕“大学生为什么应该关注心理健康”写短文，需要包含一个例子。',
+  'writing-public-transport': '围绕“公共交通在城市生活中的价值”写短文，需要讨论好处和一个可能问题。',
+  'writing-cultural-heritage': '围绕“保护文化遗产”写短文，需要说明重要性以及年轻人如何参与。',
+  'writing-teamwork': '围绕“团队合作在大学学习中的重要性”写短文，需要表明观点并给出理由。',
+  'writing-online-privacy': '围绕“学生如何保护在线隐私”写短文，需要包含至少两种实用方法。',
+  'writing-rural-tourism': '围绕“乡村旅游”写短文，需要讨论它如何惠及当地社区以及应保护什么。',
+  'writing-independent-learning': '围绕“自主学习”写短文，需要说明学生独立学习需要哪些条件。',
+  'writing-community-service': '围绕“社区服务”写短文，需要说明学生能从中学到什么。',
+  'writing-exam-preparation': '围绕“有效备考”写短文，需要讨论准确率、速度和复盘。',
+  'writing-ai-feedback': '围绕“学习中的 AI 反馈”写短文，需要讨论如何正确使用。',
+};
+
+const findSubjectivePromptIndex = (
+  promptBank: typeof CET4_WRITING_PROMPT_BANK | typeof CET4_TRANSLATION_PROMPT_BANK,
+  promptId?: string,
+) => {
+  if (!promptId) return 0;
+  const targetIndex = promptBank.findIndex((item) => item.id === promptId);
+  return targetIndex >= 0 ? targetIndex : 0;
+};
+
+const loadSubjectiveDraftState = (
+  mode: SubjectiveMode,
+  promptBank: typeof CET4_WRITING_PROMPT_BANK | typeof CET4_TRANSLATION_PROMPT_BANK,
+  initialPromptId?: string,
+) => {
+  const targetIndex = findSubjectivePromptIndex(promptBank, initialPromptId);
+  const fallback = {
+    restored: false,
+    startedAt: new Date().toISOString(),
+    taskIndex: targetIndex,
+    answer: '',
+  };
+  const draft = loadPracticeDraft<SubjectivePracticeDraft>(practiceDraftKeys.subjective(mode));
+  if (!draft || draft.version !== 1 || draft.mode !== mode) return fallback;
+
+  const draftTaskIndex = clampDraftIndex(draft.taskIndex, promptBank.length);
+  if (initialPromptId && draftTaskIndex !== targetIndex) return fallback;
+
+  return {
+    restored: !initialPromptId,
+    startedAt: draft.startedAt ?? fallback.startedAt,
+    taskIndex: initialPromptId ? targetIndex : draftTaskIndex,
+    answer: typeof draft.answer === 'string' ? draft.answer : '',
+  };
+};
+
+export default function SubjectiveTraining({ mode, initialPromptId, onBack, onComplete }: SubjectiveTrainingProps) {
   const task = TASKS[mode];
   const promptBank = mode === 'writing' ? CET4_WRITING_PROMPT_BANK : CET4_TRANSLATION_PROMPT_BANK;
-  const [taskIndex, setTaskIndex] = useState(0);
-  const [startedAt] = useState(() => new Date().toISOString());
-  const [answer, setAnswer] = useState('');
+  const [initialDraft] = useState(() => loadSubjectiveDraftState(mode, promptBank, initialPromptId));
+  const isFirstModeSync = useRef(true);
+  const draftKey = practiceDraftKeys.subjective(mode);
+  const [taskIndex, setTaskIndex] = useState(initialDraft.taskIndex);
+  const [startedAt, setStartedAt] = useState(() => initialDraft.startedAt);
+  const [answer, setAnswer] = useState(initialDraft.answer);
   const [analysis, setAnalysis] = useState<SubjectivePracticeAnalysis | null>(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const promptItem = promptBank[taskIndex % promptBank.length];
+  const writingChinesePrompt = mode === 'writing'
+    ? WRITING_PROMPT_CN[promptItem.id] ?? `围绕“${promptItem.title}”写短文；重点覆盖：${promptItem.syllabusFocus.join('、')}。`
+    : null;
 
   useEffect(() => {
-    setTaskIndex(0);
-    setAnswer('');
+    if (isFirstModeSync.current) {
+      isFirstModeSync.current = false;
+      return;
+    }
+    const nextDraft = loadSubjectiveDraftState(mode, promptBank, initialPromptId);
+    setTaskIndex(nextDraft.taskIndex);
+    setStartedAt(nextDraft.startedAt);
+    setAnswer(nextDraft.answer);
     setAnalysis(null);
     setErrorMessage(null);
-  }, [mode]);
+  }, [mode, initialPromptId]);
 
   const handleNextPrompt = () => {
-    setTaskIndex((current) => (current + 1) % promptBank.length);
+    const nextTaskIndex = (taskIndex + 1) % promptBank.length;
+    setTaskIndex(nextTaskIndex);
     setAnswer('');
     setAnalysis(null);
     setErrorMessage(null);
+    savePracticeDraft<SubjectivePracticeDraft>(draftKey, {
+      version: 1,
+      mode,
+      startedAt,
+      taskIndex: nextTaskIndex,
+      answer: '',
+      updatedAt: new Date().toISOString(),
+    });
+  };
+
+  const handleAnswerChange = (nextAnswer: string) => {
+    setAnswer(nextAnswer);
+    setAnalysis(null);
+    setErrorMessage(null);
+    savePracticeDraft<SubjectivePracticeDraft>(draftKey, {
+      version: 1,
+      mode,
+      startedAt,
+      taskIndex,
+      answer: nextAnswer,
+      updatedAt: new Date().toISOString(),
+    });
   };
 
   const handleEvaluate = async () => {
@@ -96,6 +196,7 @@ export default function SubjectiveTraining({ mode, onBack, onComplete }: Subject
     const report = buildSubjectivePracticeReport({
       examId: 'cet4',
       moduleId: mode,
+      questionId: promptItem.id,
       questionTypeId: task.questionTypeId,
       modeId: `${mode}-practice`,
       plannedMinutes: task.plannedMinutes,
@@ -104,19 +205,20 @@ export default function SubjectiveTraining({ mode, onBack, onComplete }: Subject
       answer,
       analysis,
     });
+    clearPracticeDraft(draftKey);
     onComplete(analysis.score, report);
   };
 
   const Icon = mode === 'translation' ? Languages : FileText;
 
   return (
-    <div className="app-page-surface flex-1 min-h-[100svh] lg:h-screen overflow-hidden bg-[#f7fbff] flex flex-col">
-      <header className="min-h-16 px-4 sm:px-6 py-3 border-b border-[#cfe6f2] bg-white flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="app-page-surface ui-page overflow-hidden">
+      <header className="ui-page-header-compact flex min-h-16 flex-col gap-3 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div className="flex items-center gap-3 sm:gap-4">
           <button
             onClick={onBack}
             aria-label="返回专项练习"
-            className="p-2 rounded-xl text-[#003178] hover:bg-[#dbf1fe] cursor-pointer"
+            className="ui-button ui-button-secondary ui-button-icon"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
@@ -126,6 +228,11 @@ export default function SubjectiveTraining({ mode, onBack, onComplete }: Subject
               {task.title}
             </h2>
             <p className="text-[11px] text-slate-400 font-bold">CET-4 {task.label} · AI 反馈 · 错因复习入队</p>
+            {initialDraft.restored ? (
+              <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-700">
+                已恢复上次草稿
+              </span>
+            ) : null}
           </div>
         </div>
         <span className="rounded-full border border-[#cfe6f2] bg-[#eef7fc] px-3 py-1 text-xs font-black text-[#003178]">
@@ -134,7 +241,7 @@ export default function SubjectiveTraining({ mode, onBack, onComplete }: Subject
       </header>
 
       <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 p-4 sm:p-6 lg:p-8 overflow-y-auto">
-        <section className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-4 sm:p-6 shadow-xs flex flex-col gap-5">
+        <section className="ui-panel flex flex-col gap-5">
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-[#dbf1fe] px-3 py-1 text-[10px] font-black text-[#003178]">
               <Sparkles className="h-3.5 w-3.5" />
@@ -155,13 +262,18 @@ export default function SubjectiveTraining({ mode, onBack, onComplete }: Subject
                 <button
                   type="button"
                   onClick={handleNextPrompt}
-                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-[#cfe6f2] bg-white px-3 text-xs font-black text-[#003178] transition hover:bg-[#eef7fc]"
+                  className="ui-button ui-button-secondary ui-button-compact"
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
                   换一道题
                 </button>
               </div>
               <p className="whitespace-pre-line text-sm font-semibold leading-relaxed text-slate-700">{promptItem.prompt}</p>
+              {writingChinesePrompt ? (
+                <p className="rounded-2xl border border-amber-100 bg-amber-50/70 px-3 py-2 text-xs font-bold leading-5 text-amber-800">
+                  中文题意：{writingChinesePrompt}
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -169,7 +281,7 @@ export default function SubjectiveTraining({ mode, onBack, onComplete }: Subject
             <span className="text-xs font-black text-slate-500">你的作答</span>
             <textarea
               value={answer}
-              onChange={(event) => setAnswer(event.target.value)}
+              onChange={(event) => handleAnswerChange(event.target.value)}
               placeholder={task.placeholder}
               className="flex-1 min-h-[260px] rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-semibold leading-relaxed text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#003178]/30"
             />
@@ -184,7 +296,7 @@ export default function SubjectiveTraining({ mode, onBack, onComplete }: Subject
           <button
             onClick={handleEvaluate}
             disabled={isEvaluating || answer.trim().length < 20}
-            className="w-full rounded-2xl bg-[#003178] px-5 py-3.5 text-sm font-black text-white shadow-md transition hover:bg-[#0d47a1] disabled:cursor-not-allowed disabled:bg-slate-300"
+            className="ui-button ui-button-primary ui-button-full"
           >
             {isEvaluating ? (
               <span className="inline-flex items-center gap-2">
@@ -195,7 +307,7 @@ export default function SubjectiveTraining({ mode, onBack, onComplete }: Subject
           </button>
         </section>
 
-        <section className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-4 sm:p-6 shadow-xs flex flex-col gap-5">
+        <section className="ui-panel flex flex-col gap-5">
           <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <h3 className="text-sm font-black text-[#003178]">结构化反馈</h3>
             <span className="text-3xl font-black text-emerald-700">{analysis?.score ?? '--'}</span>
@@ -241,7 +353,7 @@ export default function SubjectiveTraining({ mode, onBack, onComplete }: Subject
 
               <button
                 onClick={handleComplete}
-                className="w-full rounded-2xl bg-emerald-700 px-5 py-3.5 text-sm font-black text-white shadow-md transition hover:bg-emerald-800 inline-flex items-center justify-center gap-2"
+                className="ui-button ui-button-primary ui-button-full"
               >
                 <CheckCircle2 className="h-4 w-4" />
                 完成训练并写入能力画像

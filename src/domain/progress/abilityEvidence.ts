@@ -88,6 +88,16 @@ const SUB_SKILL_LABELS: Record<string, string> = {
   'diagnostic-reading': '入门阅读诊断',
   'long-conversation': '长对话定位',
   'diagnostic-listening': '入门听力诊断',
+  'mock-short-essay': '阶段模考写作',
+  'mock-listening-mixed': '阶段模考听力总评',
+  'mock-short-news': '阶段模考短篇新闻',
+  'mock-long-conversation': '阶段模考长对话',
+  'mock-listening-passage': '阶段模考听力篇章',
+  'mock-reading-mixed': '阶段模考阅读总评',
+  'mock-word-bank': '阶段模考选词填空',
+  'mock-long-matching': '阶段模考长篇匹配',
+  'mock-careful-reading': '阶段模考仔细阅读',
+  'mock-paragraph-translation': '阶段模考翻译',
   'cet4-core-vocabulary': 'CET-4 核心词汇',
   'vocabulary-audio-choice': '词汇听音辨义',
   'diagnostic-writing': '入门写作诊断',
@@ -225,7 +235,9 @@ export function buildAbilityEvidenceSummary(
     hasEvidence,
     scores,
     averageScore,
-    forecastScore: hasEvidence && averageScore > 0 ? Math.max(300, Math.min(710, Math.round(300 + averageScore * 4.1))) : null,
+    forecastScore: hasEvidence && averageScore > 0 && coreScores.length >= 3
+      ? Math.max(300, Math.min(710, Math.round(300 + averageScore * 4.1)))
+      : null,
     evidenceCount,
     trainingStability: hasEvidence ? Math.max(12, Math.min(100, Math.round((evidenceCount / 12) * 100))) : null,
   };

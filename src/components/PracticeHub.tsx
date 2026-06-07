@@ -14,7 +14,7 @@ import {
   Volume2,
   type LucideIcon,
 } from 'lucide-react';
-import { CET4_VOCABULARY_BANK } from '../data';
+import { CET4_VOCABULARY_BANK, VOCABULARY_SESSION_SIZE } from '../data';
 import {
   CET4_LISTENING_PRACTICE_QUESTIONS,
   CET4_CLOZE_PRACTICE_QUESTIONS,
@@ -22,35 +22,54 @@ import {
   CET4_MOCK_EXAM_BANK,
   CET4_QUESTION_BANK_COVERAGE,
   CET4_READING_BANK,
-  CET4_READING_PRACTICE_QUESTIONS,
   CET4_TRANSLATION_PROMPT_BANK,
   CET4_WRITING_PROMPT_BANK,
 } from '../questionBank';
-import { DailyPlan, Passage, SkillProfile } from '../types';
+import { Attempt, DailyPlan, Passage, PracticeSession, SkillProfile } from '../types';
+import {
+  buildPracticeModuleProgress,
+  buildPracticeQuestionStatusList,
+  filterUnpracticedItems,
+  matchesPracticeModuleAttempt,
+  mergePracticeProgressAttempts,
+  type PracticeQuestionDescriptor,
+  type PracticeQuestionStatusItem,
+  type PracticeModuleTotals,
+  type PracticeProgressModuleId,
+} from '../domain/practice/practicedQuestions';
+import {
+  loadPracticeDraft,
+  practiceDraftKeys,
+  type ListeningPracticeDraft,
+  type ReadingPracticeDraft,
+  type VocabularyPracticeDraft,
+} from '../domain/practice/draftProgress';
 
-type PracticeModuleId = 'vocabulary' | 'cloze' | 'grammar' | 'reading' | 'listening' | 'writing' | 'translation' | 'mock';
+type PracticeModuleId = PracticeProgressModuleId;
 
 interface PracticeHubProps {
   examId: string;
   examName: string;
   onStartOnboarding: () => void;
-  onStartVocabulary: () => void;
-  onStartGrammar: () => void;
-  onStartCloze: () => void;
-  onStartReading: (passage: Passage) => void;
-  onStartListening: () => void;
-  onStartWriting: () => void;
-  onStartTranslation: () => void;
+  onStartVocabulary: (questionId?: string) => void;
+  onStartGrammar: (questionId?: string) => void;
+  onStartCloze: (questionId?: string) => void;
+  onStartReading: (passage: Passage, questionId?: string) => void;
+  onStartListening: (questionId?: string) => void;
+  onStartWriting: (questionId?: string) => void;
+  onStartTranslation: (questionId?: string) => void;
   onStartMockExam: () => void;
   skillProfiles?: SkillProfile[];
   dailyPlan?: DailyPlan | null;
+  readingPassages?: Passage[];
+  persistedAttempts?: Attempt[];
+  persistedPracticeSessions?: PracticeSession[];
 }
 
 interface PracticeTone {
   pill: string;
   card: string;
   active: string;
-  button: string;
 }
 
 interface PracticeModule {
@@ -71,30 +90,153 @@ interface PracticeModule {
 
 const TONES: Record<'blue' | 'green' | 'amber' | 'rose', PracticeTone> = {
   blue: {
-    pill: 'border-[#cfe6f2] bg-[#eef7fc] text-[#003178]',
-    card: 'border-[#cfe6f2] bg-white',
-    active: 'border-[#003178] bg-[#003178] text-white shadow-lg shadow-blue-900/10',
-    button: 'bg-[#003178] hover:bg-[#0d47a1] text-white',
+    pill: 'border-[#dde5ee] bg-[#f8fafc] text-[#334155]',
+    card: 'border-[#dde5ee] bg-white',
+    active: 'border-[#003178] bg-[#f8fbff] shadow-sm ring-1 ring-[#e7eef7]',
   },
   green: {
-    pill: 'border-emerald-100 bg-emerald-50 text-emerald-700',
-    card: 'border-emerald-100 bg-white',
-    active: 'border-emerald-700 bg-emerald-700 text-white shadow-lg shadow-emerald-900/10',
-    button: 'bg-[#1b6d24] hover:bg-emerald-700 text-white',
+    pill: 'border-[#dde5ee] bg-[#f8fafc] text-[#334155]',
+    card: 'border-[#dde5ee] bg-white',
+    active: 'border-[#003178] bg-[#f8fbff] shadow-sm ring-1 ring-[#e7eef7]',
   },
   amber: {
-    pill: 'border-amber-100 bg-amber-50 text-amber-700',
-    card: 'border-amber-100 bg-white',
-    active: 'border-amber-600 bg-amber-600 text-white shadow-lg shadow-amber-900/10',
-    button: 'bg-amber-600 hover:bg-amber-700 text-white',
+    pill: 'border-[#dde5ee] bg-[#f8fafc] text-[#334155]',
+    card: 'border-[#dde5ee] bg-white',
+    active: 'border-[#003178] bg-[#f8fbff] shadow-sm ring-1 ring-[#e7eef7]',
   },
   rose: {
-    pill: 'border-rose-100 bg-rose-50 text-rose-700',
-    card: 'border-rose-100 bg-white',
-    active: 'border-rose-700 bg-rose-700 text-white shadow-lg shadow-rose-900/10',
-    button: 'bg-rose-700 hover:bg-rose-800 text-white',
+    pill: 'border-[#dde5ee] bg-[#f8fafc] text-[#334155]',
+    card: 'border-[#dde5ee] bg-white',
+    active: 'border-[#003178] bg-[#f8fbff] shadow-sm ring-1 ring-[#e7eef7]',
   },
 };
+
+const CAREFUL_READING_QUESTION_TOTAL = CET4_READING_BANK.reduce(
+  (sum, passage) => sum + passage.questions.length,
+  0,
+);
+const LISTENING_SPECIALTY_QUESTION_TOTAL = CET4_LISTENING_PRACTICE_QUESTIONS
+  .filter((question) => question.questionTypeId === 'long-conversation').length;
+
+const PRACTICE_MODULE_TOTALS: PracticeModuleTotals = {
+  vocabulary: CET4_VOCABULARY_BANK.length,
+  cloze: CET4_CLOZE_PRACTICE_QUESTIONS.length,
+  grammar: CET4_GRAMMAR_PRACTICE_QUESTIONS.length,
+  reading: CAREFUL_READING_QUESTION_TOTAL,
+  listening: LISTENING_SPECIALTY_QUESTION_TOTAL,
+  writing: CET4_WRITING_PROMPT_BANK.length,
+  translation: CET4_TRANSLATION_PROMPT_BANK.length,
+  mock: CET4_MOCK_EXAM_BANK.length,
+};
+
+const GRAMMAR_DRAFT_PASSAGE_ID = 'cet4-grammar-structure-practice';
+const CLOZE_DRAFT_PASSAGE_ID = 'cet4-cloze-context-practice';
+const LISTENING_DRAFT_QUESTION_IDS = new Set(
+  CET4_LISTENING_PRACTICE_QUESTIONS
+    .filter((question) => question.questionTypeId === 'long-conversation')
+    .map((_, index) => String(index + 1)),
+);
+const QUESTION_STATUS_PREVIEW_LIMIT = 120;
+
+function buildPracticeQuestionBank(): Record<PracticeModuleId, PracticeQuestionDescriptor[]> {
+  return {
+    vocabulary: CET4_VOCABULARY_BANK.map((item) => ({
+      id: item.id,
+      moduleId: 'vocabulary',
+      questionTypeId: 'cet4-core-vocabulary',
+      label: item.word,
+    })),
+    cloze: CET4_CLOZE_PRACTICE_QUESTIONS.map((question) => ({
+      id: question.id,
+      moduleId: question.moduleId,
+      questionTypeId: question.questionTypeId,
+      label: question.title,
+    })),
+    grammar: CET4_GRAMMAR_PRACTICE_QUESTIONS.map((question) => ({
+      id: question.id,
+      moduleId: question.moduleId,
+      questionTypeId: question.questionTypeId,
+      label: question.title,
+    })),
+    reading: CET4_READING_BANK.flatMap((passage, passageIndex) => passage.questions.map((question, questionIndex) => ({
+      id: question.id,
+      moduleId: question.moduleId ?? passage.moduleId ?? 'reading',
+      questionTypeId: question.questionTypeId,
+      label: `第 ${passageIndex + 1} 组-${questionIndex + 1} 题`,
+      groupLabel: passage.title,
+    }))),
+    listening: CET4_LISTENING_PRACTICE_QUESTIONS
+      .filter((question) => question.questionTypeId === 'long-conversation')
+      .map((question, index) => ({
+        id: String(index + 1),
+        moduleId: question.moduleId,
+        questionTypeId: question.questionTypeId,
+        label: `长对话 ${index + 1}`,
+      })),
+    writing: CET4_WRITING_PROMPT_BANK.map((item) => ({
+      id: item.id,
+      moduleId: item.moduleId,
+      questionTypeId: item.questionTypeId,
+      label: item.title,
+    })),
+    translation: CET4_TRANSLATION_PROMPT_BANK.map((item) => ({
+      id: item.id,
+      moduleId: item.moduleId,
+      questionTypeId: item.questionTypeId,
+      label: item.title,
+    })),
+    mock: CET4_MOCK_EXAM_BANK.map((paper, index) => ({
+      id: `mock-paper-${index + 1}`,
+      moduleId: 'mock',
+      questionTypeId: 'cet4-standard-mock',
+      label: paper.title,
+    })),
+  };
+}
+
+function createDraftAttempt(params: {
+  moduleId: string;
+  questionTypeId: string;
+  questionId: string;
+}): Attempt {
+  return {
+    id: `draft-${params.moduleId}-${params.questionId}`,
+    sessionId: `draft-${params.moduleId}`,
+    questionId: params.questionId,
+    examId: 'cet4',
+    moduleId: params.moduleId,
+    questionTypeId: params.questionTypeId,
+    answer: 'draft',
+    isCorrect: true,
+    elapsedSeconds: 0,
+    mistakeReasons: [],
+    createdAt: 'draft',
+  };
+}
+
+function appendDraftAttemptsFromAnswers(
+  draftAttempts: Attempt[],
+  params: {
+    answers: unknown[];
+    questions: Array<{ id: string | number; moduleId?: string; questionTypeId?: string }>;
+    fallbackModuleId: string;
+    fallbackQuestionTypeId: string;
+  },
+) {
+  params.answers.forEach((answer, index) => {
+    if (!answer) return;
+    const question = params.questions[index];
+    if (!question) return;
+
+    draftAttempts.push(
+      createDraftAttempt({
+        moduleId: question.moduleId ?? params.fallbackModuleId,
+        questionTypeId: question.questionTypeId ?? params.fallbackQuestionTypeId,
+        questionId: String(question.id),
+      }),
+    );
+  });
+}
 
 export default function PracticeHub({
   examId,
@@ -110,13 +252,105 @@ export default function PracticeHub({
   onStartMockExam,
   skillProfiles = [],
   dailyPlan,
+  readingPassages: availableReadingPassages = CET4_READING_BANK,
+  persistedAttempts = [],
+  persistedPracticeSessions = [],
 }: PracticeHubProps) {
   const [selectedModuleId, setSelectedModuleId] = useState<PracticeModuleId>('vocabulary');
   const [hasManualSelection, setHasManualSelection] = useState(false);
   const [visibleReadingCount, setVisibleReadingCount] = useState(8);
+  const [expandedStatusModuleIds, setExpandedStatusModuleIds] = useState<PracticeModuleId[]>([]);
   const isCet4 = examId === 'cet4';
+  const practiceQuestionBank = useMemo(() => buildPracticeQuestionBank(), []);
+  const mergedPracticeAttempts = useMemo(() => {
+    const draftAttempts: Attempt[] = [];
+    const filterDraftQuestions = (
+      questions: Array<{ id: string | number; moduleId?: string; questionTypeId?: string }>,
+      moduleId: PracticeModuleId,
+    ) => {
+      const unpracticedQuestions = questions.filter((question) => !persistedAttempts.some(
+        (attempt) =>
+          matchesPracticeModuleAttempt(attempt, moduleId)
+          && String(attempt.questionId) === String(question.id),
+      ));
+      return unpracticedQuestions.length > 0 ? unpracticedQuestions : questions;
+    };
 
-  const readingPassages = useMemo(() => CET4_READING_BANK.map((passage) => ({
+    const vocabularyDraft = loadPracticeDraft<VocabularyPracticeDraft>(practiceDraftKeys.vocabulary);
+    if (vocabularyDraft?.version === 1) {
+      const availableVocabularyItems = filterUnpracticedItems(CET4_VOCABULARY_BANK, persistedAttempts, 'vocabulary');
+      const packCount = Math.max(1, Math.ceil(availableVocabularyItems.length / VOCABULARY_SESSION_SIZE));
+      const packIndex = Math.min(Math.max(0, vocabularyDraft.packIndex), packCount - 1);
+      const sessionItems = availableVocabularyItems.slice(
+        packIndex * VOCABULARY_SESSION_SIZE,
+        (packIndex + 1) * VOCABULARY_SESSION_SIZE,
+      );
+
+      appendDraftAttemptsFromAnswers(draftAttempts, {
+        answers: Array.isArray(vocabularyDraft.answers) ? vocabularyDraft.answers : [],
+        questions: sessionItems.map((item) => ({
+          id: item.id,
+          moduleId: 'vocabulary',
+          questionTypeId: 'cet4-core-vocabulary',
+        })),
+        fallbackModuleId: 'vocabulary',
+        fallbackQuestionTypeId: 'cet4-core-vocabulary',
+      });
+    }
+
+    availableReadingPassages.forEach((passage) => {
+      const readingDraft = loadPracticeDraft<ReadingPracticeDraft>(practiceDraftKeys.reading(passage.id));
+      if (!readingDraft || readingDraft.version !== 1 || readingDraft.passageId !== passage.id) return;
+
+      appendDraftAttemptsFromAnswers(draftAttempts, {
+        answers: Array.isArray(readingDraft.answers) ? readingDraft.answers : [],
+        questions: passage.questions,
+        fallbackModuleId: passage.moduleId ?? 'reading',
+        fallbackQuestionTypeId: passage.questions[0]?.questionTypeId ?? 'careful-reading',
+      });
+    });
+
+    const grammarDraft = loadPracticeDraft<ReadingPracticeDraft>(practiceDraftKeys.reading(GRAMMAR_DRAFT_PASSAGE_ID));
+    if (grammarDraft?.version === 1 && grammarDraft.passageId === GRAMMAR_DRAFT_PASSAGE_ID) {
+      appendDraftAttemptsFromAnswers(draftAttempts, {
+        answers: Array.isArray(grammarDraft.answers) ? grammarDraft.answers : [],
+        questions: filterDraftQuestions(CET4_GRAMMAR_PRACTICE_QUESTIONS, 'grammar'),
+        fallbackModuleId: 'grammar',
+        fallbackQuestionTypeId: 'grammar-structure',
+      });
+    }
+
+    const clozeDraft = loadPracticeDraft<ReadingPracticeDraft>(practiceDraftKeys.reading(CLOZE_DRAFT_PASSAGE_ID));
+    if (clozeDraft?.version === 1 && clozeDraft.passageId === CLOZE_DRAFT_PASSAGE_ID) {
+      appendDraftAttemptsFromAnswers(draftAttempts, {
+        answers: Array.isArray(clozeDraft.answers) ? clozeDraft.answers : [],
+        questions: filterDraftQuestions(CET4_CLOZE_PRACTICE_QUESTIONS, 'cloze'),
+        fallbackModuleId: 'grammar',
+        fallbackQuestionTypeId: 'cloze-choice',
+      });
+    }
+
+    const listeningDraft = loadPracticeDraft<ListeningPracticeDraft>(practiceDraftKeys.listening);
+    if (listeningDraft?.version === 1 && listeningDraft.answersByQuestionId) {
+      Object.entries(listeningDraft.answersByQuestionId).forEach(([questionId, answer]) => {
+        if (!answer?.isSubmitted || !LISTENING_DRAFT_QUESTION_IDS.has(questionId)) return;
+        draftAttempts.push(
+          createDraftAttempt({
+            moduleId: 'listening',
+            questionTypeId: 'long-conversation',
+            questionId,
+          }),
+        );
+      });
+    }
+
+    return mergePracticeProgressAttempts({
+      persistedAttempts,
+      draftAttempts,
+    });
+  }, [availableReadingPassages, persistedAttempts]);
+
+  const readingPassages = useMemo(() => availableReadingPassages.map((passage) => ({
     id: passage.id,
     title: passage.title,
     category: '原创模拟 · 仔细阅读',
@@ -124,8 +358,16 @@ export default function PracticeHub({
     duration: `${Math.max(12, passage.questions.length * 3)} 分钟`,
     questionCount: passage.questions.length,
     data: passage,
-  })), []);
+  })), [availableReadingPassages]);
   const firstReadingPassage = readingPassages[0];
+  const practiceHistoryByModule = useMemo(() => {
+    return buildPracticeModuleProgress({
+      attempts: mergedPracticeAttempts,
+      sessions: persistedPracticeSessions,
+      totals: PRACTICE_MODULE_TOTALS,
+    });
+  }, [mergedPracticeAttempts, persistedPracticeSessions]);
+  const recordedAttemptCount = mergedPracticeAttempts.length;
   const latestScoreBySkill = useMemo(() => {
     const result = new Map<SkillProfile['skillArea'], SkillProfile>();
     skillProfiles.forEach((profile) => {
@@ -218,7 +460,7 @@ export default function PracticeHub({
       Icon: BookOpen,
       label: '仔细阅读',
       subtitle: '选择材料后进入定位、作答、错因反馈',
-      count: `${readingPassages.length} 组材料 / ${CET4_READING_PRACTICE_QUESTIONS.length} 题`,
+      count: `${CET4_READING_BANK.length} 组材料 / ${CAREFUL_READING_QUESTION_TOTAL} 题`,
       duration: '12-18m',
       actionLabel: '开始仔细阅读训练',
       outcome: '每题保留定位线索、作答、把握度和阅读能力画像。',
@@ -235,7 +477,7 @@ export default function PracticeHub({
       Icon: Headphones,
       label: '长对话精听',
       subtitle: '进入后自动语音播报，可暂停、调速、重听',
-      count: `${CET4_LISTENING_PRACTICE_QUESTIONS.length} 道听力题`,
+      count: `${LISTENING_SPECIALTY_QUESTION_TOTAL} 道长对话题`,
       duration: '15m',
       actionLabel: '开始听力训练',
       outcome: '听力作答会记录关键词漏听、转折漏听和低信心证据。',
@@ -306,60 +548,106 @@ export default function PracticeHub({
   const recommendedModule = orderedModules[0];
   const recommendedTask = dailyPlan?.tasks.find((task) => moduleIdForTask(task) === recommendedModuleId);
   const selectedModule = orderedModules.find((module) => module.id === selectedModuleId) ?? orderedModules[0];
-  const selectedIcon = selectedModule.Icon;
+  const selectedQuestionStatuses = useMemo(() => buildPracticeQuestionStatusList({
+    attempts: mergedPracticeAttempts,
+    sessions: persistedPracticeSessions,
+    moduleId: selectedModule.id,
+    questions: practiceQuestionBank[selectedModule.id],
+  }), [mergedPracticeAttempts, persistedPracticeSessions, practiceQuestionBank, selectedModule.id]);
+  const statusExpanded = expandedStatusModuleIds.includes(selectedModule.id);
+  const visibleQuestionStatuses = statusExpanded || selectedQuestionStatuses.length <= QUESTION_STATUS_PREVIEW_LIMIT
+    ? selectedQuestionStatuses
+    : selectedQuestionStatuses.slice(0, QUESTION_STATUS_PREVIEW_LIMIT);
+  const selectedStatusPracticedCount = selectedQuestionStatuses.filter((item) => item.practiced).length;
+  const selectedStatusRemainingCount = Math.max(0, selectedQuestionStatuses.length - selectedStatusPracticedCount);
   const visibleReadingPassages = readingPassages.slice(0, visibleReadingCount);
+  const toggleStatusExpanded = () => {
+    setExpandedStatusModuleIds((ids) => (
+      ids.includes(selectedModule.id)
+        ? ids.filter((id) => id !== selectedModule.id)
+        : [...ids, selectedModule.id]
+    ));
+  };
+  const handleStartStatusQuestion = (item: PracticeQuestionStatusItem) => {
+    if (selectedModule.id === 'reading') {
+      const targetPassage = CET4_READING_BANK.find((passage) =>
+        passage.questions.some((question) => String(question.id) === item.id),
+      );
+      if (targetPassage) {
+        onStartReading(targetPassage, item.id);
+        return;
+      }
+    }
+
+    if (selectedModule.id === 'vocabulary') {
+      onStartVocabulary(item.id);
+      return;
+    }
+    if (selectedModule.id === 'grammar') {
+      onStartGrammar(item.id);
+      return;
+    }
+    if (selectedModule.id === 'cloze') {
+      onStartCloze(item.id);
+      return;
+    }
+    if (selectedModule.id === 'listening') {
+      onStartListening(item.id);
+      return;
+    }
+    if (selectedModule.id === 'writing') {
+      onStartWriting(item.id);
+      return;
+    }
+    if (selectedModule.id === 'translation') {
+      onStartTranslation(item.id);
+      return;
+    }
+
+    selectedModule.onStart();
+  };
 
   useEffect(() => {
     if (!hasManualSelection) setSelectedModuleId(recommendedModuleId);
   }, [hasManualSelection, recommendedModuleId]);
 
   return (
-    <div className="app-page-surface flex-1 overflow-y-auto overflow-x-hidden bg-[#f7fbff] p-4 sm:p-6 lg:h-screen lg:p-8">
-      <div className="mx-auto w-full max-w-6xl space-y-5">
-        <header className="overflow-hidden rounded-[2rem] border border-sky-100 bg-white/92 p-5 shadow-sm sm:p-6">
-          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+    <div className="app-page-surface ui-page">
+      <div className="ui-page-content space-y-5">
+        <header className="ui-page-header overflow-hidden">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="min-w-0">
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-[#003178]/10 px-3 py-1 text-xs font-black text-[#003178]">
+              <div className="ui-page-eyebrow mb-3">
                 <LibraryBig className="h-4 w-4" />
-                {examName} 专项训练工作台
+                {examName} 专项训练
               </div>
-              <h2 className="text-2xl font-black leading-tight text-[#003178] sm:text-3xl">
+              <h2 className="text-2xl font-black leading-tight text-[#101828] sm:text-3xl">
                 专项练习
               </h2>
               <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
                 选择一个能力，直接开始训练。
               </p>
+              <div data-testid="practice-hub-summary" className="mt-3 flex flex-wrap gap-2 text-[11px] font-black">
+                <span className="ui-chip ui-chip-accent">已记录 {recordedAttemptCount} 次作答</span>
+                <span className="ui-chip">未练优先</span>
+                <span className="ui-chip">耗尽回流</span>
+              </div>
             </div>
             <button
               type="button"
               onClick={onStartOnboarding}
-              className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-2xl border border-[#cfe6f2] bg-[#003178] px-5 text-sm font-black text-white shadow-sm transition hover:bg-[#07244f]"
+              className="ui-button ui-button-primary shrink-0"
             >
-              <GraduationCap className="h-4 w-4 text-emerald-300" />
-              入门诊断与能力画像
+              <GraduationCap className="h-4 w-4" />
+              入门诊断
             </button>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-5">
-            {[
-              ['阅读材料', readingPassages.length],
-              ['词汇语块', CET4_VOCABULARY_BANK.length],
-              ['语法完形', CET4_GRAMMAR_PRACTICE_QUESTIONS.length + CET4_CLOZE_PRACTICE_QUESTIONS.length],
-              ['阅读题池', CET4_READING_PRACTICE_QUESTIONS.length],
-              ['写译题', CET4_WRITING_PROMPT_BANK.length + CET4_TRANSLATION_PROMPT_BANK.length],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-2xl bg-slate-50 p-3 text-center">
-                <div className="text-2xl font-black text-[#003178]">{value}</div>
-                <div className="text-[11px] font-black text-slate-500">{label}</div>
-              </div>
-            ))}
-          </div>
-
           {isCet4 && recommendedModule && (
-            <div className="mt-5 rounded-3xl border border-emerald-100 bg-emerald-50 p-4">
+            <div className="mt-5 rounded-2xl border border-[#cfe6f2] bg-[#f8fbff] px-4 py-3">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <div className="text-xs font-black text-emerald-800">诊断驱动推荐</div>
+                  <div className="text-xs font-black text-[#003178]">推荐</div>
                   <p className="mt-1 text-sm font-bold leading-6 text-slate-700">
                     优先进入「{recommendedModule.label}」{recommendedTask?.reason ? ` · ${recommendedTask.reason}` : ''}
                   </p>
@@ -367,7 +655,7 @@ export default function PracticeHub({
                 <button
                   type="button"
                   onClick={recommendedModule.onStart}
-                  className="ui-button ui-button-success shrink-0"
+                  className="ui-button ui-button-primary shrink-0"
                 >
                   进入推荐专项
                   <ChevronRight className="h-4 w-4" />
@@ -378,67 +666,88 @@ export default function PracticeHub({
         </header>
 
         {!isCet4 && (
-          <section className="rounded-[2rem] border border-amber-200 bg-amber-50 p-5 text-sm font-bold leading-6 text-amber-900 shadow-sm">
+          <section className="ui-panel-soft text-sm font-bold leading-6 text-slate-700">
             当前目标考试「{examName}」还处于题库建设阶段，暂不开放专项练习。请在设置或入门诊断中切回 CET-4 后继续训练。
           </section>
         )}
 
         {isCet4 && (
-        <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3" aria-label="专项练习模块">
+        <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4" aria-label="专项练习模块">
           {orderedModules.map((module, index) => {
             const Icon = module.Icon;
             const isActive = selectedModuleId === module.id;
+            const history = practiceHistoryByModule.get(module.id);
+            const progressLabel = history ? `已练 ${history.practiced}/${history.total}` : '暂无记录';
+            const historyLabel = module.id === 'mock'
+              ? '阶段入口'
+              : history && history.total > 0 && history.remaining === 0
+                ? '题库回流'
+                : '未练优先';
             return (
               <article
                 key={module.id}
-                className={`rounded-[2rem] border p-4 shadow-sm transition sm:p-5 ${
-                  isActive ? module.tone.active : `${module.tone.card} hover:border-[#003178]/50 hover:shadow-md`
+                className={`ui-panel flex min-h-[250px] flex-col transition ${
+                  isActive ? 'border-[#003178] bg-[#f8fbff] ring-1 ring-[#dcecff]' : 'hover:border-[#003178]/30'
                 }`}
               >
                 <button
                   type="button"
+                  data-testid={`practice-module-select-${module.id}`}
                   onClick={() => {
                     setHasManualSelection(true);
                     setSelectedModuleId(module.id);
                   }}
                   aria-pressed={isActive}
-                  className="w-full rounded-2xl text-left focus:outline-none focus:ring-2 focus:ring-white/70"
+                  className="flex flex-1 flex-col text-left focus:outline-none focus:ring-2 focus:ring-[#003178]/20"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-black ${
-                      isActive ? 'border-white/30 bg-white/15 text-white' : module.tone.pill
+                      isActive ? 'border-[#cfe6f2] bg-[#eef7fc] text-[#003178]' : module.tone.pill
                     }`}>
                       <Icon className="h-3.5 w-3.5" />
-                      Step {index + 1}
+                      {index + 1}
                     </span>
-                    <span className={`text-[11px] font-black ${isActive ? 'text-white/80' : 'text-slate-400'}`}>
+                    <span className={`text-[11px] font-black ${isActive ? 'text-[#003178]' : 'text-slate-400'}`}>
                       {isActive ? '已选择' : module.duration}
                     </span>
                   </div>
                   {module.recommendation ? (
                     <span className={`mt-3 inline-flex rounded-full px-2.5 py-1 text-[10px] font-black ${
-                      isActive ? 'bg-white/18 text-white' : 'bg-amber-50 text-amber-700'
+                      isActive ? 'bg-[#eef7fc] text-[#003178]' : 'bg-slate-100 text-slate-600'
                     }`}>
                       {module.recommendation}
                     </span>
                   ) : null}
-                  <h3 className={`mt-3 text-lg font-black ${isActive ? 'text-white' : 'text-[#071e27]'}`}>{module.label}</h3>
-                  <p className={`mt-2 line-clamp-1 text-sm font-semibold leading-5 ${isActive ? 'text-white/82' : 'text-slate-500'}`}>
+                  <h3 className={`mt-3 text-lg font-black ${isActive ? 'text-[#101828]' : 'text-[#071e27]'}`}>{module.label}</h3>
+                  <p className={`mt-2 line-clamp-1 text-sm font-semibold leading-5 ${isActive ? 'text-slate-600' : 'text-slate-500'}`}>
                     {module.subtitle}
                   </p>
-                  <div className={`mt-3 text-xs font-black ${isActive ? 'text-white/78' : 'text-slate-500'}`}>
+                  <div className={`mt-3 text-xs font-black ${isActive ? 'text-slate-600' : 'text-slate-500'}`}>
                     {module.count}
+                  </div>
+                  <div className="mt-auto flex flex-wrap gap-2 pt-4 text-[11px] font-black">
+                    <span
+                      data-testid={`practice-module-progress-${module.id}`}
+                      className={isActive ? 'text-[#003178]' : 'text-slate-500'}
+                    >
+                      {progressLabel}
+                    </span>
+                    <span
+                      data-testid={`practice-module-history-${module.id}`}
+                      className={isActive ? 'text-[#003178]' : 'text-slate-400'}
+                    >
+                      {historyLabel}
+                    </span>
                   </div>
                 </button>
                 <button
                   type="button"
+                  data-testid={`practice-module-action-${module.id}`}
                   onClick={(event) => {
                     event.stopPropagation();
                     module.onStart();
                   }}
-                  className={`ui-button ui-button-full mt-4 ${
-                    isActive ? 'bg-white text-[#003178] hover:bg-slate-50' : module.tone.button
-                  }`}
+                  className={`ui-button ui-button-full mt-4 ${isActive ? 'ui-button-primary' : 'ui-button-secondary'}`}
                 >
                   {module.actionLabel}
                   <ChevronRight className="h-4 w-4" />
@@ -450,56 +759,38 @@ export default function PracticeHub({
         )}
 
         {isCet4 && (
-        <section className="rounded-[2rem] border border-[#cfe6f2] bg-white p-4 shadow-sm sm:p-5">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0">
-                <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-black ${selectedModule.tone.pill}`}>
-                  {React.createElement(selectedIcon, { className: 'h-4 w-4' })}
-                  当前选择
-                </span>
-                <h3 className="mt-3 text-2xl font-black text-[#003178]">{selectedModule.label}</h3>
-                <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-black text-slate-500">
-                  <span className="rounded-full bg-slate-100 px-3 py-1">{selectedModule.duration}</span>
-                  <span className="rounded-full bg-slate-100 px-3 py-1">{selectedModule.count}</span>
-                  {selectedModule.recommendation ? (
-                    <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700">{selectedModule.recommendation}</span>
-                  ) : null}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={selectedModule.onStart}
-                aria-label={`进入当前${selectedModule.label}训练`}
-                className={`ui-button shrink-0 ${selectedModule.tone.button}`}
-              >
-                进入当前训练
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-        </section>
+          <QuestionStatusPanel
+            moduleId={selectedModule.id}
+            moduleLabel={selectedModule.label}
+            statuses={visibleQuestionStatuses}
+            totalCount={selectedQuestionStatuses.length}
+            practicedCount={selectedStatusPracticedCount}
+            remainingCount={selectedStatusRemainingCount}
+            expanded={statusExpanded}
+            onToggleExpanded={toggleStatusExpanded}
+            onSelectQuestion={handleStartStatusQuestion}
+          />
         )}
 
         {isCet4 && selectedModule.id === 'reading' && (
-          <section className="rounded-[2rem] border border-[#cfe6f2] bg-white p-5 shadow-sm sm:p-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <span className="inline-flex rounded-full border border-[#cfe6f2] bg-[#eef7fc] px-2.5 py-1 text-[10px] font-black text-[#003178]">
-                  阅读材料库
-                </span>
-                <h3 className="mt-3 text-lg font-black text-[#071e27]">按材料进入训练，避免一次性铺满全题库</h3>
-              </div>
-              <p className="text-xs font-bold leading-5 text-slate-500">
-                当前显示 {visibleReadingPassages.length}/{readingPassages.length} 组，可继续展开。
-              </p>
-            </div>
+          <details className="ui-panel" open>
+            <summary className="flex cursor-pointer list-none flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <span className="inline-flex items-center gap-2 text-sm font-black text-[#003178]">
+                <FileText className="h-4 w-4" />
+                阅读材料库
+              </span>
+              <span className="text-xs font-bold leading-5 text-slate-500">
+                {visibleReadingPassages.length}/{readingPassages.length} 组
+              </span>
+            </summary>
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
               {visibleReadingPassages.map((passage) => (
                 <article
                   key={passage.id}
-                  className="flex min-h-40 flex-col justify-between rounded-3xl border border-slate-100 bg-slate-50 p-4 transition hover:border-[#003178]/40 hover:bg-white"
+                  className="flex min-h-40 flex-col justify-between rounded-2xl border border-[#dde5ee] bg-[#f8fafc] p-4 transition hover:border-[#003178]/20 hover:bg-white"
                 >
                   <div>
-                    <span className="inline-flex rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-[#003178]">
+                    <span className="ui-chip">
                       {passage.category}
                     </span>
                     <h4 className="mt-3 line-clamp-2 text-base font-black text-[#071e27]">{passage.title}</h4>
@@ -529,11 +820,11 @@ export default function PracticeHub({
                 展开更多阅读材料
               </button>
             )}
-          </section>
+          </details>
         )}
 
         {isCet4 && (
-        <details className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <details className="ui-panel">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-left">
             <span className="inline-flex items-center gap-2 text-sm font-black text-[#003178]">
               <ShieldCheck className="h-4 w-4" />
@@ -543,7 +834,7 @@ export default function PracticeHub({
           </summary>
           <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1.2fr_0.8fr]">
             <div>
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#cfe6f2] bg-[#eef7fc] px-2.5 py-1 text-[10px] font-black text-[#003178]">
+              <div className="ui-chip ui-chip-accent mb-3">
                 <ListChecks className="h-3.5 w-3.5" />
                 题型覆盖
               </div>
@@ -561,8 +852,8 @@ export default function PracticeHub({
                 ['专项', '只显示当前题库'],
                 ['模考', '使用 CET-4 结构卷'],
               ].map(([title, detail]) => (
-                <div key={title} className="rounded-2xl border border-emerald-100 bg-emerald-50/55 p-3">
-                  <div className="text-xs font-black text-emerald-800">{title}</div>
+                <div key={title} className="rounded-2xl border border-[#dde5ee] bg-[#f8fafc] p-3">
+                  <div className="text-xs font-black text-[#003178]">{title}</div>
                   <p className="mt-1 text-[11px] font-semibold text-slate-600">{detail}</p>
                 </div>
               ))}
@@ -572,6 +863,89 @@ export default function PracticeHub({
         )}
       </div>
     </div>
+  );
+}
+
+function QuestionStatusPanel({
+  moduleId,
+  moduleLabel,
+  statuses,
+  totalCount,
+  practicedCount,
+  remainingCount,
+  expanded,
+  onToggleExpanded,
+  onSelectQuestion,
+}: {
+  moduleId: PracticeModuleId;
+  moduleLabel: string;
+  statuses: PracticeQuestionStatusItem[];
+  totalCount: number;
+  practicedCount: number;
+  remainingCount: number;
+  expanded: boolean;
+  onToggleExpanded: () => void;
+  onSelectQuestion: (item: PracticeQuestionStatusItem) => void;
+}) {
+  const canToggle = totalCount > QUESTION_STATUS_PREVIEW_LIMIT;
+
+  return (
+    <section data-testid={`practice-question-status-${moduleId}`} className="ui-panel">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <span className="ui-chip ui-chip-accent">
+            <ListChecks className="h-3.5 w-3.5" />
+            题号列表 · {moduleLabel}
+          </span>
+          <h3 className="mt-3 text-lg font-black text-[#101828]">
+            已答 {practicedCount} / {totalCount}
+          </h3>
+        </div>
+        <div className="flex flex-wrap gap-2 text-[11px] font-black">
+          <span className="rounded-full border border-[#cfe6f2] bg-[#eef7fc] px-3 py-1.5 text-[#003178]">
+            已答 {practicedCount}
+          </span>
+          <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-500">
+            未答 {remainingCount}
+          </span>
+        </div>
+      </div>
+
+      <div role="list" className="mt-4 grid grid-cols-[repeat(auto-fill,minmax(2.75rem,1fr))] gap-2">
+        {statuses.map((item) => (
+          <div
+            key={item.id}
+            role="listitem"
+            className="min-w-11"
+          >
+            <button
+              type="button"
+              data-testid={`practice-question-status-${moduleId}-${item.number}`}
+              title={`${item.groupLabel ? `${item.groupLabel} · ` : ''}${item.label} · ${item.practiced ? '已答' : '未答'} · 点击进入本题`}
+              aria-label={`${moduleLabel} 第 ${item.number} 题 ${item.practiced ? '已答' : '未答'}，点击进入本题`}
+              onClick={() => onSelectQuestion(item)}
+              className={`flex h-11 w-full min-w-11 items-center justify-center rounded-xl border text-xs font-black transition hover:-translate-y-0.5 hover:border-[#003178]/45 focus:outline-none focus:ring-2 focus:ring-[#003178]/25 ${
+                item.practiced
+                  ? 'border-[#cfe6f2] bg-[#eef7fc] text-[#003178]'
+                  : 'border-slate-200 bg-white text-slate-500'
+              }`}
+            >
+              {item.number}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {canToggle && (
+        <button
+          type="button"
+          onClick={onToggleExpanded}
+          className="ui-button ui-button-secondary ui-button-full mt-4"
+        >
+          {expanded ? '收起题号列表' : `展开全部 ${totalCount} 题`}
+        </button>
+      )}
+    </section>
   );
 }
 

@@ -145,11 +145,12 @@ export default function MaterialImporter({ onLoadCustomPassage }: MaterialImport
   };
 
   return (
-    <div className="app-page-surface flex-1 min-h-[calc(100svh-9rem)] lg:h-screen overflow-y-auto overflow-x-hidden bg-[#f7fbff] p-4 sm:p-6 lg:p-8">
-      <header className="mb-6 flex flex-col gap-4 border-b border-[#cfe6f2] pb-5 lg:flex-row lg:items-end lg:justify-between">
+    <div className="app-page-surface ui-page">
+      <div className="ui-page-content">
+      <header className="ui-page-header-compact mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.25em] text-[#0d47a1]">Material Studio</p>
-          <h2 className="mt-2 flex items-center gap-2 text-xl font-black tracking-tight text-[#003178] sm:text-2xl">
+          <p className="text-xs font-black uppercase tracking-[0.25em] text-slate-500">Material Studio</p>
+          <h2 className="mt-2 flex items-center gap-2 text-xl font-black tracking-tight text-[#101828] sm:text-2xl">
             <DownloadCloud className="h-7 w-7" />
             材料导入与 AI 模拟卷生成
           </h2>
@@ -157,7 +158,7 @@ export default function MaterialImporter({ onLoadCustomPassage }: MaterialImport
             支持 AI 生成 CET-4 模拟阅读，也支持导入合法来源的 JSON 题材。所有导入内容都会先经过后端结构校验，再进入训练舱。
           </p>
         </div>
-        <div className="rounded-2xl border border-[#cfe6f2] bg-white/80 px-4 py-3 text-xs font-bold text-[#003178] shadow-xs">
+        <div className="ui-chip ui-chip-accent px-4 py-3 text-xs">
           当前草稿：{questionCount || '未识别'} 道题
         </div>
       </header>
@@ -176,7 +177,7 @@ export default function MaterialImporter({ onLoadCustomPassage }: MaterialImport
       )}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[0.92fr_1.08fr]">
-        <section className="rounded-3xl border border-[#c3c6d4] bg-white p-4 shadow-xs sm:p-6">
+        <section className="ui-panel">
           <div className="flex items-center gap-2 text-sm font-black text-[#071e27]">
             <Sparkles className="h-5 w-5 text-[#003178]" />
             AI 模拟阅读生成
@@ -196,11 +197,7 @@ export default function MaterialImporter({ onLoadCustomPassage }: MaterialImport
             <button
               onClick={() => handleGenerate()}
               disabled={loading || !topic.trim()}
-              className={`flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-black shadow-sm transition ${
-                topic.trim() && !loading
-                  ? 'bg-[#003178] text-white hover:-translate-y-0.5 hover:bg-[#0d47a1]'
-                  : 'cursor-not-allowed bg-slate-100 text-slate-400'
-              }`}
+              className="ui-button ui-button-primary ui-button-full"
             >
               {loading ? <RotateCw className="h-4 w-4 animate-spin" /> : <BookOpen className="h-4 w-4" />}
               <span>{loading ? '正在处理材料...' : '一键生成 CET-4 模拟阅读'}</span>
@@ -228,7 +225,7 @@ export default function MaterialImporter({ onLoadCustomPassage }: MaterialImport
           </div>
         </section>
 
-        <section className="rounded-3xl border border-[#c3c6d4] bg-white p-4 shadow-xs sm:p-6">
+        <section className="ui-panel">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="flex items-center gap-2 text-sm font-black text-[#071e27]">
@@ -259,7 +256,7 @@ export default function MaterialImporter({ onLoadCustomPassage }: MaterialImport
                 setJsonText(JSON.stringify(SAMPLE_IMPORT_TEMPLATE, null, 2));
                 setStatus({ type: 'success', text: '已恢复示例模板，可直接校验导入。' });
               }}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-xs font-black text-slate-600 transition hover:border-[#003178] hover:text-[#003178]"
+              className="ui-button ui-button-secondary"
             >
               <ClipboardPaste className="h-4 w-4" />
               填入示例模板
@@ -267,13 +264,14 @@ export default function MaterialImporter({ onLoadCustomPassage }: MaterialImport
             <button
               onClick={handleImportJson}
               disabled={loading || !jsonText.trim()}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#1b6d24] px-6 py-3 text-xs font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+              className="ui-button ui-button-primary"
             >
               {loading ? <RotateCw className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
               校验并导入训练
             </button>
           </div>
         </section>
+      </div>
       </div>
     </div>
   );

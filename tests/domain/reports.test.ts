@@ -15,6 +15,12 @@ describe('buildChoicePracticeReport', () => {
         {
           id: 1,
           question: 'What is the main idea?',
+          options: {
+            A: 'A library policy detail.',
+            B: 'Nature can support focus and lower stress.',
+            C: 'A history of city parks.',
+            D: 'A warning about online learning.',
+          },
           correctAnswer: 'B',
           correctSentence: 'Natural environments may reduce stress and improve concentration.',
           explanation: 'The correct option paraphrases reduce stress and improve concentration.',
@@ -34,7 +40,16 @@ describe('buildChoicePracticeReport', () => {
     expect(report.attempts).toHaveLength(1);
     expect(report.attempts[0].mistakeReasons).toContain('同义替换未识别');
     expect(report.reviewItems).toHaveLength(1);
-    expect(report.reviewItems[0].learningMethod).toBe('active-recall-cloze-production');
+    expect(report.reviewItems[0].learningMethod).toBe('wrong-question-redo-active-recall');
+    expect(report.reviewItems[0].redoQuestion).toMatchObject({
+      kind: 'single-choice',
+      prompt: 'What is the main idea?',
+      correctAnswer: 'B',
+      userAnswer: 'A',
+      options: {
+        B: 'Nature can support focus and lower stress.',
+      },
+    });
     expect(report.reviewItems[0].memoryTask).toMatchObject({
       sourceText: 'Natural environments may reduce stress and improve concentration.',
       spacingPlanDays: [1, 3, 7, 14, 30],
@@ -156,6 +171,7 @@ describe('buildChoicePracticeReport', () => {
     const report = buildSubjectivePracticeReport({
       examId: 'cet4',
       moduleId: 'translation',
+      questionId: 'translation-renewable-energy',
       questionTypeId: 'paragraph-translation',
       modeId: 'translation-practice',
       plannedMinutes: 30,
@@ -177,6 +193,8 @@ describe('buildChoicePracticeReport', () => {
       modeId: 'translation-practice',
       status: 'completed',
     });
+    expect(report.session.questionIds).toEqual(['translation-renewable-energy']);
+    expect(report.attempts[0].questionId).toBe('translation-renewable-energy');
     expect(report.attempts[0].mistakeReasons).toContain('中文干扰');
     expect(report.reviewItems[0]).toMatchObject({
       targetType: 'expression',

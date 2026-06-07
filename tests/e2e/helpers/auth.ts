@@ -4,10 +4,10 @@ const REGISTRATION_INVITE_CODE = process.env.E2E_REGISTRATION_INVITE_CODE || 'ET
 
 export async function registerAndEnterApp(page: Page, label = 'e2e') {
   await page.goto('/');
-  await expect(page.getByText('账号密码登录')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '英语训练舱' })).toBeVisible();
 
   const email = `${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
-  await page.getByRole('button', { name: '使用邀请码注册' }).click();
+  await page.getByRole('button', { name: '邀请码注册' }).click();
   await page.getByTestId('saas-name-input').fill('E2E 学习者');
   await page.getByTestId('saas-organization-input').fill('E2E 训练团队');
   await page.getByTestId('saas-invite-code-input').fill(REGISTRATION_INVITE_CODE);

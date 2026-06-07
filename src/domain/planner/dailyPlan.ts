@@ -1,5 +1,6 @@
 import { DailyPlan, ReviewItem, SkillProfile, StudyGoal } from '../../types';
 import { buildStageProgressSummary } from '../progress/abilityEvidence';
+import { isReviewItemDueOn, sortWrongQuestionReviewItems } from '../review/reviewQueue';
 
 interface BuildDailyPlanInput {
   goal: Pick<StudyGoal, 'id' | 'examId' | 'examDate' | 'dailyMinutes' | 'prioritySkills'>;
@@ -105,10 +106,10 @@ function allocateTaskMinutes(params: {
 export function buildDailyPlan(input: BuildDailyPlanInput): DailyPlan {
   const date = input.date ?? todayIsoDate();
   const plannedMinutes = minutesByMode(input.goal.dailyMinutes, input.energyMode ?? 'standard');
-  const allReviewItems = input.reviewItems ?? [];
+  const allReviewItems = sortWrongQuestionReviewItems(input.reviewItems ?? []);
   const reviewStrategy = input.strategy === 'review';
   const dueReviews = allReviewItems
-    .filter((item) => !item.nextReviewAt || item.nextReviewAt.slice(0, 10) <= date)
+    .filter((item) => isReviewItemDueOn(item, date))
     .sort((a, b) => (b.priorityScore ?? 0) - (a.priorityScore ?? 0));
   const reviewCandidates = (reviewStrategy && allReviewItems.length > 0 ? allReviewItems : dueReviews)
     .sort((a, b) => (b.priorityScore ?? 0) - (a.priorityScore ?? 0));
@@ -168,7 +169,7 @@ export function buildDailyPlan(input: BuildDailyPlanInput): DailyPlan {
     tasks.push({
       id: `task-review-${date}`,
       type: 'review',
-      title: `${reviewStrategy ? '巩固' : '处理'} ${reviewCandidates.length} 个${dueReviews.length > 0 ? '到期' : '高优先级'}复习项`,
+      title: `${reviewStrategy ? '巩固' : '处理'} ${reviewCandidates.length} 个${dueReviews.length > 0 ? '到期' : '高优先级'}错题`,
       skillArea: reviewCandidates[0].skillArea ?? primaryPracticeSkill,
       estimatedMinutes: taskMinutes.reviewMinutes,
       priority: 'high',
@@ -260,7 +261,7 @@ export function buildDailyPlan(input: BuildDailyPlanInput): DailyPlan {
     plannedMinutes,
     tasks,
     rationale: [
-      !hasAbilityEvidence ? '首次使用先做入门诊断，避免系统凭空推荐。' : dueReviews.length > 0 ? '到期复习优先级高于新题训练。' : '今天没有到期复习项，优先建立新练习证据。',
+      !hasAbilityEvidence ? '首次使用先做入门诊断，避免系统凭空推荐。' : dueReviews.length > 0 ? '到期错题优先级高于新题训练。' : '今天没有到期错题，优先建立新练习证据。',
       declinedStageSection
         ? `${declinedStageSection.label} 阶段模考较基线下降 ${Math.abs(declinedStageSection.delta)} 个能力点，今日主训练优先修正该回落分项。`
         : weakestSkill
@@ -268,7 +269,7 @@ export function buildDailyPlan(input: BuildDailyPlanInput): DailyPlan {
         : '能力画像证据不足，先从阅读/听力核心模块开始。',
       needsVocabularyTask ? '词汇证据不足或分数偏低，今日任务加入核心词汇听音练习。' : '词汇证据已达到当前稳定线，今天不强制安排词汇。',
       mockMinutes > 0 ? '临近考试且已有能力证据，加入阶段模考来校准写作、听力、阅读和翻译分项。' : '今天以诊断、专项或复习为主，阶段模考可在左侧“阶段模考”中手动启动。',
-      reviewStrategy ? '当前使用巩固策略，会优先处理高优先级复习项。' : '当前使用高效策略，优先分配新题训练与到期复习。',
+      reviewStrategy ? '当前使用巩固策略，会优先处理高优先级错题。' : '当前使用高效策略，优先分配新题训练与到期错题。',
       speakingEnabled ? '保留口语重说短回合，形成表达改进闭环。' : '当前目标未开启口语并行训练。',
     ],
   };

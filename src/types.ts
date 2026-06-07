@@ -1,4 +1,4 @@
-export type ActiveTab = 'today' | 'practice' | 'mock' | 'review' | 'speaking' | 'progress' | 'import' | 'settings';
+export type ActiveTab = 'today' | 'practice' | 'mock' | 'review' | 'history' | 'speaking' | 'progress' | 'import' | 'settings';
 
 export type SkillArea = 'reading' | 'listening' | 'writing' | 'translation' | 'speaking' | 'vocabulary' | 'grammar';
 
@@ -20,6 +20,14 @@ export type MistakeReason =
   | '搭配错误'
   | '时态语态错误'
   | '中文干扰';
+
+export type ChoiceOption = 'A' | 'B' | 'C' | 'D';
+
+export interface QuestionChineseSupport {
+  context?: string;
+  question?: string;
+  options?: Partial<Record<ChoiceOption, string>>;
+}
 
 export interface ExamProfile {
   id: string;
@@ -82,9 +90,10 @@ export interface Question {
     C: string;
     D: string;
   };
-  correctAnswer: 'A' | 'B' | 'C' | 'D';
+  correctAnswer: ChoiceOption;
   explanation: string;
   type: string; // e.g., "细节推断", "主旨大意", "词汇理解"
+  chineseSupport?: QuestionChineseSupport;
   tags?: string[];
   difficulty?: 1 | 2 | 3 | 4 | 5;
   sourceType?: 'original' | 'user-imported' | 'licensed' | 'ai-generated';
@@ -107,6 +116,7 @@ export interface Passage {
   moduleId?: string;
   title: string;
   content: string;
+  chineseSupport?: QuestionChineseSupport;
   questions: Question[];
 }
 
@@ -155,11 +165,25 @@ export interface PracticeCompletionReport {
 }
 
 export interface ReviewCompletionEvidence {
+  redoAnswer?: string;
+  redoCorrect?: boolean;
+  reviewOutcome?: 'mastered' | 'unclear' | 'again';
   recallAnswer: string;
   clozeAnswer: string;
   productionAnswer: string;
   completedStepCount: number;
   startedAt?: string;
+}
+
+export interface ReviewRedoQuestion {
+  kind: 'single-choice' | 'text';
+  prompt: string;
+  context?: string;
+  options?: Partial<Record<ChoiceOption, string>>;
+  correctAnswer?: ChoiceOption | string;
+  userAnswer?: string;
+  explanation?: string;
+  sourceLabel?: string;
 }
 
 export interface MemoryReviewTask {
@@ -232,7 +256,8 @@ export interface ReviewItem {
   sourceAttemptId?: string;
   createdAt?: string;
   memoryTask?: MemoryReviewTask;
-  learningMethod?: 'active-recall-cloze-production';
+  redoQuestion?: ReviewRedoQuestion;
+  learningMethod?: 'wrong-question-redo-active-recall' | 'active-recall-cloze-production';
   retrievalCount?: number;
 }
 

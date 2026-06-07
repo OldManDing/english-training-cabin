@@ -2,8 +2,8 @@ import request from 'supertest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
-import { buildContentSecurityPolicy, createApp } from '../../server';
+import { describe, expect, it, vi } from 'vitest';
+import { buildContentSecurityPolicy, buildEdgeTtsArguments, createApp } from '../../server';
 import { assertSmokeLearningBackupRoundTrip, createSmokeLearningBackup, getSmokeReviewEvidenceIds } from '../../scripts/smoke-learning-backup.mjs';
 import { CET4_MOCK_EXAM } from '../../src/questionBank';
 import {
@@ -12,6 +12,52 @@ import {
   LOCAL_REGISTRATION_INVITE_CODE,
   signBillingWebhookPayload,
 } from '../../src/server/saas';
+
+const MOCK_WRITING_ESSAY =
+  'Consistent practice matters in English learning because real ability grows only when students use knowledge again and again in meaningful tasks. When learners write, listen, and review on a fixed schedule, they notice mistakes earlier and build stronger memory. For example, I write a short paragraph after class, read it aloud, and then check whether my topic sentence, reasons, and examples are clear. This routine may look simple, but it helps me turn passive vocabulary into active language and stops me from depending on last minute memorization. It also gives teachers enough evidence to offer specific feedback. In my view, the biggest value of consistent practice is that it makes progress visible, keeps confidence stable, and supports long term improvement before the CET-4 exam.';
+
+const MINIMAL_CET4_REAL_PAPER_PDF = `%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 206 >>
+stream
+BT
+/F1 12 Tf
+72 720 Td
+(Part I Writing Directions test writing prompt) Tj
+0 -20 Td
+(Part II Listening Comprehension Section A 1. A question) Tj
+0 -20 Td
+(Part III Reading Comprehension Section A passage text) Tj
+0 -20 Td
+(Part IV Translation Directions translate this paragraph) Tj
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000241 00000 n
+0000000311 00000 n
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+568
+%%EOF`;
 
 describe('server API', () => {
   const app = createApp();
@@ -43,6 +89,11 @@ describe('server API', () => {
       app: 'english-training-cabin',
     });
     expect(response.body).toHaveProperty('aiProvider');
+    expect(response.body.aiRuntime).toMatchObject({
+      state: 'offline-fallback',
+      fallbackAvailable: true,
+      statusReason: 'not_configured',
+    });
     expect(response.body.saas).toMatchObject({
       registrationInviteRequired: true,
       registrationInviteConfigured: true,
@@ -55,6 +106,48 @@ describe('server API', () => {
     expect(response.headers['permissions-policy']).toContain('microphone=(self)');
     expect(response.headers['content-security-policy']).toContain("default-src 'self'");
     expect(response.headers['content-security-policy']).toContain("frame-ancestors 'none'");
+  });
+
+  it('exposes public AI availability without leaking provider secrets', async () => {
+    const response = await request(app).get('/api/ai/status').expect(200);
+
+    expect(response.body).toMatchObject({
+      configured: false,
+      provider: 'mock',
+      model: 'offline-fallback',
+      state: 'offline-fallback',
+      fallbackAvailable: true,
+      shouldNotifyUser: true,
+      statusReason: 'not_configured',
+    });
+    expect(response.body).toHaveProperty('requestsTotal');
+    expect(response.body).toHaveProperty('fallbackRate');
+    expect(response.body).toHaveProperty('averageLatencyMs');
+    expect(response.body).toHaveProperty('fallbacksByReason');
+    expect(response.body).not.toHaveProperty('apiKey');
+    expect(response.body).not.toHaveProperty('baseUrl');
+  });
+
+  it('returns a clear response for server practice TTS availability', async () => {
+    const response = await request(app)
+      .post('/api/practice/tts')
+      .send({ text: 'adapt', rate: 0.8 });
+
+    if (response.status === 200) {
+      expect(response.headers['content-type']).toMatch(/audio\/(?:mpeg|wav)/);
+      expect(response.body.length).toBeGreaterThan(128);
+      return;
+    }
+
+    expect(response.status).toBe(501);
+    expect(response.body).toMatchObject({ error: 'practice_tts_unavailable' });
+  });
+
+  it('passes negative Edge TTS rates as a single option argument', () => {
+    const args = buildEdgeTtsArguments('adapt quickly', '/tmp/practice-tts.mp3', { browserRate: 0.85 });
+
+    expect(args).toContain('--rate=-7%');
+    expect(args).not.toContain('-7%');
   });
 
   it('accepts allowed product telemetry events and exposes observability summary', async () => {
@@ -85,6 +178,33 @@ describe('server API', () => {
     await request(app)
       .post('/api/telemetry/event')
       .send({ eventName: 'raw_prompt_dump' })
+      .expect(400);
+  });
+
+  it('accepts user feedback and writes a local evidence record', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'etc-feedback-'));
+    const feedbackFilePath = path.join(tempDir, 'feedback.jsonl');
+    const feedbackApp = createApp({ feedbackFilePath });
+
+    await request(feedbackApp)
+      .post('/api/feedback')
+      .send({ message: '专项练习页面的暂停按钮需要更明显。', category: 'ui', page: '/settings' })
+      .expect(201)
+      .expect((response) => {
+        expect(response.body).toEqual({ status: 'received' });
+      });
+
+    const storedLines = (await fs.readFile(feedbackFilePath, 'utf8')).trim().split('\n');
+    expect(storedLines).toHaveLength(1);
+    expect(JSON.parse(storedLines[0])).toMatchObject({
+      category: 'ui',
+      message: '专项练习页面的暂停按钮需要更明显。',
+      page: '/settings',
+    });
+
+    await request(feedbackApp)
+      .post('/api/feedback')
+      .send({ message: '太短', category: 'bug' })
       .expect(400);
   });
 
@@ -760,11 +880,13 @@ describe('server API', () => {
     expect(response.body.questionBankCoverage.length).toBeGreaterThanOrEqual(8);
     expect(response.body.mockExam).toMatchObject({
       id: 'cet4-standard-mock-001',
-      plannedMinutes: 137,
+      plannedMinutes: 125,
+      totalQuestionCount: 57,
+      writingTaskCount: 1,
+      translationTaskCount: 1,
     });
     expect(response.body.mockExam.listeningQuestionCount).toBe(25);
     expect(response.body.mockExam.readingQuestionCount).toBe(30);
-    expect(response.body.mockExam.foundationQuestionCount).toBe(8);
     expect(response.body.degreeEnglish.outline).toMatchObject({
       id: 'nanjing-tech-degree-english-2025-09',
       plannedMinutes: 120,
@@ -781,6 +903,294 @@ describe('server API', () => {
       traditionalReadingQuestionCount: 15,
       paragraphMatchingQuestionCount: 5,
     });
+  });
+
+  it('lists and serves local CET-4 real paper PDFs from a configured root', async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'etc-local-papers-'));
+    const cet4Directory = path.join(tempRoot, '大学英语四级');
+    const listeningDirectory = path.join(tempRoot, '听力');
+    const answerRoot = path.join(tempRoot, 'answers');
+    await fs.mkdir(cet4Directory, { recursive: true });
+    await fs.mkdir(listeningDirectory, { recursive: true });
+    await fs.mkdir(answerRoot, { recursive: true });
+    await fs.writeFile(path.join(cet4Directory, '2025年12月英语四级真题(第2套).pdf'), MINIMAL_CET4_REAL_PAPER_PDF);
+    await fs.writeFile(path.join(cet4Directory, '2025年12月英语四级真题(第2套)答案.txt'), '1. A\n2. B\n');
+    await fs.writeFile(path.join(listeningDirectory, '2025年12月英语四级真题(第2套)听力.mp3'), 'fake-audio');
+    await fs.writeFile(path.join(cet4Directory, '2020年7月英语四级真题(组合卷).pdf'), '%PDF-1.4\n% combo pdf\n');
+    await fs.writeFile(path.join(cet4Directory, '英语六级真题.pdf'), '%PDF-1.4\n% ignored pdf\n');
+    await fs.writeFile(
+      path.join(answerRoot, '大学英语四级-纯答案.md'),
+      '# 大学英语四级纯答案\n\n### 2020年7月英语四级真题(组合卷)\n\n1.C 2.A 3.B 4.D\n',
+    );
+
+    const previousRoot = process.env.LOCAL_REAL_PAPER_ROOT;
+    const previousAnswerRoot = process.env.LOCAL_REAL_PAPER_ANSWER_ROOT;
+    const previousAudioRoot = process.env.LOCAL_REAL_PAPER_AUDIO_ROOT;
+    process.env.LOCAL_REAL_PAPER_ROOT = tempRoot;
+    process.env.LOCAL_REAL_PAPER_ANSWER_ROOT = answerRoot;
+    process.env.LOCAL_REAL_PAPER_AUDIO_ROOT = listeningDirectory;
+
+    try {
+      const localApp = createApp({
+        saasStore: createInMemorySaasStore(),
+        saasSessionSecret: 'test-local-real-papers-secret',
+      });
+      const response = await request(localApp)
+        .get('/api/local-real-papers?exam=cet4')
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        examId: 'cet4',
+        total: 2,
+        answerKeyStatus: 'ready',
+        listeningAssetStatus: 'ready',
+      });
+      expect(response.body.papers.map((paper: { id: string }) => paper.id)).toEqual([
+        'cet4-2025-12-set2',
+        'cet4-2020-07-combo',
+      ]);
+      expect(response.body.papers[0]).toMatchObject({
+        title: '2025 年 12 月英语四级真题（第 2 套）',
+        examDate: '2025-12',
+        setLabel: '第 2 套',
+        hasAnswerKey: true,
+        hasListeningAudio: true,
+        answerKeyUrl: '/api/local-real-papers/cet4-2025-12-set2/answer-key',
+        listeningAudioUrl: '/api/local-real-papers/cet4-2025-12-set2/audio',
+        pdfUrl: '/api/local-real-papers/cet4-2025-12-set2/pdf',
+      });
+      expect(response.body.papers[1]).toMatchObject({
+        id: 'cet4-2020-07-combo',
+        hasAnswerKey: true,
+        answerKeyUrl: '/api/local-real-papers/cet4-2020-07-combo/answer-key',
+      });
+
+      await request(localApp)
+        .get('/api/local-real-papers/cet4-2025-12-set2/pdf')
+        .expect(200)
+        .expect('Content-Type', /application\/pdf/);
+
+      await request(localApp)
+        .get('/api/local-real-papers/cet4-2025-12-set2/content')
+        .expect(200)
+        .expect((contentResponse) => {
+          expect(contentResponse.body.content).toMatchObject({
+            paperId: 'cet4-2025-12-set2',
+            pageCount: 1,
+            truncated: false,
+          });
+          expect(contentResponse.body.content.sections.map((section: { id: string }) => section.id)).toEqual([
+            'writing',
+            'listening',
+            'reading',
+            'translation',
+          ]);
+          expect(contentResponse.body.content.pages[0].text).toContain('Part I Writing');
+          const serializedContent = JSON.stringify(contentResponse.body.content);
+          expect(serializedContent).not.toContain('http');
+          expect(serializedContent).not.toContain('burningvocabulary.cn');
+        });
+
+      await request(localApp)
+        .get('/api/local-real-papers/cet4-2025-12-set2/answer-key')
+        .expect(200)
+        .expect((answerResponse) => {
+          expect(answerResponse.text).toContain('1. A');
+        });
+      await request(localApp)
+        .get('/api/local-real-papers/cet4-2020-07-combo/answer-key')
+        .expect(200)
+        .expect((answerResponse) => {
+          expect(answerResponse.text).toContain('# 2020年7月英语四级真题(组合卷) 答案');
+          expect(answerResponse.text).toContain('1.C');
+        });
+
+      await request(localApp)
+        .get('/api/local-real-papers/cet4-2025-12-set2/audio')
+        .expect(200)
+        .expect('Content-Type', /audio\/mpeg/);
+
+      const { token } = await registerApiUser(localApp, 'local-paper-reference');
+      await request(localApp)
+        .get('/api/local-real-papers/cet4-2025-12-set2/ai-reference')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200)
+        .expect((referenceResponse) => {
+          expect(referenceResponse.body).toMatchObject({
+            reference: null,
+            status: 'missing',
+          });
+        });
+
+      await request(localApp)
+        .get('/api/local-real-papers/missing-paper/pdf')
+        .expect(404);
+
+      await request(localApp)
+        .get('/api/local-real-papers?exam=ielts')
+        .expect(400);
+    } finally {
+      if (previousRoot === undefined) {
+        delete process.env.LOCAL_REAL_PAPER_ROOT;
+      } else {
+        process.env.LOCAL_REAL_PAPER_ROOT = previousRoot;
+      }
+      if (previousAnswerRoot === undefined) {
+        delete process.env.LOCAL_REAL_PAPER_ANSWER_ROOT;
+      } else {
+        process.env.LOCAL_REAL_PAPER_ANSWER_ROOT = previousAnswerRoot;
+      }
+      if (previousAudioRoot === undefined) {
+        delete process.env.LOCAL_REAL_PAPER_AUDIO_ROOT;
+      } else {
+        process.env.LOCAL_REAL_PAPER_AUDIO_ROOT = previousAudioRoot;
+      }
+      await fs.rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('uses browser speech fallback when generated listening audio is disabled', async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'etc-local-papers-browser-speech-'));
+    const cet4Directory = path.join(tempRoot, '大学英语四级');
+    const answerRoot = path.join(tempRoot, 'answers');
+    await fs.mkdir(cet4Directory, { recursive: true });
+    await fs.mkdir(answerRoot, { recursive: true });
+    await fs.writeFile(path.join(cet4Directory, '2025年12月英语四级真题(第1套).pdf'), MINIMAL_CET4_REAL_PAPER_PDF);
+    await fs.writeFile(
+      path.join(answerRoot, '大学英语四级-纯答案.md'),
+      '# 大学英语四级纯答案\n\n### 2025年12月英语四级真题(第1套)\n\n1.C 2.A 3.C 4.B\n',
+    );
+
+    const previousRoot = process.env.LOCAL_REAL_PAPER_ROOT;
+    const previousAnswerRoot = process.env.LOCAL_REAL_PAPER_ANSWER_ROOT;
+    const previousAudioRoot = process.env.LOCAL_REAL_PAPER_AUDIO_ROOT;
+    const previousGeneratedAudioEnabled = process.env.LOCAL_REAL_PAPER_GENERATED_AUDIO_ENABLED;
+    process.env.LOCAL_REAL_PAPER_ROOT = tempRoot;
+    process.env.LOCAL_REAL_PAPER_ANSWER_ROOT = answerRoot;
+    delete process.env.LOCAL_REAL_PAPER_AUDIO_ROOT;
+    process.env.LOCAL_REAL_PAPER_GENERATED_AUDIO_ENABLED = 'false';
+
+    try {
+      const localApp = createApp({
+        saasStore: createInMemorySaasStore(),
+        saasSessionSecret: 'test-local-real-papers-browser-speech-secret',
+      });
+      const response = await request(localApp)
+        .get('/api/local-real-papers?exam=cet4')
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        examId: 'cet4',
+        total: 1,
+        sourceStatus: 'local-scan',
+        answerKeyStatus: 'ready',
+        listeningAssetStatus: 'browser-tts',
+      });
+      expect(response.body.papers[0]).toMatchObject({
+        id: 'cet4-2025-12-set1',
+        hasAnswerKey: true,
+        hasListeningAudio: false,
+        answerKeyUrl: '/api/local-real-papers/cet4-2025-12-set1/answer-key',
+        answerSource: 'local-file',
+        listeningSource: 'browser-tts',
+      });
+      expect(response.body.papers[0].listeningAudioUrl).toBeUndefined();
+
+      await request(localApp)
+        .get('/api/local-real-papers/cet4-2025-12-set1/generated-listening-audio')
+        .expect(404)
+        .expect((audioResponse) => {
+          expect(audioResponse.body.error).toBe('generated_listening_audio_unavailable');
+        });
+    } finally {
+      if (previousRoot === undefined) {
+        delete process.env.LOCAL_REAL_PAPER_ROOT;
+      } else {
+        process.env.LOCAL_REAL_PAPER_ROOT = previousRoot;
+      }
+      if (previousAnswerRoot === undefined) {
+        delete process.env.LOCAL_REAL_PAPER_ANSWER_ROOT;
+      } else {
+        process.env.LOCAL_REAL_PAPER_ANSWER_ROOT = previousAnswerRoot;
+      }
+      if (previousAudioRoot === undefined) {
+        delete process.env.LOCAL_REAL_PAPER_AUDIO_ROOT;
+      } else {
+        process.env.LOCAL_REAL_PAPER_AUDIO_ROOT = previousAudioRoot;
+      }
+      if (previousGeneratedAudioEnabled === undefined) {
+        delete process.env.LOCAL_REAL_PAPER_GENERATED_AUDIO_ENABLED;
+      } else {
+        process.env.LOCAL_REAL_PAPER_GENERATED_AUDIO_ENABLED = previousGeneratedAudioEnabled;
+      }
+      await fs.rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('falls back to bundled CET-4 real paper PDFs when the scan root is unavailable', async () => {
+    const previousRoot = process.env.LOCAL_REAL_PAPER_ROOT;
+    const previousAnswerRoot = process.env.LOCAL_REAL_PAPER_ANSWER_ROOT;
+    const previousAudioRoot = process.env.LOCAL_REAL_PAPER_AUDIO_ROOT;
+    process.env.LOCAL_REAL_PAPER_ROOT = path.join(os.tmpdir(), `etc-missing-local-papers-${Date.now()}`);
+    delete process.env.LOCAL_REAL_PAPER_ANSWER_ROOT;
+    delete process.env.LOCAL_REAL_PAPER_AUDIO_ROOT;
+
+    try {
+      const localApp = createApp({
+        saasStore: createInMemorySaasStore(),
+        saasSessionSecret: 'test-bundled-real-papers-secret',
+      });
+      const response = await request(localApp)
+        .get('/api/local-real-papers?exam=cet4')
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        examId: 'cet4',
+        total: 3,
+        sourceStatus: 'bundled',
+      });
+      expect(response.body.papers.map((paper: { id: string }) => paper.id)).toContain('cet4-2023-06-set1');
+      expect(response.body.papers[0]).toMatchObject({
+        pdfUrl: '/api/local-real-papers/cet4-2023-06-set1/pdf',
+        source: 'bundled',
+      });
+
+      await request(localApp)
+        .get('/api/local-real-papers/cet4-2023-06-set1/pdf')
+        .expect(200)
+        .expect('Content-Type', /application\/pdf/);
+
+      await request(localApp)
+        .get('/api/local-real-papers/cet4-2023-06-set1/content')
+        .expect(200)
+        .expect((contentResponse) => {
+          expect(contentResponse.body.content).toMatchObject({
+            paperId: 'cet4-2023-06-set1',
+            truncated: false,
+          });
+          expect(JSON.stringify(contentResponse.body.content)).toMatch(/Part I Writing|写作/);
+        });
+
+      await request(localApp)
+        .get('/api/local-real-papers/cet4-2023-06-set1/answer-key')
+        .expect(404);
+    } finally {
+      if (previousRoot === undefined) {
+        delete process.env.LOCAL_REAL_PAPER_ROOT;
+      } else {
+        process.env.LOCAL_REAL_PAPER_ROOT = previousRoot;
+      }
+      if (previousAnswerRoot === undefined) {
+        delete process.env.LOCAL_REAL_PAPER_ANSWER_ROOT;
+      } else {
+        process.env.LOCAL_REAL_PAPER_ANSWER_ROOT = previousAnswerRoot;
+      }
+      if (previousAudioRoot === undefined) {
+        delete process.env.LOCAL_REAL_PAPER_AUDIO_ROOT;
+      } else {
+        process.env.LOCAL_REAL_PAPER_AUDIO_ROOT = previousAudioRoot;
+      }
+    }
   });
 
   it('denies unauthenticated access to learning business APIs', async () => {
@@ -1027,6 +1437,37 @@ describe('server API', () => {
     expect(response.body).toHaveProperty('sampleAnswer');
   });
 
+  it('falls back safely for diagnostic AI subjective evaluation without API key', async () => {
+    const { token } = await registerApiUser(app, 'diagnostic-ai');
+    const response = await request(app)
+      .post('/api/ai/evaluate-diagnostic')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        examId: 'cet4',
+        items: [
+          {
+            id: 'diag-writing-argument',
+            skillArea: 'writing',
+            title: '写作结构与论证',
+            context: 'Topic: Should students use AI tools when learning English?',
+            prompt: 'Write a short CET-4 argument paragraph.',
+            answer: MOCK_WRITING_ESSAY,
+            minWords: 45,
+          },
+        ],
+      })
+      .expect(200);
+
+    expect(response.body.usedFallback).toBe(true);
+    expect(response.body.evaluations['diag-writing-argument']).toMatchObject({
+      itemId: 'diag-writing-argument',
+      source: 'fallback',
+      confidence: 'low',
+    });
+    expect(response.body.evaluations['diag-writing-argument'].score).toBeGreaterThan(0);
+    expect(response.body.evaluations['diag-writing-argument'].comments[0]).toContain('AI');
+  });
+
   it('builds a subjective completion report through API', async () => {
     const { token } = await registerApiUser(app, 'subjective-report');
 
@@ -1077,16 +1518,14 @@ describe('server API', () => {
             [
               ...CET4_MOCK_EXAM.listening.questions,
               ...CET4_MOCK_EXAM.reading.questions,
-              ...CET4_MOCK_EXAM.foundation.questions,
             ].map((question) => [
               question.id,
               question.correctAnswer,
             ]),
           ),
-          writingAnswer:
-            'Consistent practice helps students improve English because they can receive feedback and correct mistakes. For example, I write one short paragraph every day and review useful expressions after class.',
+          writingAnswer: MOCK_WRITING_ESSAY,
           translationAnswer:
-            'More and more college students use digital tools to learn English. Effective tools should not only give answers, but also help students find mistakes, actively recall knowledge and review at the right time.',
+            'More and more college students use digital tools to learn English. Effective tools should not only give answers, but also help students find mistakes, actively recall knowledge, and return to weak points at the right time through regular review.',
         },
       })
       .expect(200);
@@ -1095,15 +1534,19 @@ describe('server API', () => {
       moduleId: 'mock',
       modeId: 'cet4-standard-mock',
     });
-    expect(response.body.report.attempts).toHaveLength(65);
-    expect(response.body.sectionScores).toHaveLength(5);
-    expect(response.body.report.skillProfiles.map((profile: { skillArea: string }) => profile.skillArea)).toEqual([
-      'writing',
-      'listening',
-      'reading',
-      'grammar',
-      'grammar',
-      'translation',
+    expect(response.body.report.attempts).toHaveLength(57);
+    expect(response.body.sectionScores).toHaveLength(4);
+    expect(response.body.report.skillProfiles.map((profile: { subSkillId: string }) => profile.subSkillId)).toEqual([
+      'mock-short-essay',
+      'mock-listening-mixed',
+      'mock-short-news',
+      'mock-long-conversation',
+      'mock-listening-passage',
+      'mock-reading-mixed',
+      'mock-word-bank',
+      'mock-long-matching',
+      'mock-careful-reading',
+      'mock-paragraph-translation',
     ]);
   });
 
@@ -1133,6 +1576,84 @@ describe('server API', () => {
 
     expect(response.body.questions).toHaveLength(5);
     expect(response.body.title).toContain('模拟阅读');
+  });
+
+  it('surfaces AI usage-limit fallback status without exposing provider error details', async () => {
+    const previous = {
+      allowLive: process.env.ALLOW_LIVE_AI_IN_TESTS,
+      provider: process.env.AI_PROVIDER,
+      baseUrl: process.env.AI_BASE_URL,
+      apiKey: process.env.AI_API_KEY,
+      model: process.env.AI_MODEL,
+    };
+    const originalFetch = global.fetch;
+
+    process.env.ALLOW_LIVE_AI_IN_TESTS = 'true';
+    process.env.AI_PROVIDER = 'openai-compatible';
+    process.env.AI_BASE_URL = 'https://api.example.test/v1';
+    process.env.AI_API_KEY = 'test-secret';
+    process.env.AI_MODEL = 'gpt-test';
+
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      JSON.stringify({
+        error: {
+          code: 'MONTHLY_LIMIT_EXCEEDED',
+          message: 'test-secret should never reach public status payload',
+        },
+      }),
+      { status: 429, headers: { 'Content-Type': 'application/json' } },
+    )));
+
+    try {
+      const limitedApp = createApp({
+        saasStore: createInMemorySaasStore(),
+        saasSessionSecret: 'ai-usage-limit-secret',
+      });
+      const { token } = await registerApiUser(limitedApp, 'ai-usage-limited');
+
+      await request(limitedApp)
+        .post('/api/ai/generate-passage')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ topic: 'study habits' })
+        .expect(200);
+
+      const aiStatus = await request(limitedApp).get('/api/ai/status').expect(200);
+      expect(aiStatus.body).toMatchObject({
+        configured: true,
+        provider: 'openai-compatible',
+        model: 'gpt-test',
+        state: 'degraded',
+        fallbackAvailable: true,
+        shouldNotifyUser: true,
+        lastFallbackReason: 'usage_limited',
+        statusReason: 'usage_limited',
+      });
+      expect(aiStatus.body.fallbacksByReason).toMatchObject({ usage_limited: 1 });
+      expect(JSON.stringify(aiStatus.body)).not.toContain('MONTHLY_LIMIT_EXCEEDED');
+      expect(JSON.stringify(aiStatus.body)).not.toContain('test-secret');
+
+      const health = await request(limitedApp).get('/api/health').expect(200);
+      expect(health.body.aiRuntime).toMatchObject({
+        state: 'degraded',
+        fallbackAvailable: true,
+        statusReason: 'usage_limited',
+        lastFallbackReason: 'usage_limited',
+      });
+    } finally {
+      vi.unstubAllGlobals();
+      global.fetch = originalFetch;
+      Object.entries(previous).forEach(([key, value]) => {
+        const environmentKey = {
+          allowLive: 'ALLOW_LIVE_AI_IN_TESTS',
+          provider: 'AI_PROVIDER',
+          baseUrl: 'AI_BASE_URL',
+          apiKey: 'AI_API_KEY',
+          model: 'AI_MODEL',
+        }[key]!;
+        if (value === undefined) delete process.env[environmentKey];
+        else process.env[environmentKey] = value;
+      });
+    }
   });
 
   it('validates speech analysis input', async () => {
@@ -1371,6 +1892,15 @@ describe('server API', () => {
         aiProvider: 'baseui',
         aiModel: 'gpt-test',
       });
+
+      const aiStatus = await request(createApp()).get('/api/ai/status').expect(200);
+      expect(aiStatus.body).toMatchObject({
+        configured: true,
+        provider: 'baseui',
+        model: 'gpt-test',
+        fallbackAvailable: true,
+      });
+      expect(aiStatus.body).not.toHaveProperty('apiKey');
     } finally {
       Object.entries(previous).forEach(([key, value]) => {
         const environmentKey = {

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { GraduationCap, Loader2, LockKeyhole, ShieldCheck } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 import SaasAccountPanel, { PublicSaasAccountContext } from './SaasAccountPanel';
 import { apiRequest, AUTH_STATE_CHANGE_EVENT, clearStoredAuthToken, getStoredAuthToken } from '../lib/api';
 
@@ -11,6 +11,7 @@ type AuthGateState = 'checking' | 'authenticated' | 'anonymous';
 
 export default function AuthGate({ children }: AuthGateProps) {
   const [state, setState] = useState<AuthGateState>('checking');
+  const [modalContent, setModalContent] = useState<{ title: string; body: string } | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -58,8 +59,8 @@ export default function AuthGate({ children }: AuthGateProps) {
 
   if (state === 'checking') {
     return (
-      <div className="app-page-surface min-h-[100svh] bg-[#f4f6f8] flex items-center justify-center p-6">
-        <div className="rounded-2xl border border-[#d9dee7] bg-white px-6 py-5 shadow-sm flex items-center gap-3 text-[#003178]">
+      <div className="app-page-surface flex min-h-[100svh] items-center justify-center bg-[#f4f6f8] p-6">
+        <div className="flex items-center gap-3 rounded-2xl border border-[#d9dee7] bg-white px-5 py-4 text-[#003178] shadow-sm">
           <Loader2 className="h-5 w-5 animate-spin" />
           <span className="text-sm font-black">正在校验登录状态...</span>
         </div>
@@ -72,33 +73,52 @@ export default function AuthGate({ children }: AuthGateProps) {
   }
 
   return (
-    <main className="app-page-surface min-h-[100svh] bg-[#f4f6f8] px-4 py-8 sm:px-6">
-      <div className="mx-auto flex min-h-[calc(100svh-4rem)] max-w-md flex-col justify-center gap-5">
-        <header className="space-y-3 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#d9dee7] bg-white text-[#003178] shadow-sm">
-            <GraduationCap className="h-7 w-7" />
-          </div>
-          <div>
-            <p className="inline-flex items-center gap-1.5 rounded-full border border-[#d9dee7] bg-white px-3 py-1 text-[11px] font-black text-[#003178]">
-              <LockKeyhole className="h-3.5 w-3.5" />
-              账号密码登录
-            </p>
-            <h1 className="mt-3 text-2xl font-black tracking-tight text-[#101828] sm:text-3xl">
+    <>
+      <main className="app-page-surface flex min-h-[100svh] items-center justify-center bg-[#f4f6f8] px-4 py-6 sm:px-6">
+        <div className="w-full max-w-[380px] space-y-4">
+          <header className="text-center">
+            <h1 className="text-3xl font-black tracking-tight text-[#101828]">
               英语训练舱
             </h1>
-            <p className="mt-2 text-sm font-semibold leading-6 text-[#5d6675]">
-              输入账号密码进入。新用户需要邀请码注册。
+            <p className="mt-2 text-sm font-semibold text-[#5d6675]">
+              登录 / 邀请码注册
             </p>
+          </header>
+
+          <SaasAccountPanel
+            onAuthenticated={() => setState('authenticated')}
+            onTriggerModal={(title, body) => setModalContent({ title, body })}
+          />
+        </div>
+      </main>
+
+      {modalContent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs">
+          <div className="flex max-h-[88svh] w-full max-w-md flex-col rounded-2xl border border-slate-100 bg-white p-4 shadow-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
+              <h2 className="text-sm font-black text-[#003178]">{modalContent.title}</h2>
+              <button
+                type="button"
+                aria-label="关闭提示"
+                onClick={() => setModalContent(null)}
+                className="grid h-11 w-11 place-items-center rounded-xl text-slate-500 transition hover:bg-slate-50 hover:text-[#003178]"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="mt-4 max-h-[58svh] overflow-y-auto whitespace-pre-line rounded-2xl border border-slate-200/70 bg-slate-50/70 p-4 text-xs font-semibold leading-6 text-slate-700">
+              {modalContent.body}
+            </div>
+            <button
+              type="button"
+              onClick={() => setModalContent(null)}
+              className="mt-4 min-h-11 rounded-xl bg-[#003178] px-4 text-xs font-black text-white transition hover:bg-[#0d47a1]"
+            >
+              我知道了
+            </button>
           </div>
-        </header>
-
-        <SaasAccountPanel onAuthenticated={() => setState('authenticated')} />
-
-        <p className="flex items-center justify-center gap-2 text-center text-[11px] font-bold text-[#667085]">
-          <ShieldCheck className="h-3.5 w-3.5 text-[#1f7a4d]" />
-          服务端校验会话与邀请码，防止未授权使用。
-        </p>
-      </div>
-    </main>
+        </div>
+      )}
+    </>
   );
 }

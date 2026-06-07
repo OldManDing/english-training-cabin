@@ -54,12 +54,6 @@ export interface Cet4MockExamPaper {
     passage: string;
     questions: Cet4MockChoiceQuestion[];
   };
-  foundation: {
-    title: string;
-    sourceNotice: string;
-    plannedMinutes: number;
-    questions: Cet4MockChoiceQuestion[];
-  };
   translation: {
     prompt: string;
     keywords: string[];
@@ -2790,20 +2784,6 @@ function takeCyclic<T>(items: T[], startIndex: number, count: number): T[] {
   return Array.from({ length: count }, (_, index) => items[(startIndex + index) % items.length]);
 }
 
-const CET4_FOUNDATION_CALIBRATION_MINUTES = 12;
-
-function buildCET4FoundationCalibration(paperIndex: number): Cet4MockExamPaper['foundation'] {
-  const grammarQuestions = takeCyclic(CET4_GRAMMAR_PRACTICE_QUESTIONS, paperIndex * 4, 4);
-  const clozeQuestions = takeCyclic(CET4_CLOZE_PRACTICE_QUESTIONS, paperIndex * 4, 4);
-
-  return {
-    title: '语法/完形基础校准',
-    sourceNotice: '补充校准题不计入 CET-4 标准分，用于阶段模考后生成语法结构与完形语境弱项证据。',
-    plannedMinutes: CET4_FOUNDATION_CALIBRATION_MINUTES,
-    questions: [...grammarQuestions, ...clozeQuestions],
-  };
-}
-
 const DEGREE_PRACTICAL_WRITING_CONFIGS = [
   {
     slug: 'lecture-notice',
@@ -3744,8 +3724,8 @@ export const CET4_TRANSLATION_PROMPT_BANK: Cet4SubjectivePrompt[] = [
 export const CET4_MOCK_EXAM: Cet4MockExamPaper = {
   id: 'cet4-standard-mock-001',
   title: 'CET-4 标准结构模拟卷 A',
-  sourceNotice: '内置原创模拟题，不是官方真题；标准分仍按 CET-4 写作、听力、阅读、翻译四部分计算，另加语法/完形基础校准题生成弱项证据。',
-  plannedMinutes: 125 + CET4_FOUNDATION_CALIBRATION_MINUTES,
+  sourceNotice: '内置原创模拟题，不是官方真题；结构按 CET-4 笔试四部分、57 题、125 分钟组织。',
+  plannedMinutes: 125,
   writing: {
     prompt: CET4_WRITING_PROMPT_BANK[0].prompt,
     minWords: CET4_WRITING_PROMPT_BANK[0].minWords ?? 120,
@@ -3760,7 +3740,6 @@ export const CET4_MOCK_EXAM: Cet4MockExamPaper = {
     passage: CET4_STANDARD_READING_PASSAGE,
     questions: CET4_STANDARD_READING_QUESTIONS,
   },
-  foundation: buildCET4FoundationCalibration(0),
   translation: {
     prompt: CET4_TRANSLATION_PROMPT_BANK[0].prompt,
     keywords: CET4_TRANSLATION_PROMPT_BANK[0].keywords,
@@ -3784,8 +3763,8 @@ function buildCET4MockExamVariant(paperIndex: number): Cet4MockExamPaper {
   return {
     id: `cet4-standard-mock-${paperNo}`,
     title: `CET-4 标准结构模拟卷 ${String.fromCharCode(64 + paperIndex + 1)}`,
-    sourceNotice: '由内置原创题池自动组卷；标准分保持 CET-4 笔试 57 题结构，语法/完形作为阶段校准补充题单独生成能力证据。',
-    plannedMinutes: 125 + CET4_FOUNDATION_CALIBRATION_MINUTES,
+    sourceNotice: '由内置原创题池自动组卷；结构保持 CET-4 笔试四部分、57 题、125 分钟。',
+    plannedMinutes: 125,
     writing: {
       prompt: writingPrompt.prompt,
       minWords: writingPrompt.minWords ?? 120,
@@ -3800,7 +3779,6 @@ function buildCET4MockExamVariant(paperIndex: number): Cet4MockExamPaper {
       passage: CET4_STANDARD_READING_PASSAGE,
       questions: CET4_STANDARD_READING_QUESTIONS,
     },
-    foundation: buildCET4FoundationCalibration(paperIndex),
     translation: {
       prompt: translationPrompt.prompt,
       keywords: translationPrompt.keywords,

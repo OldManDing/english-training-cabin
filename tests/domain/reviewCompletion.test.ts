@@ -97,4 +97,103 @@ describe('buildReviewCompletionRecords', () => {
       evidenceCount: 1,
     });
   });
+
+  it('records wrong-question redo evidence before recall and output consolidation', () => {
+    const records = buildReviewCompletionRecords({
+      reviewItem: reviewItem({
+        redoQuestion: {
+          kind: 'single-choice',
+          prompt: 'Why does the writer mention the library?',
+          options: {
+            A: 'To show a quiet study space.',
+            B: 'To compare two buildings.',
+            C: 'To introduce a local policy.',
+            D: 'To explain a schedule.',
+          },
+          correctAnswer: 'A',
+          userAnswer: 'C',
+          explanation: 'The sentence paraphrases quiet spaces for focused study.',
+        },
+        learningMethod: 'wrong-question-redo-active-recall',
+      }),
+      evidence: {
+        ...evidence,
+        redoAnswer: 'A',
+        redoCorrect: true,
+      },
+      now: '2026-05-27T08:05:00.000Z',
+    });
+
+    expect(records.session).toMatchObject({
+      moduleId: 'review',
+      modeId: 'wrong-question-redo-active-recall',
+      status: 'completed',
+    });
+    expect(records.attempt).toMatchObject({
+      moduleId: 'review',
+      questionTypeId: 'wrong-question-redo-active-recall',
+      isCorrect: true,
+    });
+    expect(records.attempt.answer).toMatchObject({
+      redoAnswer: 'A',
+      redoCorrect: true,
+      reviewOutcome: undefined,
+      redoPrompt: 'Why does the writer mention the library?',
+      referenceRedoAnswer: 'A',
+      recallAnswer: evidence.recallAnswer,
+      productionAnswer: evidence.productionAnswer,
+    });
+
+    const stillWrong = buildReviewCompletionRecords({
+      reviewItem: reviewItem({
+        redoQuestion: {
+          kind: 'single-choice',
+          prompt: 'Why does the writer mention the library?',
+          correctAnswer: 'A',
+          userAnswer: 'C',
+        },
+        learningMethod: 'wrong-question-redo-active-recall',
+      }),
+      evidence: {
+        ...evidence,
+        redoAnswer: 'B',
+        redoCorrect: false,
+      },
+      now: '2026-05-27T08:05:00.000Z',
+    });
+
+    expect(stillWrong.reviewItem.masteryScore).toBe(43);
+    expect(stillWrong.attempt.isCorrect).toBe(false);
+  });
+
+  it('uses lightweight self rating to schedule quick reviews', () => {
+    const unclear = buildReviewCompletionRecords({
+      reviewItem: reviewItem(),
+      evidence: {
+        ...evidence,
+        reviewOutcome: 'unclear',
+      },
+      now: '2026-05-27T08:05:00.000Z',
+    });
+
+    expect(unclear.reviewItem.masteryScore).toBe(50);
+    expect(unclear.reviewItem.nextReviewAt).toBe('2026-05-28T08:05:00.000Z');
+    expect(unclear.attempt.answer).toMatchObject({
+      reviewOutcome: 'unclear',
+    });
+    expect(unclear.attempt.isCorrect).toBe(true);
+
+    const again = buildReviewCompletionRecords({
+      reviewItem: reviewItem(),
+      evidence: {
+        ...evidence,
+        reviewOutcome: 'again',
+      },
+      now: '2026-05-27T08:05:00.000Z',
+    });
+
+    expect(again.reviewItem.masteryScore).toBe(43);
+    expect(again.reviewItem.nextReviewAt).toBe('2026-05-28T08:05:00.000Z');
+    expect(again.attempt.isCorrect).toBe(false);
+  });
 });

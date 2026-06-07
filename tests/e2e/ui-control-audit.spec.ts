@@ -199,26 +199,26 @@ test('auth inputs and mode buttons validate locally before API submission', asyn
 
   await page.goto('/');
   await expectVisibleControlsHealthy(page, 'auth-login');
-  await expectButtonHasVisibleChrome(page, '使用邀请码注册');
+  await expectButtonHasVisibleChrome(page, '邀请码注册');
   await expectButtonHasVisibleChrome(page, '忘记密码');
 
   await page.getByTestId('saas-auth-submit').click();
   await expect(page.getByTestId('saas-auth-error')).toHaveText('请输入有效邮箱。');
 
-  await page.getByRole('button', { name: '使用邀请码注册' }).click();
+  await page.getByRole('button', { name: '邀请码注册' }).click();
   await expectVisibleControlsHealthy(page, 'auth-register');
   await expectButtonHasVisibleChrome(page, '返回登录');
-  await expectButtonHasVisibleChrome(page, '忘记密码');
   await page.getByTestId('saas-auth-submit').click();
   await expect(page.getByTestId('saas-auth-error')).toHaveText('请输入有效邀请码。');
 
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await page.getByRole('button', { name: '返回登录' }).click();
+  await expect(page.getByRole('heading', { name: '登录' })).toBeInViewport();
   await page.getByRole('button', { name: '忘记密码' }).click();
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   await expect(page.getByRole('heading', { name: '重置密码' })).toBeInViewport();
   await expectVisibleControlsHealthy(page, 'auth-reset');
   await expectButtonHasVisibleChrome(page, '返回登录');
-  await expectButtonHasVisibleChrome(page, '使用邀请码注册');
   await page.getByTestId('saas-auth-submit').click();
   await expect(page.getByTestId('saas-auth-error')).toHaveText('请输入有效邮箱。');
 

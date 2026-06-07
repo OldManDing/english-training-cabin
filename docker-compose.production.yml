@@ -29,8 +29,14 @@ services:
       APP_URL: https://study.xmlga.top
       DATABASE_URL: postgresql://${POSTGRES_USER:-english_training}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-english_training}
       SAAS_DATA_FILE: /data/saas-store.json
+      LOCAL_REAL_PAPER_ROOT: ${LOCAL_REAL_PAPER_ROOT:-/app/data/local-real-papers}
+      LOCAL_REAL_PAPER_ANSWER_ROOT: ${LOCAL_REAL_PAPER_ANSWER_ROOT:-/app/data/local-real-answers}
+      LOCAL_REAL_PAPER_AUDIO_ROOT: ${LOCAL_REAL_PAPER_AUDIO_ROOT:-/app/data/local-real-papers}
+      LOCAL_REAL_PAPER_GENERATED_AUDIO_ENABLED: ${LOCAL_REAL_PAPER_GENERATED_AUDIO_ENABLED:-true}
     volumes:
       - app-data:/data
+      - ${LOCAL_REAL_PAPER_HOST_ROOT:-/opt/english-training-cabin/shared/local-real-papers}:/app/data/local-real-papers:ro
+      - ${LOCAL_REAL_PAPER_ANSWER_HOST_ROOT:-/opt/english-training-cabin/shared/local-real-answers}:/app/data/local-real-answers:ro
     ports:
       - "127.0.0.1:${HOST_APP_PORT:-3312}:3000"
     expose:

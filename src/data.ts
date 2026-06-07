@@ -19,6 +19,8 @@ export interface VocabularyPracticeItem {
 }
 
 export const VOCABULARY_SESSION_SIZE = 40;
+const VOCABULARY_CHOICE_KEYS = ['A', 'B', 'C', 'D'] as const;
+const VOCABULARY_DISTRIBUTION_SEED = 20260606;
 
 type VocabularyExtensionRow = readonly [
   word: string,
@@ -66,6 +68,77 @@ function buildVocabularyItem(row: VocabularyExtensionRow): VocabularyPracticeIte
     example,
     explanation,
   };
+}
+
+function relocateVocabularyAnswer(
+  item: VocabularyPracticeItem,
+  targetAnswer: VocabularyPracticeItem['correctAnswer'],
+): VocabularyPracticeItem {
+  if (item.correctAnswer === targetAnswer) return item;
+
+  const correctText = item.options[item.correctAnswer];
+  const distractorTexts = VOCABULARY_CHOICE_KEYS
+    .filter((key) => key !== item.correctAnswer)
+    .map((key) => item.options[key]);
+  const nextOptions = {} as VocabularyPracticeItem['options'];
+  let distractorIndex = 0;
+
+  for (const key of VOCABULARY_CHOICE_KEYS) {
+    if (key === targetAnswer) {
+      nextOptions[key] = correctText;
+      continue;
+    }
+    nextOptions[key] = distractorTexts[distractorIndex];
+    distractorIndex += 1;
+  }
+
+  return {
+    ...item,
+    options: nextOptions,
+    correctAnswer: targetAnswer,
+  };
+}
+
+function createSeededRandom(seed: number) {
+  let state = seed >>> 0;
+  return () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+}
+
+function shuffleInPlace<T>(items: T[], nextRandom: () => number) {
+  for (let index = items.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(nextRandom() * (index + 1));
+    [items[index], items[swapIndex]] = [items[swapIndex], items[index]];
+  }
+  return items;
+}
+
+function buildRandomizedVocabularyAnswerPool(length: number): VocabularyPracticeItem['correctAnswer'][] {
+  const nextRandom = createSeededRandom(VOCABULARY_DISTRIBUTION_SEED ^ length);
+  const baseCountPerChoice = Math.floor(length / VOCABULARY_CHOICE_KEYS.length);
+  const remainder = length % VOCABULARY_CHOICE_KEYS.length;
+  const extraChoices = shuffleInPlace([...VOCABULARY_CHOICE_KEYS], nextRandom);
+  const pool: VocabularyPracticeItem['correctAnswer'][] = [];
+
+  VOCABULARY_CHOICE_KEYS.forEach((choice) => {
+    for (let index = 0; index < baseCountPerChoice; index += 1) {
+      pool.push(choice);
+    }
+  });
+
+  for (let index = 0; index < remainder; index += 1) {
+    pool.push(extraChoices[index]);
+  }
+
+  return shuffleInPlace(pool, nextRandom);
+}
+
+function rebalanceVocabularyBank(items: VocabularyPracticeItem[]): VocabularyPracticeItem[] {
+  const randomizedAnswers = buildRandomizedVocabularyAnswerPool(items.length);
+  return items.map((item, index) =>
+    relocateVocabularyAnswer(item, randomizedAnswers[index] ?? item.correctAnswer));
 }
 
 const CET4_SYLLABUS_EXTENSION_ROWS: VocabularyExtensionRow[] = [
@@ -319,7 +392,7 @@ const CET4_SYLLABUS_EXTENSION_VOCABULARY: VocabularyPracticeItem[] =
     ...CET4_PRODUCTIVE_PHRASE_ROWS,
   ].map(buildVocabularyItem);
 
-export const CET4_VOCABULARY_BANK: VocabularyPracticeItem[] = [
+export const CET4_VOCABULARY_BANK: VocabularyPracticeItem[] = rebalanceVocabularyBank([
   {
     id: 'vocab-adapt',
     word: 'adapt',
@@ -848,7 +921,7 @@ export const CET4_VOCABULARY_BANK: VocabularyPracticeItem[] = [
     explanation: 'visible 常用于“使问题/进步/影响可见”，适合产品和学习分析语境。',
   },
   ...CET4_SYLLABUS_EXTENSION_VOCABULARY,
-];
+]);
 
 export const INITIAL_PASSAGE: Passage = {
   id: 'cet-ai-edu',

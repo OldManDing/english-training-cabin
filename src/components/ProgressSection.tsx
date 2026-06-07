@@ -78,7 +78,8 @@ export default function ProgressSection({
   };
 
   return (
-    <div className="app-page-surface flex min-h-[calc(100svh-9rem)] flex-1 flex-col overflow-y-auto overflow-x-hidden bg-[#f7fbff] p-4 sm:p-6 lg:h-screen lg:p-8">
+    <div className="app-page-surface ui-page">
+      <div className="ui-page-content">
       {toastMessage && (
         <div className="absolute left-4 right-4 top-4 z-50 flex items-center gap-2.5 rounded-2xl border border-[#cfe6f2] bg-[#003178] px-4 py-3 text-xs font-bold text-white shadow-xl sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:px-5">
           <Sparkle className="h-4 w-4 shrink-0 fill-emerald-300 text-emerald-300" />
@@ -86,16 +87,16 @@ export default function ProgressSection({
         </div>
       )}
 
-      <header className="mb-6 border-b border-[#cfe6f2] pb-4">
-        <h2 className="text-2xl font-black tracking-tight text-[#003178]">能力地图</h2>
-        <p className="mt-1 text-xs font-semibold text-slate-500">
-          只展示已写入本地学习记录的能力证据；暂无证据的维度保持待诊断状态。
+      <header className="ui-page-header-compact mb-6">
+        <h2 className="text-2xl font-black tracking-tight text-[#101828]">能力地图</h2>
+        <p className="mt-2 text-sm font-semibold text-slate-500 sm:text-base">
+          基于本地学习证据生成，非官方成绩。
         </p>
       </header>
 
       <div className="space-y-5 lg:space-y-8">
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-5 lg:gap-8">
-          <section className="rounded-3xl border border-[#c3c6d4] bg-white p-4 shadow-2xs transition-colors hover:border-[#003178] sm:p-6 lg:col-span-2">
+          <section className="ui-panel transition-colors hover:border-[#003178] lg:col-span-2">
             <div className="mb-6 flex items-center justify-between">
               <h3 className="text-sm font-bold uppercase tracking-wider text-[#071e27]">综合能力雷达</h3>
               <div className="rounded-lg bg-[#e6f6ff] p-1.5 text-[#003178]">
@@ -128,28 +129,28 @@ export default function ProgressSection({
             </div>
 
             <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-2xl border bg-[#f3faff] p-4">
+              <div className="ui-metric">
                 <span className="block text-[10px] font-bold text-slate-400">总分估计</span>
                 <span className="mt-1 block font-mono text-3xl font-black text-[#003178]">{abilitySummary.forecastScore ?? '--'}</span>
               </div>
-              <div className="rounded-2xl border bg-[#f3faff] p-4">
+              <div className="ui-metric">
                 <span className="block text-[10px] font-bold text-slate-400">证据数</span>
                 <span className="mt-1 block font-mono text-3xl font-black text-[#003178]">{abilitySummary.evidenceCount}</span>
               </div>
-              <div className="rounded-2xl border bg-[#f3faff] p-4">
+              <div className="ui-metric">
                 <span className="block text-[10px] font-bold text-slate-400">稳定度</span>
                 <span className="mt-1 block font-mono text-3xl font-black text-emerald-700">{abilitySummary.trainingStability == null ? '--' : `${abilitySummary.trainingStability}%`}</span>
               </div>
             </div>
 
             {!abilitySummary.hasEvidence && (
-              <p className="mt-4 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-[11px] font-bold leading-5 text-amber-800">
-                还没有真实能力证据。请先完成入门诊断或任一专项训练，系统会用作答记录重新计算能力地图。
+              <p className="ui-empty-state mt-4 text-xs font-bold leading-6">
+                暂无能力证据。完成诊断或任一专项训练后自动更新。
               </p>
             )}
           </section>
 
-          <section className="rounded-3xl border border-[#c3c6d4] bg-white p-4 shadow-2xs transition-colors hover:border-[#003178] sm:p-6 lg:col-span-3">
+          <section className="ui-panel transition-colors hover:border-[#003178] lg:col-span-3">
             <div className="mb-4 flex flex-col gap-3 border-b pb-3 sm:flex-row sm:items-center sm:justify-between">
               <h3 className="text-sm font-bold uppercase tracking-wider text-[#071e27]">证据知识点图谱</h3>
               <div className="flex items-center space-x-0.5 rounded-xl border bg-slate-100 p-0.5 text-[11px] font-bold">
@@ -196,7 +197,7 @@ export default function ProgressSection({
           </section>
         </div>
 
-        <section className="rounded-3xl border border-[#c3c6d4] bg-white p-4 shadow-2xs transition-colors hover:border-[#003178] sm:p-6">
+        <section className="ui-panel transition-colors hover:border-[#003178]">
           <div className="mb-5 flex flex-col gap-3 border-b pb-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-[#071e27]">
@@ -262,7 +263,7 @@ export default function ProgressSection({
               ))}
             </div>
           ) : (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm font-semibold leading-7 text-slate-500">
+            <div className="ui-empty-state text-sm font-semibold leading-7">
               {stageProgress.nextAction}
             </div>
           )}
@@ -279,7 +280,7 @@ export default function ProgressSection({
           )}
         </section>
 
-        <section className="rounded-3xl border border-[#c3c6d4] bg-white p-4 shadow-2xs transition-colors hover:border-[#003178] sm:p-6">
+        <section className="ui-panel transition-colors hover:border-[#003178]">
           <div className="mb-5 flex flex-col gap-3 border-b pb-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-[#071e27]">
@@ -287,23 +288,23 @@ export default function ProgressSection({
                 学习证据账本
               </h3>
               <p className="mt-2 max-w-3xl text-xs font-semibold leading-5 text-slate-500">
-                这里展示能力画像、阶段验证和每日调度实际依赖的学习证据，避免系统只给结论、不说明依据。
+                能力结论依赖这些本地证据。
               </p>
             </div>
             <div className="grid grid-cols-2 gap-2 text-center text-[11px] font-black sm:min-w-96 sm:grid-cols-4">
-              <div className="rounded-2xl bg-[#eef7fc] p-3 text-[#003178]">
+              <div className="ui-metric text-[#003178]">
                 <div className="font-mono text-xl">{evidenceLedger.totalCompletedSessions}</div>
                 <div>完成训练</div>
               </div>
-              <div className="rounded-2xl bg-[#eef7fc] p-3 text-[#003178]">
+              <div className="ui-metric text-[#003178]">
                 <div className="font-mono text-xl">{evidenceLedger.totalAttempts}</div>
                 <div>作答记录</div>
               </div>
-              <div className="rounded-2xl bg-emerald-50 p-3 text-emerald-700">
+              <div className="ui-metric text-emerald-700">
                 <div className="font-mono text-xl">{evidenceLedger.feedbackAttemptCount}</div>
                 <div>反馈证据</div>
               </div>
-              <div className="rounded-2xl bg-amber-50 p-3 text-amber-700">
+              <div className="ui-metric text-amber-700">
                 <div className="font-mono text-xl">{evidenceLedger.mistakeReasonCount}</div>
                 <div>错因标签</div>
               </div>
@@ -364,8 +365,8 @@ export default function ProgressSection({
                   ))}
                 </div>
               ) : (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-xs font-semibold leading-6 text-slate-500">
-                  还没有可展示的学习会话。完成诊断、专项练习、复习或阶段模考后，这里会自动沉淀证据。
+                <div className="ui-empty-state text-xs font-semibold leading-6">
+                  暂无学习会话。完成诊断、专项、复习或模考后自动沉淀。
                 </div>
               )}
             </div>
@@ -383,7 +384,7 @@ export default function ProgressSection({
           )}
         </section>
 
-        <section className="rounded-3xl border border-[#c3c6d4] bg-white p-4 shadow-2xs transition-colors hover:border-[#003178] sm:p-6">
+        <section className="ui-panel transition-colors hover:border-[#003178]">
           <div className="mb-6 flex flex-col gap-3 border-b pb-2 sm:flex-row sm:items-center sm:justify-between">
             <h3 className="flex items-center gap-1 text-sm font-bold uppercase tracking-wider text-[#071e27]">
               <Activity className="h-4 w-4 text-[#003178]" />
@@ -416,7 +417,7 @@ export default function ProgressSection({
                       style={{ height: `${hasWeekEvidence ? week.value : 5}%` }}
                     />
                     {isActive && (
-                      <span className="absolute -top-3 rounded bg-[#003178] px-1 text-[8px] font-bold text-white shadow-2xs">Active</span>
+                      <span className="absolute -top-3 rounded bg-[#003178] px-1 text-[8px] font-bold text-white shadow-2xs">当前</span>
                     )}
                   </div>
                   <span className={`text-[10px] font-extrabold ${isActive ? 'text-[#003178]' : 'text-slate-400'}`}>{week.label}</span>
@@ -425,6 +426,7 @@ export default function ProgressSection({
             })}
           </div>
         </section>
+      </div>
       </div>
     </div>
   );

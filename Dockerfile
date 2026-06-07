@@ -12,6 +12,11 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
+RUN apk add --no-cache espeak-ng python3 py3-pip \
+  && python3 -m venv /opt/edge-tts \
+  && /opt/edge-tts/bin/python -m pip install --upgrade pip \
+  && /opt/edge-tts/bin/pip install --no-cache-dir edge-tts==7.2.8 \
+  && rm -rf /root/.cache /tmp/*
 COPY --chown=node:node package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build --chown=node:node /app/dist ./dist

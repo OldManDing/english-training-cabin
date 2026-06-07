@@ -4,9 +4,21 @@ const REGISTRATION_INVITE_CODE = process.env.E2E_REGISTRATION_INVITE_CODE || 'ET
 
 test('SaaS registration shows a visible error for invalid invite codes', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByText('账号密码登录')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '英语训练舱' })).toBeVisible();
 
-  await page.getByRole('button', { name: '使用邀请码注册' }).click();
+  await page.getByRole('button', { name: '隐私协议' }).click();
+  await expect(page.getByRole('heading', { name: '隐私协议' })).toBeVisible();
+  await expect(page.getByText('IndexedDB')).toBeVisible();
+  await expect(page.getByText('AI 不可用时系统会切换到规则反馈兜底')).toBeVisible();
+  await page.getByRole('button', { name: '我知道了' }).click();
+
+  await page.getByRole('button', { name: '服务条款' }).click();
+  await expect(page.getByRole('heading', { name: '服务条款' })).toBeVisible();
+  await expect(page.getByText('训练参考')).toBeVisible();
+  await expect(page.getByText('不构成官方考试成绩')).toBeVisible();
+  await page.getByRole('button', { name: '我知道了' }).click();
+
+  await page.getByRole('button', { name: '邀请码注册' }).click();
   await page.getByTestId('saas-name-input').fill('无效邀请码用户');
   await page.getByTestId('saas-organization-input').fill('无效邀请码团队');
   await page.getByTestId('saas-invite-code-input').fill('WRONG-CODE');
@@ -17,16 +29,16 @@ test('SaaS registration shows a visible error for invalid invite codes', async (
   await expect(page.getByTestId('saas-auth-error')).toBeVisible();
   await expect(page.getByTestId('saas-auth-error')).toHaveText('邀请码无效或已失效。');
   await expect(page.getByText('邀请码无效或已失效。')).toHaveCount(1);
-  await expect(page.getByText('登录后可把当前浏览器的学习记录同步到服务端，形成可恢复的云端学习档案。')).toBeVisible();
+  await expect(page.getByText('登录 / 邀请码注册')).toBeVisible();
 });
 
 test('SaaS account trial can sync and restore local learning data', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByText('账号密码登录')).toBeVisible();
-  await expect(page.getByRole('heading', { name: '账号登录' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '英语训练舱' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '登录' })).toBeVisible();
 
   const email = `saas-${Date.now()}@example.com`;
-  await page.getByRole('button', { name: '使用邀请码注册' }).click();
+  await page.getByRole('button', { name: '邀请码注册' }).click();
   await expect(page.getByRole('heading', { name: '邀请码注册' })).toBeVisible();
   await page.getByTestId('saas-name-input').fill('云端学习者');
   await page.getByTestId('saas-organization-input').fill('商业化训练团队');
@@ -40,11 +52,15 @@ test('SaaS account trial can sync and restore local learning data', async ({ pag
   await expect(page.getByRole('heading', { name: '今日训练' })).toBeVisible();
   await page.getByRole('button', { name: '设置' }).click();
   await expect(page.getByText(email, { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('云端账号已连接，可同步当前学习数据。')).toBeVisible();
   await expect(page.getByText('云同步 已开通')).toBeVisible();
 
+  await page.getByRole('button', { name: '隐私协议' }).click();
+  await expect(page.getByRole('heading', { name: '隐私协议' })).toBeVisible();
+  await expect(page.getByText('用户可以在设置页导出本地学习数据、从云端恢复学习数据，并通过反馈入口提交问题。')).toBeVisible();
+  await page.getByRole('button', { name: '我知道了' }).click();
+
   await page.getByRole('button', { name: '同步到云端' }).click();
-  await expect(page.getByText(/云端同步完成/)).toBeVisible();
+  await expect(page.getByText(/已同步：练习/)).toBeVisible();
 
   await page.getByRole('button', { name: '从云端恢复' }).click();
   await expect(page.getByText('云端学习数据恢复完成', { exact: true })).toBeVisible();

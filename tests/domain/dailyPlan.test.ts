@@ -1,6 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import { buildDailyPlan } from '../../src/domain/planner/dailyPlan';
-import { StudyGoal } from '../../src/types';
+import { ReviewItem, StudyGoal } from '../../src/types';
+
+function dueWrongReviewItem(overrides: Partial<ReviewItem> = {}): ReviewItem {
+  return {
+    id: 'review-1',
+    title: '阅读错因：同义替换未识别',
+    category: '错题',
+    detail: 'test',
+    daysAgo: 0,
+    skillArea: 'reading',
+    priorityScore: 90,
+    nextReviewAt: '2026-05-24T00:00:00.000Z',
+    redoQuestion: {
+      kind: 'single-choice',
+      prompt: 'Why does the writer mention the library?',
+      options: {
+        A: 'Correct answer',
+        B: 'Previous wrong answer',
+      },
+      correctAnswer: 'A',
+      userAnswer: 'B',
+    },
+    learningMethod: 'wrong-question-redo-active-recall',
+    ...overrides,
+  };
+}
 
 describe('buildDailyPlan', () => {
   const goal: Pick<StudyGoal, 'id' | 'examId' | 'examDate' | 'dailyMinutes' | 'prioritySkills'> = {
@@ -16,16 +41,7 @@ describe('buildDailyPlan', () => {
       goal,
       date: '2026-05-24',
       reviewItems: [
-        {
-          id: 'review-1',
-          title: '阅读错因：同义替换未识别',
-          category: '错题',
-          detail: 'test',
-          daysAgo: 0,
-          skillArea: 'reading',
-          priorityScore: 90,
-          nextReviewAt: '2026-05-24T00:00:00.000Z',
-        },
+        dueWrongReviewItem(),
       ],
       skillProfiles: [
         {
@@ -44,7 +60,7 @@ describe('buildDailyPlan', () => {
       type: 'review',
       priority: 'high',
     });
-    expect(plan.rationale[0]).toContain('到期复习');
+    expect(plan.rationale[0]).toContain('到期错题');
   });
 
   it('starts with diagnostic before recommending practice when there is no ability evidence', () => {
@@ -69,16 +85,9 @@ describe('buildDailyPlan', () => {
       },
       date: '2026-05-24',
       reviewItems: [
-        {
-          id: 'review-1',
+        dueWrongReviewItem({
           title: '阅读错因：定位失准',
-          category: '错题',
-          detail: 'test',
-          daysAgo: 0,
-          skillArea: 'reading',
-          priorityScore: 90,
-          nextReviewAt: '2026-05-24T00:00:00.000Z',
-        },
+        }),
       ],
       skillProfiles: [],
       strategy: 'review',
@@ -87,6 +96,43 @@ describe('buildDailyPlan', () => {
     const totalMinutes = plan.tasks.reduce((sum, task) => sum + task.estimatedMinutes, 0);
     expect(totalMinutes).toBeLessThanOrEqual(plan.plannedMinutes);
     expect(plan.plannedMinutes).toBe(20);
+  });
+
+  it('ignores non-wrong review items when building the daily plan', () => {
+    const plan = buildDailyPlan({
+      goal,
+      date: '2026-05-24',
+      reviewItems: [
+        dueWrongReviewItem({
+          id: 'correct-redo',
+          redoQuestion: {
+            kind: 'single-choice',
+            prompt: 'Why does the writer mention the library?',
+            correctAnswer: 'A',
+            userAnswer: 'A',
+          },
+        }),
+        dueWrongReviewItem({
+          id: 'memory-only',
+          redoQuestion: undefined,
+          learningMethod: 'active-recall-cloze-production',
+        }),
+      ],
+      skillProfiles: [
+        {
+          id: 'cet4-reading-diagnostic',
+          skillArea: 'reading',
+          subSkillId: 'diagnostic-reading',
+          score: 70,
+          confidence: 3,
+          evidenceCount: 1,
+          lastUpdatedAt: '2026-05-24T00:00:00.000Z',
+        },
+      ],
+    });
+
+    expect(plan.tasks.some((task) => task.type === 'review')).toBe(false);
+    expect(plan.rationale[0]).toContain('今天没有到期错题');
   });
 
   it('uses the weakest skill profile for the main practice task', () => {

@@ -3,6 +3,7 @@ import { ChevronDown, Cloud, Copy, DownloadCloud, KeyRound, LogIn, LogOut, Refre
 import { exportLearningData, importLearningData } from '../lib/storage/db';
 import { apiRequest, clearStoredAuthToken, getStoredAuthToken, setStoredAuthToken } from '../lib/api';
 import SaasOperationsPanel from './SaasOperationsPanel';
+import LegalLinks from './LegalLinks';
 
 export interface PublicSaasAccountContext {
   user: {
@@ -38,7 +39,7 @@ interface SaasAccountPanelProps {
   onLogout?: () => void;
 }
 
-const INITIAL_CLOUD_STATUS = '登录后可把当前浏览器的学习记录同步到服务端，形成可恢复的云端学习档案。';
+const INITIAL_CLOUD_STATUS = '登录后可同步。';
 type AuthMode = 'login' | 'register' | 'invitation' | 'reset';
 
 function getInitialAuthAction(): { mode?: AuthMode; token?: string } {
@@ -151,7 +152,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
         setAccount(payload.account);
         setStatusText((current) =>
           current === INITIAL_CLOUD_STATUS || current === '登录状态已失效，请重新登录。'
-            ? '云端账号已连接，可同步当前学习数据。'
+            ? '已连接。'
             : current,
         );
       })
@@ -219,10 +220,10 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
       setAccount(payload.account);
       setAuthError('');
       const statusByMode: Record<AuthMode, string> = {
-        register: '云端账号已创建，学习档案同步能力已开通。请立即保存账号恢复码。',
-        login: '已登录云端账号。',
+        register: '账号已创建，请保存恢复码。',
+        login: '已登录。',
         invitation: '邀请已接受，您已加入团队。',
-        reset: '密码已重置并重新登录。请保存新的账号恢复码。',
+        reset: '密码已重置，请保存新恢复码。',
       };
       setStatusText(statusByMode[mode]);
       if (payload.recoveryCode) {
@@ -250,7 +251,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
       setToken(null);
       setAccount(null);
       setOneTimeRecoveryCode(null);
-      setStatusText('已退出云端账号，本机学习记录仍保存在当前浏览器。');
+      setStatusText('已退出。');
       onLogout?.();
     } finally {
       setIsBusy(false);
@@ -267,7 +268,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
         token,
       );
       setOneTimeRecoveryCode(response.recoveryCode);
-      setStatusText('新的账号恢复码已生成，旧恢复码已失效。请立即保存。');
+      setStatusText('新恢复码已生成，请保存。');
     } catch (error) {
       setStatusText(getApiMessage(error));
     } finally {
@@ -288,7 +289,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
         },
         token,
       );
-      setStatusText(`云端同步完成：${response.snapshot.counts.practiceSessions} 组练习、${response.snapshot.counts.reviewItems} 个复习项已归档。`);
+      setStatusText(`已同步：练习 ${response.snapshot.counts.practiceSessions} 组，复习 ${response.snapshot.counts.reviewItems} 项。`);
     } catch (error) {
       setStatusText(getApiMessage(error));
     } finally {
@@ -310,13 +311,13 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
       }>('/api/cloud/learning-data', {}, token);
 
       if (!response.snapshot) {
-        setStatusText('云端还没有学习数据，请先同步当前浏览器数据。');
+        setStatusText('云端暂无数据。');
         return;
       }
 
       const restored = await importLearningData(response.snapshot.backup);
       await onDataRestored?.();
-      const summary = `已从云端恢复：目标 ${restored.studyGoals} 项、练习 ${restored.practiceSessions} 组、错题复习 ${restored.reviewItems} 项、能力画像 ${restored.skillProfiles} 项。`;
+      const summary = `已恢复：目标 ${restored.studyGoals} 项、练习 ${restored.practiceSessions} 组、复习 ${restored.reviewItems} 项、画像 ${restored.skillProfiles} 项。`;
       onTriggerModal?.('云端学习数据恢复完成', summary);
       setStatusText(summary);
     } catch (error) {
@@ -326,24 +327,34 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
     }
   };
 
+  const modeTitle =
+    mode === 'register'
+      ? '邀请码注册'
+      : mode === 'reset'
+        ? '重置密码'
+        : mode === 'invitation'
+          ? '接受邀请'
+          : '登录';
+  const showStatus = Boolean(account || oneTimeRecoveryCode || statusText !== INITIAL_CLOUD_STATUS);
+
   return (
-    <div className="bg-white border border-[#c3c6d4]/60 rounded-3xl p-4 sm:p-6.5 shadow-sm space-y-4">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h3 className="text-sm font-black text-[#003178] flex items-center gap-2">
-            <Cloud className="h-4 w-4 text-[#003178]" />
-            {account ? '云端账号与团队协作' : '账号登录'}
-          </h3>
-          <p className="text-[11px] leading-5 text-[#434652] font-semibold mt-2">
-            {account ? '同步学习记录、管理会话和恢复码。' : '已有账号直接登录；注册必须填写邀请码。'}
-          </p>
-        </div>
-        {account && (
+    <div className="space-y-3 rounded-[1.5rem] border border-[#dde5ee] bg-white p-4 shadow-sm sm:p-5">
+      {account && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h3 className="text-sm font-black text-[#003178] flex items-center gap-2">
+              <Cloud className="h-4 w-4 text-[#003178]" />
+              账户
+            </h3>
+            <p className="mt-1 text-[11px] font-semibold text-[#434652]">
+              同步与团队
+            </p>
+          </div>
           <span className="shrink-0 rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black text-emerald-700 border border-emerald-100">
             {formatAccountState(account)}
           </span>
-        )}
-      </div>
+        </div>
+      )}
 
       {!account ? (
         <form
@@ -353,40 +364,43 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
             void handleAuthSubmit();
           }}
         >
-          {(mode === 'register' || mode === 'login' || mode === 'reset') ? <div className="space-y-1.5">
-            <h3 className="text-lg font-black text-[#101828]">
-              {mode === 'register' ? '邀请码注册' : mode === 'reset' ? '重置密码' : '登录'}
-            </h3>
-            <p className="text-xs font-semibold leading-5 text-[#667085]">
-              {mode === 'register'
-                ? '请输入邀请码后创建账号。没有邀请码无法注册。'
-                : mode === 'reset'
-                  ? '使用注册时保存的恢复码重置密码。'
-                  : '输入邮箱和密码即可进入训练舱。'}
-            </p>
-            <button
-              type="button"
-              onClick={() => setMode('register')}
-              className="hidden"
-            >
-              创建账号
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode('login')}
-              className="hidden"
-            >
-              登录
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode('reset')}
-              className="hidden"
-            >
-              找回
-            </button>
-          </div> : (
-            <div className="rounded-2xl bg-[#eef7fc] border border-[#d2e2ec] p-3 flex items-center justify-between gap-3">
+          {(mode === 'register' || mode === 'login' || mode === 'reset') ? (
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-base font-black text-[#101828]">
+                {modeTitle}
+              </h2>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                {mode !== 'login' && (
+                  <button
+                    type="button"
+                    onClick={() => setMode('login')}
+                    className="min-h-[44px] rounded-full border border-[#d9dee7] bg-white px-3 text-[11px] font-black text-[#003178] transition hover:border-[#003178]"
+                  >
+                    返回登录
+                  </button>
+                )}
+                {mode === 'login' && (
+                  <button
+                    type="button"
+                    onClick={() => setMode('register')}
+                    className="min-h-[44px] rounded-full border border-[#d9dee7] bg-white px-3 text-[11px] font-black text-[#003178] transition hover:border-[#003178]"
+                  >
+                    邀请码注册
+                  </button>
+                )}
+                {mode === 'login' && (
+                  <button
+                    type="button"
+                    onClick={() => setMode('reset')}
+                    className="min-h-[44px] rounded-full border border-[#d9dee7] bg-white px-3 text-[11px] font-black text-[#5d6675] transition hover:border-[#5d6675]"
+                  >
+                    忘记密码
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-[#d2e2ec] bg-[#eef7fc] p-3">
               <p className="text-[10.5px] font-black text-[#003178]">
                 接受团队邀请
               </p>
@@ -432,7 +446,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               className="rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-4 py-3 text-xs font-bold text-[#003178] outline-none focus:ring-1 focus:ring-[#003178]"
-              placeholder="账号邮箱（仅用于登录）"
+              placeholder="邮箱"
               autoComplete="username"
               type="email"
             />
@@ -455,11 +469,9 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
                 onChange={(event) => setRecoveryCode(event.target.value)}
                 className="w-full rounded-xl border border-[#c3c6d4] bg-[#f8fafc] px-4 py-3 text-xs font-bold text-[#003178] outline-none focus:ring-1 focus:ring-[#003178]"
                 autoComplete="one-time-code"
-                placeholder="输入注册或上次重置时保存的账号恢复码"
+                placeholder="账号恢复码"
               />
-              <p className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10.5px] font-bold leading-5 text-amber-800">
-                本产品不依赖邮箱找回密码。恢复码只显示一次，服务端只保存哈希，重置成功后旧恢复码会立即失效。
-              </p>
+              <p className="text-[10.5px] font-bold text-amber-800">恢复码仅显示一次。</p>
             </div>
           )}
 
@@ -492,7 +504,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
             className="ui-button ui-button-primary ui-button-full"
           >
             {isBusy ? <RefreshCw className="h-4 w-4 animate-spin" /> : mode === 'register' || mode === 'invitation' ? <UserPlus className="h-4 w-4" /> : mode === 'reset' ? <KeyRound className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
-            {mode === 'register' ? '创建云端账号' : mode === 'login' ? '登录云端账号' : mode === 'reset' ? '用恢复码重置密码' : '接受邀请并加入团队'}
+            {mode === 'register' ? '创建账号' : mode === 'login' ? '登录' : mode === 'reset' ? '重置密码' : '接受邀请'}
           </button>
 
           {authError && (
@@ -506,35 +518,16 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
             </div>
           )}
 
-          {mode !== 'invitation' && (
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {mode !== 'login' && (
-                <button type="button" onClick={() => setMode('login')} className="ui-button ui-button-secondary ui-button-compact ui-button-full">
-                  返回登录
-                </button>
-              )}
-              {mode !== 'register' && (
-                <button type="button" onClick={() => setMode('register')} className="ui-button ui-button-secondary ui-button-compact ui-button-full">
-                  使用邀请码注册
-                </button>
-              )}
-              {mode !== 'reset' && (
-                <button type="button" onClick={() => setMode('reset')} className="ui-button ui-button-muted ui-button-compact ui-button-full">
-                  忘记密码
-                </button>
-              )}
-            </div>
-          )}
-
-          {mode === 'login' && (
-            <p className="text-center text-[10.5px] font-bold text-[#5d6472]">
-              忘记密码时，请使用注册或上次重置时保存的恢复码。
+          <div className="rounded-2xl border border-[#cfe6f2] bg-[#f7fbff] p-3 text-center">
+            <p className="mb-2 text-[10.5px] font-bold leading-5 text-[#434652]">
+              注册或登录即表示你已了解本地数据、云同步、AI 反馈和内容来源边界。
             </p>
-          )}
+            <LegalLinks onOpen={onTriggerModal} compact />
+          </div>
         </form>
       ) : (
         <div className="space-y-4">
-          <div className="rounded-2xl bg-[#f7fbff] border border-[#cfe6f2] p-4 space-y-2">
+          <div className="space-y-2 rounded-2xl border border-[#cfe6f2] bg-[#f7fbff] p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-black text-[#003178]">{account.user.name}</p>
@@ -561,7 +554,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
               className="ui-button ui-button-secondary ui-button-compact"
             >
               <KeyRound className="h-3.5 w-3.5" />
-              生成新的账号恢复码
+              生成新恢复码
             </button>
           </div>
 
@@ -586,19 +579,14 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
             </button>
           </div>
 
-          <section className="rounded-3xl border border-[#cfe6f2] bg-[#f7fbff] p-3 sm:p-4">
+          <section className="rounded-2xl border border-[#cfe6f2] bg-[#f7fbff] p-3 sm:p-4">
             <button
               data-testid="saas-ops-toggle"
               type="button"
               onClick={() => setShowOperations((current) => !current)}
               className="ui-button ui-button-secondary ui-button-full justify-between text-left"
             >
-              <span>
-                <span className="block text-xs font-black text-[#003178]">团队与数据管理（高级）</span>
-                <span className="mt-1 block text-[10.5px] font-bold leading-5 text-[#434652]">
-                  展开后可邀请成员、管理内容授权、处理数据权利请求并查看聚合观测。
-                </span>
-              </span>
+              <span className="block text-xs font-black text-[#003178]">团队与数据管理（高级）</span>
               <ChevronDown className={`h-4 w-4 shrink-0 text-[#003178] transition ${showOperations ? 'rotate-180' : ''}`} />
             </button>
 
@@ -616,13 +604,11 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
       )}
 
       {oneTimeRecoveryCode && (
-        <div data-testid="saas-recovery-code" className="rounded-2xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+        <div data-testid="saas-recovery-code" className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-[11px] font-black text-amber-900">账号恢复码仅显示一次</p>
-              <p className="mt-1 text-[10px] font-bold leading-5 text-amber-800">
-                请保存在密码管理器中。忘记密码时需要它；生成新码后旧码会失效。
-              </p>
+              <p className="text-[11px] font-black text-amber-900">恢复码仅显示一次</p>
+              <p className="mt-1 text-[10px] font-bold leading-5 text-amber-800">请保存。</p>
             </div>
             <button
               type="button"
@@ -647,16 +633,18 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
               }}
               className="ui-button ui-button-primary ui-button-full"
             >
-              我已保存恢复码，进入学习舱
+              已保存，进入学习舱
             </button>
           )}
         </div>
       )}
 
-      <div className="flex items-start gap-2 rounded-2xl bg-[#eef7fc] border border-[#d2e2ec] p-3">
-        <ShieldCheck className="h-4 w-4 text-[#003178] shrink-0 mt-0.5" />
-        <p className="text-[10.5px] leading-5 font-bold text-[#434652]">{statusText}</p>
-      </div>
+      {showStatus && (
+        <div className="flex items-start gap-2 rounded-2xl border border-[#d2e2ec] bg-[#f8fafc] px-3 py-2">
+          <ShieldCheck className="h-4 w-4 text-[#003178] shrink-0 mt-0.5" />
+          <p className="text-[10.5px] leading-5 font-bold text-[#434652]">{statusText}</p>
+        </div>
+      )}
     </div>
   );
 }

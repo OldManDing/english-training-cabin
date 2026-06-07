@@ -3,27 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import Sidebar from './components/Sidebar';
 import TodayDashboard from './components/TodayDashboard';
-import ReadingTraining from './components/ReadingTraining';
-import PracticeHub from './components/PracticeHub';
-import SpeakingTraining from './components/SpeakingTraining';
-import SubjectiveTraining from './components/SubjectiveTraining';
-import ReviewSection from './components/ReviewSection';
-import ProgressSection from './components/ProgressSection';
-import MaterialImporter from './components/MaterialImporter';
-import OnboardingDiagnostic from './components/OnboardingDiagnostic';
-import ListeningTraining from './components/ListeningTraining';
-import SettingsSection from './components/SettingsSection';
-import VocabularyTraining from './components/VocabularyTraining';
 import AuthGate from './components/AuthGate';
-import MockExam from './components/MockExam';
 import { ActiveTab, Attempt, DailyPlan, Passage, PracticeCompletionReport, PracticeSession, ReviewCompletionEvidence, ReviewItem, SkillProfile, StudyGoal } from './types';
 import { CET4_VOCABULARY_BANK, INITIAL_PASSAGE } from './data';
 import {
   CET4_CLOZE_PRACTICE_QUESTIONS,
   CET4_GRAMMAR_PRACTICE_QUESTIONS,
+  CET4_READING_BANK,
   type Cet4MockChoiceQuestion,
 } from './questionBank';
 import { Sparkles, X } from 'lucide-react';
@@ -40,9 +29,30 @@ import {
 } from './lib/storage/db';
 import { buildDailyPlan } from './domain/planner/dailyPlan';
 import { buildReviewGateStatus } from './domain/review/reviewGate';
+import { getDueWrongQuestionReviewItems } from './domain/review/reviewQueue';
 import { trackTelemetry } from './lib/telemetry';
 import { OnboardingDiagnosticReport } from './domain/diagnostic/onboardingDiagnostic';
 import { getExamRegistryEntry } from './exams/registry';
+import {
+  buildUnpracticedReadingPassages,
+  filterPassageForUnpracticedQuestions,
+  filterUnpracticedItems,
+  getPracticedQuestionIds,
+} from './domain/practice/practicedQuestions';
+
+const ReadingTraining = lazy(() => import('./components/ReadingTraining'));
+const PracticeHub = lazy(() => import('./components/PracticeHub'));
+const SpeakingTraining = lazy(() => import('./components/SpeakingTraining'));
+const SubjectiveTraining = lazy(() => import('./components/SubjectiveTraining'));
+const ReviewSection = lazy(() => import('./components/ReviewSection'));
+const AnsweredQuestionHistory = lazy(() => import('./components/AnsweredQuestionHistory'));
+const ProgressSection = lazy(() => import('./components/ProgressSection'));
+const MaterialImporter = lazy(() => import('./components/MaterialImporter'));
+const OnboardingDiagnostic = lazy(() => import('./components/OnboardingDiagnostic'));
+const ListeningTraining = lazy(() => import('./components/ListeningTraining'));
+const SettingsSection = lazy(() => import('./components/SettingsSection'));
+const VocabularyTraining = lazy(() => import('./components/VocabularyTraining'));
+const MockExam = lazy(() => import('./components/MockExam'));
 
 function getDaysRemaining(examDate?: string): number {
   if (!examDate) return 0;
@@ -54,8 +64,7 @@ function getDaysRemaining(examDate?: string): number {
 }
 
 function countDueReviews(reviewItems: ReviewItem[]): number {
-  const now = new Date().toISOString();
-  return reviewItems.filter((item) => !item.nextReviewAt || item.nextReviewAt <= now).length;
+  return getDueWrongQuestionReviewItems(reviewItems).length;
 }
 
 function levelToProfileScore(level: number): number {
@@ -81,7 +90,7 @@ function estimateCetScore(skillProfiles: SkillProfile[]): number | undefined {
     { skill: 'translation' as const, weight: 0.15 },
   ];
   const available = weightedProfiles.filter((item) => latestBySkill.has(item.skill));
-  if (available.length === 0) return undefined;
+  if (available.length < 3) return undefined;
 
   const normalizedWeight = available.reduce((sum, item) => sum + item.weight, 0);
   const abilityScore = available.reduce((sum, item) => {
@@ -126,14 +135,17 @@ function buildChoiceQuestionPassage(params: {
   title: string;
   content: string;
   questions: Cet4MockChoiceQuestion[];
+  questionLimit?: number;
 }): Passage {
+  const selectedQuestions = params.questions.slice(0, params.questionLimit ?? params.questions.length);
+
   return {
     id: params.id,
     examId: 'cet4',
     moduleId: 'grammar',
     title: params.title,
     content: params.content,
-    questions: params.questions.slice(0, 8).map((question) => ({
+    questions: selectedQuestions.map((question) => ({
       id: question.id,
       examId: 'cet4',
       moduleId: question.moduleId,
@@ -156,6 +168,7 @@ const CET4_GRAMMAR_STRUCTURE_PASSAGE = buildChoiceQuestionPassage({
   title: '语法结构与固定搭配专项',
   content: '本组题用于训练时态、语态、非谓语、从句、连接词和固定搭配。诊断显示语法薄弱时，系统会优先推荐这一组。',
   questions: CET4_GRAMMAR_PRACTICE_QUESTIONS,
+  questionLimit: 8,
 });
 
 const CET4_CLOZE_CONTEXT_PASSAGE = buildChoiceQuestionPassage({
@@ -163,7 +176,36 @@ const CET4_CLOZE_CONTEXT_PASSAGE = buildChoiceQuestionPassage({
   title: '完形/选词填空语境专项',
   content: '本组题用于训练上下文线索、词义辨析、固定搭配和句际逻辑。诊断显示词汇语境或完形薄弱时，系统会优先推荐这一组。',
   questions: CET4_CLOZE_PRACTICE_QUESTIONS,
+  questionLimit: 8,
 });
+
+const CET4_GRAMMAR_STRUCTURE_FULL_PASSAGE = buildChoiceQuestionPassage({
+  ...CET4_GRAMMAR_STRUCTURE_PASSAGE,
+  questions: CET4_GRAMMAR_PRACTICE_QUESTIONS,
+});
+
+const CET4_CLOZE_CONTEXT_FULL_PASSAGE = buildChoiceQuestionPassage({
+  ...CET4_CLOZE_CONTEXT_PASSAGE,
+  questions: CET4_CLOZE_PRACTICE_QUESTIONS,
+});
+
+type PracticeJumpTarget = {
+  moduleId: 'vocabulary' | 'cloze' | 'grammar' | 'reading' | 'listening' | 'writing' | 'translation';
+  questionId: string;
+};
+
+function WorkspaceLoadingFallback() {
+  return (
+    <div className="app-page-surface flex min-h-screen flex-1 items-center justify-center p-6">
+      <div className="ui-panel max-w-xs text-center">
+        <div className="mx-auto mb-3 h-2 w-24 overflow-hidden rounded-full bg-[#e3f2fd]">
+          <div className="h-full w-1/2 rounded-full bg-[#003178] motion-safe:animate-pulse" />
+        </div>
+        <p className="text-xs font-black text-[#003178]">正在加载学习模块</p>
+      </div>
+    </div>
+  );
+}
 
 function StudyApp() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('today');
@@ -179,11 +221,11 @@ function StudyApp() {
   const [isListeningPracticing, setIsListeningPracticing] = useState(false);
   const [isVocabularyPracticing, setIsVocabularyPracticing] = useState(false);
   const [subjectivePracticeMode, setSubjectivePracticeMode] = useState<'writing' | 'translation' | null>(null);
+  const [practiceJumpTarget, setPracticeJumpTarget] = useState<PracticeJumpTarget | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [dailyStrategy, setDailyStrategy] = useState<'efficient' | 'review'>('efficient');
   const [targetScoreLimit, setTargetScoreLimit] = useState<number | undefined>(undefined);
   const [modalContent, setModalContent] = useState<{ title: string; body: string } | null>(null);
-  const [reviewGatePrompt, setReviewGatePrompt] = useState<{ requestedLabel: string } | null>(null);
 
   const handleTriggerModal = (title: string, body: string) => {
     setModalContent({ title, body });
@@ -199,6 +241,29 @@ function StudyApp() {
   const estimatedScore = estimateCetScore(persistedSkillProfiles);
   const abilityEvidenceCount = persistedSkillProfiles.reduce((sum, profile) => sum + profile.evidenceCount, 0);
   const reviewGateStatus = buildReviewGateStatus(persistedReviewItems);
+  const unpracticedVocabularyItems = useMemo(
+    () => filterUnpracticedItems(CET4_VOCABULARY_BANK, persistedAttempts, 'vocabulary'),
+    [persistedAttempts],
+  );
+  const unpracticedReadingPassages = useMemo(
+    () => buildUnpracticedReadingPassages(CET4_READING_BANK, persistedAttempts),
+    [persistedAttempts],
+  );
+  const preferredReadingPassage = unpracticedReadingPassages[0] ?? INITIAL_PASSAGE;
+  const unpracticedGrammarPassage = useMemo(
+    () => filterPassageForUnpracticedQuestions(CET4_GRAMMAR_STRUCTURE_PASSAGE, persistedAttempts)
+      ?? CET4_GRAMMAR_STRUCTURE_PASSAGE,
+    [persistedAttempts],
+  );
+  const unpracticedClozePassage = useMemo(
+    () => filterPassageForUnpracticedQuestions(CET4_CLOZE_CONTEXT_PASSAGE, persistedAttempts)
+      ?? CET4_CLOZE_CONTEXT_PASSAGE,
+    [persistedAttempts],
+  );
+  const practicedListeningQuestionIds = useMemo(
+    () => getPracticedQuestionIds(persistedAttempts, 'listening'),
+    [persistedAttempts],
+  );
 
   useEffect(() => {
     resetViewportScroll();
@@ -208,21 +273,18 @@ function StudyApp() {
     resetViewportScroll();
   }, [activeTab, showOnboarding, isPracticing, isListeningPracticing, isVocabularyPracticing, subjectivePracticeMode]);
 
-  const blockForReviewGate = (requestedLabel: string) => {
-    if (!reviewGateStatus.locked) return false;
+  const noteReviewGateBypass = (requestedLabel: string) => {
+    if (!reviewGateStatus.locked) return;
 
-    setReviewGatePrompt({ requestedLabel });
-    setActiveTab('review');
-    trackTelemetry('review_gate_blocked', {
+    trackTelemetry('review_gate_bypassed', {
       requestedLabel,
       dueCount: reviewGateStatus.dueCount,
       remainingRequired: reviewGateStatus.remainingRequired,
     });
-    return true;
   };
 
-  const startLearningIfUnlocked = (requestedLabel: string, start: () => void) => {
-    if (blockForReviewGate(requestedLabel)) return;
+  const startLearningWithReviewReminder = (requestedLabel: string, start: () => void) => {
+    noteReviewGateBypass(requestedLabel);
     start();
   };
 
@@ -234,7 +296,7 @@ function StudyApp() {
     };
     const requestedLabel = gatedLabels[tab];
 
-    if (requestedLabel && blockForReviewGate(requestedLabel)) return;
+    if (requestedLabel) noteReviewGateBypass(requestedLabel);
     setActiveTab(tab);
   };
 
@@ -425,23 +487,58 @@ function StudyApp() {
     }
   };
 
-  const handleSelectPassage = (passageData: Passage) => {
+  const handleSelectPassage = (passageData: Passage, questionId?: string) => {
+    setPracticeJumpTarget(questionId ? { moduleId: 'reading', questionId } : null);
     setCustomPassage(passageData);
-    startLearningIfUnlocked('仔细阅读训练', () => setIsPracticing(true));
+    startLearningWithReviewReminder('仔细阅读训练', () => setIsPracticing(true));
   };
 
-  const handleStartGrammarPractice = () => {
-    setCustomPassage(CET4_GRAMMAR_STRUCTURE_PASSAGE);
-    startLearningIfUnlocked('语法结构训练', () => setIsPracticing(true));
+  const handleStartReadingPractice = () => {
+    setPracticeJumpTarget(null);
+    startLearningWithReviewReminder('仔细阅读训练', () => {
+      setCustomPassage(preferredReadingPassage);
+      setIsPracticing(true);
+    });
   };
 
-  const handleStartClozePractice = () => {
-    setCustomPassage(CET4_CLOZE_CONTEXT_PASSAGE);
-    startLearningIfUnlocked('完形填空训练', () => setIsPracticing(true));
+  const handleStartGrammarPractice = (questionId?: string) => {
+    setPracticeJumpTarget(questionId ? { moduleId: 'grammar', questionId } : null);
+    setCustomPassage(questionId ? CET4_GRAMMAR_STRUCTURE_FULL_PASSAGE : unpracticedGrammarPassage);
+    startLearningWithReviewReminder('语法结构训练', () => setIsPracticing(true));
+  };
+
+  const handleStartClozePractice = (questionId?: string) => {
+    setPracticeJumpTarget(questionId ? { moduleId: 'cloze', questionId } : null);
+    setCustomPassage(questionId ? CET4_CLOZE_CONTEXT_FULL_PASSAGE : unpracticedClozePassage);
+    startLearningWithReviewReminder('完形填空训练', () => setIsPracticing(true));
+  };
+
+  const handleStartVocabularyPractice = (questionId?: string) => {
+    setPracticeJumpTarget(questionId ? { moduleId: 'vocabulary', questionId } : null);
+    startLearningWithReviewReminder('单词练习', () => setIsVocabularyPracticing(true));
+  };
+
+  const handleStartListeningPractice = (questionId?: string) => {
+    setPracticeJumpTarget(questionId ? { moduleId: 'listening', questionId } : null);
+    startLearningWithReviewReminder('听力训练', () => setIsListeningPracticing(true));
+  };
+
+  const handleStartSubjectivePractice = (mode: 'writing' | 'translation', questionId?: string) => {
+    setPracticeJumpTarget(questionId ? { moduleId: mode, questionId } : null);
+    startLearningWithReviewReminder(mode === 'writing' ? '写作训练' : '翻译训练', () => setSubjectivePracticeMode(mode));
+  };
+
+  const handleBackFromPractice = () => {
+    setPracticeJumpTarget(null);
+    setIsPracticing(false);
+    setIsListeningPracticing(false);
+    setIsVocabularyPracticing(false);
+    setSubjectivePracticeMode(null);
   };
 
   const handleCompletePractice = (score: number, report: PracticeCompletionReport) => {
     setIsPracticing(false);
+    setPracticeJumpTarget(null);
     setReadingProgress({ completed: true, score });
     setActiveTab('progress');
     trackTelemetry('practice_completed', {
@@ -460,6 +557,7 @@ function StudyApp() {
 
   const handleCompleteSubjectivePractice = (score: number, report: PracticeCompletionReport) => {
     setSubjectivePracticeMode(null);
+    setPracticeJumpTarget(null);
     setActiveTab('progress');
     trackTelemetry('practice_completed', {
       mode: report.session.modeId,
@@ -477,6 +575,7 @@ function StudyApp() {
 
   const handleCompleteVocabularyPractice = (score: number, report: PracticeCompletionReport) => {
     setIsVocabularyPracticing(false);
+    setPracticeJumpTarget(null);
     setActiveTab('progress');
     trackTelemetry('practice_completed', {
       mode: report.session.modeId,
@@ -525,17 +624,18 @@ function StudyApp() {
       case 'today':
         return (
           <TodayDashboard
-            onStartReading={() => startLearningIfUnlocked('仔细阅读训练', () => setIsPracticing(true))}
-            onStartListening={() => startLearningIfUnlocked('听力训练', () => setIsListeningPracticing(true))}
-            onStartWriting={() => startLearningIfUnlocked('写作训练', () => setSubjectivePracticeMode('writing'))}
-            onStartTranslation={() => startLearningIfUnlocked('翻译训练', () => setSubjectivePracticeMode('translation'))}
-            onStartVocabulary={() => startLearningIfUnlocked('单词练习', () => setIsVocabularyPracticing(true))}
+            onStartReading={handleStartReadingPractice}
+            onStartListening={handleStartListeningPractice}
+            onStartWriting={() => handleStartSubjectivePractice('writing')}
+            onStartTranslation={() => handleStartSubjectivePractice('translation')}
+            onStartVocabulary={handleStartVocabularyPractice}
             onStartGrammar={handleStartGrammarPractice}
             onStartCloze={handleStartClozePractice}
-            onStartMockExam={() => startLearningIfUnlocked('阶段模考', () => setActiveTab('mock'))}
+            onStartMockExam={() => startLearningWithReviewReminder('阶段模考', () => setActiveTab('mock'))}
             onStartOnboarding={() => setShowOnboarding(true)}
             onViewReview={() => setActiveTab('review')}
-            onStartSpeaking={() => startLearningIfUnlocked('口语重说', () => setActiveTab('speaking'))}
+            onViewHistory={() => setActiveTab('history')}
+            onStartSpeaking={() => startLearningWithReviewReminder('口语重说', () => setActiveTab('speaking'))}
             onOpenSettings={() => setActiveTab('settings')}
             onTriggerModal={handleTriggerModal}
             readingProgress={readingProgress}
@@ -545,6 +645,7 @@ function StudyApp() {
             abilityEvidenceCount={abilityEvidenceCount}
             dailyPlan={dailyPlan}
             reviewItemCount={reviewItemCount}
+            answeredQuestionCount={persistedAttempts.length}
             reviewGateStatus={reviewGateStatus}
             skillProfiles={persistedSkillProfiles}
             targetExamName={activeExamName}
@@ -556,18 +657,21 @@ function StudyApp() {
         return (
           <PracticeHub
             onStartOnboarding={() => setShowOnboarding(true)}
-            onStartVocabulary={() => startLearningIfUnlocked('单词练习', () => setIsVocabularyPracticing(true))}
+            onStartVocabulary={handleStartVocabularyPractice}
             onStartGrammar={handleStartGrammarPractice}
             onStartCloze={handleStartClozePractice}
             onStartReading={handleSelectPassage}
-            onStartListening={() => startLearningIfUnlocked('听力训练', () => setIsListeningPracticing(true))}
-            onStartWriting={() => startLearningIfUnlocked('写作训练', () => setSubjectivePracticeMode('writing'))}
-            onStartTranslation={() => startLearningIfUnlocked('翻译训练', () => setSubjectivePracticeMode('translation'))}
-            onStartMockExam={() => startLearningIfUnlocked('阶段模考', () => setActiveTab('mock'))}
+            onStartListening={handleStartListeningPractice}
+            onStartWriting={(questionId) => handleStartSubjectivePractice('writing', questionId)}
+            onStartTranslation={(questionId) => handleStartSubjectivePractice('translation', questionId)}
+            onStartMockExam={() => startLearningWithReviewReminder('阶段模考', () => setActiveTab('mock'))}
             examId={activeExamId}
             examName={activeExamName}
             skillProfiles={persistedSkillProfiles}
             dailyPlan={dailyPlan}
+            readingPassages={unpracticedReadingPassages}
+            persistedAttempts={persistedAttempts}
+            persistedPracticeSessions={persistedPracticeSessions}
           />
         );
       case 'mock':
@@ -587,6 +691,13 @@ function StudyApp() {
             persistedReviewItems={persistedReviewItems}
             reviewGateStatus={reviewGateStatus}
             onCompleteReviewItem={handleCompleteReviewItem}
+          />
+        );
+      case 'history':
+        return (
+          <AnsweredQuestionHistory
+            persistedAttempts={persistedAttempts}
+            persistedPracticeSessions={persistedPracticeSessions}
           />
         );
       case 'speaking':
@@ -610,7 +721,7 @@ function StudyApp() {
           <MaterialImporter
             onLoadCustomPassage={(passage) => {
               setCustomPassage(passage);
-              startLearningIfUnlocked('导入材料训练', () => setIsPracticing(true));
+              startLearningWithReviewReminder('导入材料训练', () => setIsPracticing(true));
             }}
           />
         );
@@ -630,17 +741,18 @@ function StudyApp() {
       default:
         return (
           <TodayDashboard
-            onStartReading={() => startLearningIfUnlocked('仔细阅读训练', () => setIsPracticing(true))}
-            onStartListening={() => startLearningIfUnlocked('听力训练', () => setIsListeningPracticing(true))}
-            onStartWriting={() => startLearningIfUnlocked('写作训练', () => setSubjectivePracticeMode('writing'))}
-            onStartTranslation={() => startLearningIfUnlocked('翻译训练', () => setSubjectivePracticeMode('translation'))}
-            onStartVocabulary={() => startLearningIfUnlocked('单词练习', () => setIsVocabularyPracticing(true))}
+            onStartReading={handleStartReadingPractice}
+            onStartListening={handleStartListeningPractice}
+            onStartWriting={() => handleStartSubjectivePractice('writing')}
+            onStartTranslation={() => handleStartSubjectivePractice('translation')}
+            onStartVocabulary={handleStartVocabularyPractice}
             onStartGrammar={handleStartGrammarPractice}
             onStartCloze={handleStartClozePractice}
-            onStartMockExam={() => startLearningIfUnlocked('阶段模考', () => setActiveTab('mock'))}
+            onStartMockExam={() => startLearningWithReviewReminder('阶段模考', () => setActiveTab('mock'))}
             onStartOnboarding={() => setShowOnboarding(true)}
             onViewReview={() => setActiveTab('review')}
-            onStartSpeaking={() => startLearningIfUnlocked('口语重说', () => setActiveTab('speaking'))}
+            onViewHistory={() => setActiveTab('history')}
+            onStartSpeaking={() => startLearningWithReviewReminder('口语重说', () => setActiveTab('speaking'))}
             onOpenSettings={() => setActiveTab('settings')}
             onTriggerModal={handleTriggerModal}
             readingProgress={readingProgress}
@@ -650,6 +762,7 @@ function StudyApp() {
             abilityEvidenceCount={abilityEvidenceCount}
             dailyPlan={dailyPlan}
             reviewItemCount={reviewItemCount}
+            answeredQuestionCount={persistedAttempts.length}
             reviewGateStatus={reviewGateStatus}
             skillProfiles={persistedSkillProfiles}
             targetExamName={activeExamName}
@@ -663,52 +776,74 @@ function StudyApp() {
   return (
     <div className="app-page-surface min-h-screen bg-slate-50 flex flex-col lg:flex-row font-sans antialiased text-[#1e333c]">
       {showOnboarding ? (
-        <OnboardingDiagnostic
-          onDismiss={() => setShowOnboarding(false)}
-          onSetScoreLimit={(score) => {
-            handleSetGoalTarget(score);
-          }}
-          onCompleteDiagnostic={handleCompleteDiagnostic}
-        />
+        <Suspense fallback={<WorkspaceLoadingFallback />}>
+          <OnboardingDiagnostic
+            onDismiss={() => setShowOnboarding(false)}
+            onSetScoreLimit={(score) => {
+              handleSetGoalTarget(score);
+            }}
+            onCompleteDiagnostic={handleCompleteDiagnostic}
+          />
+        </Suspense>
       ) : isListeningPracticing ? (
-        <ListeningTraining
-          onBack={() => setIsListeningPracticing(false)}
-          onComplete={(score, report) => {
-            setIsListeningPracticing(false);
-            setReadingProgress({ completed: true, score });
-            setActiveTab('progress');
-            trackTelemetry('practice_completed', {
-              mode: report.session.modeId,
-              moduleId: report.session.moduleId,
-              score,
-              attempts: report.attempts.length,
-              reviewItems: report.reviewItems.length,
-            });
-            persistCompletionReport(report).catch((error) => {
-              console.error('Failed to persist listening practice:', error);
-              trackTelemetry('client_error', { area: 'listening_practice_persist' });
-              handleTriggerModal('听力记录保存失败', '本次分数已显示，但错因和复习队列没有成功写入本地数据库。');
-            });
-          }}
-        />
+        <Suspense fallback={<WorkspaceLoadingFallback />}>
+          <ListeningTraining
+            initialQuestionId={practiceJumpTarget?.moduleId === 'listening' ? practiceJumpTarget.questionId : undefined}
+            practicedQuestionIds={practicedListeningQuestionIds}
+            onBack={handleBackFromPractice}
+            onComplete={(score, report) => {
+              setIsListeningPracticing(false);
+              setPracticeJumpTarget(null);
+              setReadingProgress({ completed: true, score });
+              setActiveTab('progress');
+              trackTelemetry('practice_completed', {
+                mode: report.session.modeId,
+                moduleId: report.session.moduleId,
+                score,
+                attempts: report.attempts.length,
+                reviewItems: report.reviewItems.length,
+              });
+              persistCompletionReport(report).catch((error) => {
+                console.error('Failed to persist listening practice:', error);
+                trackTelemetry('client_error', { area: 'listening_practice_persist' });
+                handleTriggerModal('听力记录保存失败', '本次分数已显示，但错因和复习队列没有成功写入本地数据库。');
+              });
+            }}
+          />
+        </Suspense>
       ) : isVocabularyPracticing ? (
-        <VocabularyTraining
-          items={CET4_VOCABULARY_BANK}
-          onBack={() => setIsVocabularyPracticing(false)}
-          onComplete={handleCompleteVocabularyPractice}
-        />
+        <Suspense fallback={<WorkspaceLoadingFallback />}>
+          <VocabularyTraining
+            initialQuestionId={practiceJumpTarget?.moduleId === 'vocabulary' ? practiceJumpTarget.questionId : undefined}
+            items={practiceJumpTarget?.moduleId === 'vocabulary' ? CET4_VOCABULARY_BANK : unpracticedVocabularyItems}
+            onBack={handleBackFromPractice}
+            onComplete={handleCompleteVocabularyPractice}
+          />
+        </Suspense>
       ) : isPracticing ? (
-        <ReadingTraining
-          passage={customPassage}
-          onBack={() => setIsPracticing(false)}
-          onComplete={handleCompletePractice}
-        />
+        <Suspense fallback={<WorkspaceLoadingFallback />}>
+          <ReadingTraining
+            initialQuestionId={
+              practiceJumpTarget?.moduleId === 'reading'
+              || practiceJumpTarget?.moduleId === 'grammar'
+              || practiceJumpTarget?.moduleId === 'cloze'
+                ? practiceJumpTarget.questionId
+                : undefined
+            }
+            passage={customPassage}
+            onBack={handleBackFromPractice}
+            onComplete={handleCompletePractice}
+          />
+        </Suspense>
       ) : subjectivePracticeMode ? (
-        <SubjectiveTraining
-          mode={subjectivePracticeMode}
-          onBack={() => setSubjectivePracticeMode(null)}
-          onComplete={handleCompleteSubjectivePractice}
-        />
+        <Suspense fallback={<WorkspaceLoadingFallback />}>
+          <SubjectiveTraining
+            initialPromptId={practiceJumpTarget?.moduleId === subjectivePracticeMode ? practiceJumpTarget.questionId : undefined}
+            mode={subjectivePracticeMode}
+            onBack={handleBackFromPractice}
+            onComplete={handleCompleteSubjectivePractice}
+          />
+        </Suspense>
       ) : (
         <>
           <Sidebar
@@ -718,75 +853,11 @@ function StudyApp() {
             onTriggerModal={handleTriggerModal}
           />
           <main className="app-page-surface flex-1 min-w-0 flex flex-col min-h-0 lg:h-screen lg:overflow-hidden relative">
-            {renderTabContent()}
+            <Suspense fallback={<WorkspaceLoadingFallback />}>
+              {renderTabContent()}
+            </Suspense>
           </main>
         </>
-      )}
-
-      {reviewGatePrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-xs select-none">
-          <div className="w-full max-w-lg rounded-[2rem] border border-rose-100 bg-white p-5 shadow-2xl sm:p-6">
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
-              <div>
-                <span className="inline-flex rounded-full bg-rose-50 px-3 py-1 text-[11px] font-black text-rose-700">
-                  今日复习闸门
-                </span>
-                <h3 className="mt-3 text-xl font-black text-[#003178]">先完成到期复习，再进入{reviewGatePrompt.requestedLabel}</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setReviewGatePrompt(null)}
-                className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-50 hover:text-[#003178]"
-                aria-label="关闭复习闸门提示"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="mt-4 space-y-4">
-              <p className="rounded-2xl bg-rose-50 p-4 text-sm font-semibold leading-7 text-slate-700">
-                当前有 {reviewGateStatus.dueCount} 条到期复习。为了让间隔复习真正生效，今天需要先完成
-                <strong className="mx-1 text-rose-700">{reviewGateStatus.remainingRequired}</strong>
-                条最高优先级主动回忆；完成后专项练习、模考和口语入口会自动解锁。
-              </p>
-              <div className="grid grid-cols-3 gap-3 text-center text-xs font-black">
-                <div className="rounded-2xl bg-slate-50 p-3">
-                  <div className="text-2xl text-[#003178]">{reviewGateStatus.dueCount}</div>
-                  <div className="text-slate-500">到期项</div>
-                </div>
-                <div className="rounded-2xl bg-slate-50 p-3">
-                  <div className="text-2xl text-emerald-700">{reviewGateStatus.completedToday}</div>
-                  <div className="text-slate-500">今日已复习</div>
-                </div>
-                <div className="rounded-2xl bg-slate-50 p-3">
-                  <div className="text-2xl text-rose-700">{reviewGateStatus.requiredToday}</div>
-                  <div className="text-slate-500">解锁要求</div>
-                </div>
-              </div>
-              <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReviewGatePrompt(null);
-                    setActiveTab('today');
-                  }}
-                  className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 px-5 text-sm font-black text-slate-600 transition hover:bg-slate-50"
-                >
-                  回到今日计划
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReviewGatePrompt(null);
-                    setActiveTab('review');
-                  }}
-                  className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-[#003178] px-5 text-sm font-black text-white shadow-sm transition hover:bg-[#0d47a1]"
-                >
-                  开始强制复习
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* Premium Unified Custom Modal Component overlay */}
