@@ -282,8 +282,12 @@ test('MVP critical reading flow persists local learning evidence', async ({ page
   await expect(page.getByText(`已练 5/${readingQuestionTotal}`)).toBeVisible();
   await expect(page.getByText(`${CET4_READING_BANK.length} 组材料 / ${readingQuestionTotal} 题`)).toBeVisible();
   await page.getByTestId('practice-module-select-reading').click();
+  await expect(page.getByRole('button', { name: '已答题目', exact: true })).toHaveCount(0);
   await expect(page.getByTestId('practice-question-status-reading')).toContainText(`已答 5 / ${readingQuestionTotal}`);
   await expect(page.getByTestId('practice-question-status-reading')).toContainText(`未答 ${readingQuestionTotal - 5}`);
+  await expect(page.getByTestId('practice-answered-history')).toBeVisible();
+  await expect(page.getByTestId('practice-answered-history')).toContainText('已答题目');
+  await expect(page.getByTestId('answered-history-item').first()).toBeVisible();
   await expect(page.getByTestId('practice-question-status-reading-1')).toHaveAttribute('aria-label', /已答/);
   await expect(page.getByTestId('practice-question-status-reading-6')).toHaveAttribute('aria-label', /未答/);
   const sixthReadingQuestion = CET4_READING_BANK

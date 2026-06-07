@@ -45,7 +45,6 @@ const PracticeHub = lazy(() => import('./components/PracticeHub'));
 const SpeakingTraining = lazy(() => import('./components/SpeakingTraining'));
 const SubjectiveTraining = lazy(() => import('./components/SubjectiveTraining'));
 const ReviewSection = lazy(() => import('./components/ReviewSection'));
-const AnsweredQuestionHistory = lazy(() => import('./components/AnsweredQuestionHistory'));
 const ProgressSection = lazy(() => import('./components/ProgressSection'));
 const MaterialImporter = lazy(() => import('./components/MaterialImporter'));
 const OnboardingDiagnostic = lazy(() => import('./components/OnboardingDiagnostic'));
@@ -634,7 +633,7 @@ function StudyApp() {
             onStartMockExam={() => startLearningWithReviewReminder('阶段模考', () => setActiveTab('mock'))}
             onStartOnboarding={() => setShowOnboarding(true)}
             onViewReview={() => setActiveTab('review')}
-            onViewHistory={() => setActiveTab('history')}
+            onViewHistory={() => setActiveTab('practice')}
             onStartSpeaking={() => startLearningWithReviewReminder('口语重说', () => setActiveTab('speaking'))}
             onOpenSettings={() => setActiveTab('settings')}
             onTriggerModal={handleTriggerModal}
@@ -691,13 +690,6 @@ function StudyApp() {
             persistedReviewItems={persistedReviewItems}
             reviewGateStatus={reviewGateStatus}
             onCompleteReviewItem={handleCompleteReviewItem}
-          />
-        );
-      case 'history':
-        return (
-          <AnsweredQuestionHistory
-            persistedAttempts={persistedAttempts}
-            persistedPracticeSessions={persistedPracticeSessions}
           />
         );
       case 'speaking':

@@ -291,7 +291,7 @@ export default function TodayDashboard({
                 className="ui-button ui-button-secondary"
               >
                 <History className="h-4 w-4" />
-                已答题目
+                专项已答
               </button>
               <div className="ui-chip">
                 <Clock className="h-4 w-4 text-[#003178]" />

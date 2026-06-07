@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpen, Sparkles, FolderSync, Mic, BarChart3, DownloadCloud, Settings, HelpCircle, ClipboardCheck, History } from 'lucide-react';
+import { BookOpen, Sparkles, FolderSync, Mic, BarChart3, DownloadCloud, Settings, HelpCircle, ClipboardCheck } from 'lucide-react';
 import { ActiveTab } from '../types';
 
 interface SidebarProps {
@@ -15,7 +15,6 @@ export default function Sidebar({ activeTab, setActiveTab, examCountdown, onTrig
     { id: 'practice', label: '专项练习', icon: Sparkles },
     { id: 'mock', label: '阶段模考', icon: ClipboardCheck },
     { id: 'review', label: '复习队列', icon: FolderSync },
-    { id: 'history', label: '已答题目', icon: History },
     { id: 'speaking', label: '口语重说', icon: Mic },
     { id: 'progress', label: '能力进展', icon: BarChart3 },
     { id: 'import', label: '材料导入', icon: DownloadCloud },
@@ -78,7 +77,7 @@ export default function Sidebar({ activeTab, setActiveTab, examCountdown, onTrig
               if (onTriggerModal) {
                 onTriggerModal(
                   "使用帮助",
-                  "英语训练舱当前聚焦 CET-4 首发场景，并按多考试训练系统预留架构。\n\n1. 点击今日标题旁的“入门能力诊断”建立初始能力画像。\n\n2. 点击左侧导航在专项练习、精听长对话、口语纠错重说、错题复习和已答题目间切换。\n\n学习记录默认保存在当前浏览器 IndexedDB 中；启用 AI 分析时会发送必要文本用于生成反馈。"
+                  "英语训练舱当前聚焦 CET-4 首发场景，并按多考试训练系统预留架构。\n\n1. 点击今日标题旁的“入门能力诊断”建立初始能力画像。\n\n2. 点击左侧导航在专项练习、阶段模考、复习队列、口语重说和能力进展间切换；已答题目可在专项练习中回看。\n\n学习记录默认保存在当前浏览器 IndexedDB 中；启用 AI 分析时会发送必要文本用于生成反馈。"
                 );
               }
             }}

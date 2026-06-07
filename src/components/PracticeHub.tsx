@@ -44,6 +44,7 @@ import {
   type ReadingPracticeDraft,
   type VocabularyPracticeDraft,
 } from '../domain/practice/draftProgress';
+import AnsweredQuestionHistory from './AnsweredQuestionHistory';
 
 type PracticeModuleId = PracticeProgressModuleId;
 
@@ -769,6 +770,16 @@ export default function PracticeHub({
             expanded={statusExpanded}
             onToggleExpanded={toggleStatusExpanded}
             onSelectQuestion={handleStartStatusQuestion}
+          />
+        )}
+
+        {isCet4 && (
+          <AnsweredQuestionHistory
+            embedded
+            lockedModuleId={selectedModule.id}
+            lockedModuleLabel={selectedModule.label}
+            persistedAttempts={persistedAttempts}
+            persistedPracticeSessions={persistedPracticeSessions}
           />
         )}
 
