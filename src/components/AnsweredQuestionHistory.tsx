@@ -11,9 +11,6 @@ import { SelectField } from './controls/FormControls';
 interface AnsweredQuestionHistoryProps {
   persistedAttempts?: Attempt[];
   persistedPracticeSessions?: PracticeSession[];
-  embedded?: boolean;
-  lockedModuleId?: string;
-  lockedModuleLabel?: string;
 }
 
 type OutcomeFilter = 'all' | 'correct' | 'incorrect';
@@ -224,9 +221,6 @@ function HistoryItemCard({ item, expanded, onToggle }: HistoryItemCardProps): Re
 export default function AnsweredQuestionHistory({
   persistedAttempts = [],
   persistedPracticeSessions = [],
-  embedded = false,
-  lockedModuleId,
-  lockedModuleLabel,
 }: AnsweredQuestionHistoryProps) {
   const [query, setQuery] = useState('');
   const [moduleFilter, setModuleFilter] = useState('all');
@@ -262,26 +256,18 @@ export default function AnsweredQuestionHistory({
   const filteredItems = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return historyItems.filter((item) => {
-      if (lockedModuleId) {
-        const belongsToLockedModule = item.attempt.moduleId === lockedModuleId
-          || item.snapshot.moduleId === lockedModuleId
-          || (lockedModuleId === 'mock' && item.moduleLabel.startsWith('模考'));
-        if (!belongsToLockedModule) return false;
-      } else if (moduleFilter !== 'all' && item.moduleLabel !== moduleFilter) {
-        return false;
-      }
+      if (moduleFilter !== 'all' && item.moduleLabel !== moduleFilter) return false;
       if (outcomeFilter === 'correct' && item.attempt.isCorrect !== true) return false;
       if (outcomeFilter === 'incorrect' && item.attempt.isCorrect !== false) return false;
       return !normalizedQuery || item.searchText.includes(normalizedQuery);
     });
-  }, [historyItems, lockedModuleId, moduleFilter, outcomeFilter, query]);
+  }, [historyItems, moduleFilter, outcomeFilter, query]);
   const paginatedItems = useMemo(
     () => paginateAnsweredQuestionHistory(filteredItems, currentPage),
     [currentPage, filteredItems],
   );
-  const summaryItems = lockedModuleId ? filteredItems : historyItems;
-  const correctCount = summaryItems.filter((item) => item.attempt.isCorrect === true).length;
-  const incorrectCount = summaryItems.filter((item) => item.attempt.isCorrect === false).length;
+  const correctCount = historyItems.filter((item) => item.attempt.isCorrect === true).length;
+  const incorrectCount = historyItems.filter((item) => item.attempt.isCorrect === false).length;
   const visibleExpandedId = expandedId ?? paginatedItems.items[0]?.id ?? null;
   const pageNumbers = visiblePageNumbers(paginatedItems.page, paginatedItems.pageCount);
   const goToPage = (page: number) => {
@@ -292,7 +278,7 @@ export default function AnsweredQuestionHistory({
   useEffect(() => {
     setCurrentPage(1);
     setExpandedId(null);
-  }, [lockedModuleId, moduleFilter, outcomeFilter, query]);
+  }, [moduleFilter, outcomeFilter, query]);
 
   useEffect(() => {
     if (currentPage !== paginatedItems.page) {
@@ -301,9 +287,9 @@ export default function AnsweredQuestionHistory({
   }, [currentPage, paginatedItems.page]);
 
   return (
-    <div className={embedded ? 'space-y-5' : 'app-page-surface ui-page'} data-testid={embedded ? 'practice-answered-history' : undefined}>
-      <div className={embedded ? 'space-y-5' : 'ui-page-content space-y-5'}>
-        <header className={embedded ? 'ui-panel' : 'ui-page-header'}>
+    <div className="app-page-surface ui-page">
+      <div className="ui-page-content space-y-5">
+        <header className="ui-page-header">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
               <div className="ui-page-eyebrow mb-3">
@@ -314,7 +300,7 @@ export default function AnsweredQuestionHistory({
             </div>
             <div className="grid grid-cols-3 gap-2 text-center text-[11px] font-black sm:min-w-80">
               <div className="ui-metric">
-                <div className="font-mono text-2xl text-[#003178]">{summaryItems.length}</div>
+                <div className="font-mono text-2xl text-[#003178]">{historyItems.length}</div>
                 <div className="text-slate-500">总作答</div>
               </div>
               <div className="ui-metric">
@@ -330,7 +316,7 @@ export default function AnsweredQuestionHistory({
         </header>
 
         <section className="ui-panel">
-          <div className={`grid gap-3 ${lockedModuleId ? 'lg:grid-cols-[minmax(0,1fr)_180px]' : 'lg:grid-cols-[minmax(0,1fr)_180px_180px]'}`}>
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_180px]">
             <label className="relative block">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
@@ -342,9 +328,9 @@ export default function AnsweredQuestionHistory({
             </label>
             <SelectField
               ariaLabel="筛选模块"
-              value={lockedModuleId ? (lockedModuleLabel ?? lockedModuleId) : moduleFilter}
-              options={lockedModuleId ? [{ value: lockedModuleLabel ?? lockedModuleId, label: lockedModuleLabel ?? '当前专项' }] : moduleOptions}
-              onChange={lockedModuleId ? () => undefined : setModuleFilter}
+              value={moduleFilter}
+              options={moduleOptions}
+              onChange={setModuleFilter}
               compact
             />
             <SelectField

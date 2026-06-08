@@ -285,9 +285,16 @@ test('MVP critical reading flow persists local learning evidence', async ({ page
   await expect(page.getByRole('button', { name: '已答题目', exact: true })).toHaveCount(0);
   await expect(page.getByTestId('practice-question-status-reading')).toContainText(`已答 5 / ${readingQuestionTotal}`);
   await expect(page.getByTestId('practice-question-status-reading')).toContainText(`未答 ${readingQuestionTotal - 5}`);
-  await expect(page.getByTestId('practice-answered-history')).toBeVisible();
-  await expect(page.getByTestId('practice-answered-history')).toContainText('已答题目');
-  await expect(page.getByTestId('answered-history-item').first()).toBeVisible();
+  await expect(page.getByTestId('practice-question-filter-reading-all')).toHaveAttribute('aria-pressed', 'true');
+  await page.getByTestId('practice-question-filter-reading-answered').click();
+  await expect(page.getByTestId('practice-question-filter-reading-answered')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('practice-question-status-reading-1')).toBeVisible();
+  await expect(page.getByTestId('practice-question-status-reading-5')).toBeVisible();
+  await expect(page.getByTestId('practice-question-status-reading-6')).toHaveCount(0);
+  await page.getByTestId('practice-question-filter-reading-unanswered').click();
+  await expect(page.getByTestId('practice-question-status-reading-1')).toHaveCount(0);
+  await expect(page.getByTestId('practice-question-status-reading-6')).toBeVisible();
+  await page.getByTestId('practice-question-filter-reading-all').click();
   await expect(page.getByTestId('practice-question-status-reading-1')).toHaveAttribute('aria-label', /已答/);
   await expect(page.getByTestId('practice-question-status-reading-6')).toHaveAttribute('aria-label', /未答/);
   const sixthReadingQuestion = CET4_READING_BANK

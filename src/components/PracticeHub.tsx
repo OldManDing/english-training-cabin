@@ -44,9 +44,9 @@ import {
   type ReadingPracticeDraft,
   type VocabularyPracticeDraft,
 } from '../domain/practice/draftProgress';
-import AnsweredQuestionHistory from './AnsweredQuestionHistory';
 
 type PracticeModuleId = PracticeProgressModuleId;
+type PracticeStatusFilter = 'all' | 'answered' | 'unanswered';
 
 interface PracticeHubProps {
   examId: string;
@@ -261,6 +261,7 @@ export default function PracticeHub({
   const [hasManualSelection, setHasManualSelection] = useState(false);
   const [visibleReadingCount, setVisibleReadingCount] = useState(8);
   const [expandedStatusModuleIds, setExpandedStatusModuleIds] = useState<PracticeModuleId[]>([]);
+  const [statusFilter, setStatusFilter] = useState<PracticeStatusFilter>('all');
   const isCet4 = examId === 'cet4';
   const practiceQuestionBank = useMemo(() => buildPracticeQuestionBank(), []);
   const mergedPracticeAttempts = useMemo(() => {
@@ -555,10 +556,15 @@ export default function PracticeHub({
     moduleId: selectedModule.id,
     questions: practiceQuestionBank[selectedModule.id],
   }), [mergedPracticeAttempts, persistedPracticeSessions, practiceQuestionBank, selectedModule.id]);
+  const filteredQuestionStatuses = useMemo(() => {
+    if (statusFilter === 'answered') return selectedQuestionStatuses.filter((item) => item.practiced);
+    if (statusFilter === 'unanswered') return selectedQuestionStatuses.filter((item) => !item.practiced);
+    return selectedQuestionStatuses;
+  }, [selectedQuestionStatuses, statusFilter]);
   const statusExpanded = expandedStatusModuleIds.includes(selectedModule.id);
-  const visibleQuestionStatuses = statusExpanded || selectedQuestionStatuses.length <= QUESTION_STATUS_PREVIEW_LIMIT
-    ? selectedQuestionStatuses
-    : selectedQuestionStatuses.slice(0, QUESTION_STATUS_PREVIEW_LIMIT);
+  const visibleQuestionStatuses = statusExpanded || filteredQuestionStatuses.length <= QUESTION_STATUS_PREVIEW_LIMIT
+    ? filteredQuestionStatuses
+    : filteredQuestionStatuses.slice(0, QUESTION_STATUS_PREVIEW_LIMIT);
   const selectedStatusPracticedCount = selectedQuestionStatuses.filter((item) => item.practiced).length;
   const selectedStatusRemainingCount = Math.max(0, selectedQuestionStatuses.length - selectedStatusPracticedCount);
   const visibleReadingPassages = readingPassages.slice(0, visibleReadingCount);
@@ -767,19 +773,12 @@ export default function PracticeHub({
             totalCount={selectedQuestionStatuses.length}
             practicedCount={selectedStatusPracticedCount}
             remainingCount={selectedStatusRemainingCount}
+            statusFilter={statusFilter}
             expanded={statusExpanded}
+            displayedCount={filteredQuestionStatuses.length}
+            onStatusFilterChange={setStatusFilter}
             onToggleExpanded={toggleStatusExpanded}
             onSelectQuestion={handleStartStatusQuestion}
-          />
-        )}
-
-        {isCet4 && (
-          <AnsweredQuestionHistory
-            embedded
-            lockedModuleId={selectedModule.id}
-            lockedModuleLabel={selectedModule.label}
-            persistedAttempts={persistedAttempts}
-            persistedPracticeSessions={persistedPracticeSessions}
           />
         )}
 
@@ -884,7 +883,10 @@ function QuestionStatusPanel({
   totalCount,
   practicedCount,
   remainingCount,
+  statusFilter,
   expanded,
+  displayedCount,
+  onStatusFilterChange,
   onToggleExpanded,
   onSelectQuestion,
 }: {
@@ -894,11 +896,19 @@ function QuestionStatusPanel({
   totalCount: number;
   practicedCount: number;
   remainingCount: number;
+  statusFilter: PracticeStatusFilter;
   expanded: boolean;
+  displayedCount: number;
+  onStatusFilterChange: (filter: PracticeStatusFilter) => void;
   onToggleExpanded: () => void;
   onSelectQuestion: (item: PracticeQuestionStatusItem) => void;
 }) {
-  const canToggle = totalCount > QUESTION_STATUS_PREVIEW_LIMIT;
+  const canToggle = displayedCount > QUESTION_STATUS_PREVIEW_LIMIT;
+  const filters: Array<{ id: PracticeStatusFilter; label: string; count: number }> = [
+    { id: 'all', label: '全部', count: totalCount },
+    { id: 'answered', label: '已答', count: practicedCount },
+    { id: 'unanswered', label: '未答', count: remainingCount },
+  ];
 
   return (
     <section data-testid={`practice-question-status-${moduleId}`} className="ui-panel">
@@ -913,39 +923,58 @@ function QuestionStatusPanel({
           </h3>
         </div>
         <div className="flex flex-wrap gap-2 text-[11px] font-black">
-          <span className="rounded-full border border-[#cfe6f2] bg-[#eef7fc] px-3 py-1.5 text-[#003178]">
-            已答 {practicedCount}
-          </span>
-          <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-500">
-            未答 {remainingCount}
-          </span>
+          {filters.map((filter) => {
+            const active = statusFilter === filter.id;
+            return (
+              <button
+                key={filter.id}
+                type="button"
+                data-testid={`practice-question-filter-${moduleId}-${filter.id}`}
+                onClick={() => onStatusFilterChange(filter.id)}
+                className={`rounded-full border px-3 py-1.5 transition ${
+                  active
+                    ? 'border-[#003178] bg-[#003178] text-white'
+                    : 'border-slate-200 bg-white text-slate-500 hover:border-[#003178]/40 hover:text-[#003178]'
+                }`}
+                aria-pressed={active}
+              >
+                {filter.label} {filter.count}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      <div role="list" className="mt-4 grid grid-cols-[repeat(auto-fill,minmax(2.75rem,1fr))] gap-2">
-        {statuses.map((item) => (
-          <div
-            key={item.id}
-            role="listitem"
-            className="min-w-11"
-          >
-            <button
-              type="button"
-              data-testid={`practice-question-status-${moduleId}-${item.number}`}
-              title={`${item.groupLabel ? `${item.groupLabel} · ` : ''}${item.label} · ${item.practiced ? '已答' : '未答'} · 点击进入本题`}
-              aria-label={`${moduleLabel} 第 ${item.number} 题 ${item.practiced ? '已答' : '未答'}，点击进入本题`}
-              onClick={() => onSelectQuestion(item)}
-              className={`flex h-11 w-full min-w-11 items-center justify-center rounded-xl border text-xs font-black transition hover:-translate-y-0.5 hover:border-[#003178]/45 focus:outline-none focus:ring-2 focus:ring-[#003178]/25 ${
-                item.practiced
-                  ? 'border-[#cfe6f2] bg-[#eef7fc] text-[#003178]'
-                  : 'border-slate-200 bg-white text-slate-500'
-              }`}
+      {statuses.length === 0 ? (
+        <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm font-bold text-slate-500">
+          当前筛选下暂无题目。
+        </div>
+      ) : (
+        <div role="list" className="mt-4 grid grid-cols-[repeat(auto-fill,minmax(2.75rem,1fr))] gap-2">
+          {statuses.map((item) => (
+            <div
+              key={item.id}
+              role="listitem"
+              className="min-w-11"
             >
-              {item.number}
-            </button>
-          </div>
-        ))}
-      </div>
+              <button
+                type="button"
+                data-testid={`practice-question-status-${moduleId}-${item.number}`}
+                title={`${item.groupLabel ? `${item.groupLabel} · ` : ''}${item.label} · ${item.practiced ? '已答' : '未答'} · 点击进入本题`}
+                aria-label={`${moduleLabel} 第 ${item.number} 题 ${item.practiced ? '已答' : '未答'}，点击进入本题`}
+                onClick={() => onSelectQuestion(item)}
+                className={`flex h-11 w-full min-w-11 items-center justify-center rounded-xl border text-xs font-black transition hover:-translate-y-0.5 hover:border-[#003178]/45 focus:outline-none focus:ring-2 focus:ring-[#003178]/25 ${
+                  item.practiced
+                    ? 'border-[#cfe6f2] bg-[#eef7fc] text-[#003178]'
+                    : 'border-slate-200 bg-white text-slate-500'
+                }`}
+              >
+                {item.number}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {canToggle && (
         <button
@@ -953,7 +982,7 @@ function QuestionStatusPanel({
           onClick={onToggleExpanded}
           className="ui-button ui-button-secondary ui-button-full mt-4"
         >
-          {expanded ? '收起题号列表' : `展开全部 ${totalCount} 题`}
+          {expanded ? '收起题号列表' : `展开当前筛选 ${displayedCount} 题`}
         </button>
       )}
     </section>
