@@ -278,11 +278,17 @@ export default function ReadingTraining({ passage, initialQuestionId, replayAtte
           id: question.id,
           question: question.question,
           options: question.options,
+          optionTranslations: getReadingChineseSupport(passage.id, question)?.options,
           correctAnswer: question.correctAnswer,
           type: question.type,
           moduleId: question.moduleId,
           questionTypeId: question.questionTypeId ?? practiceQuestionTypeId,
           correctSentence: question.correctSentence,
+          correctSentenceTranslation: getQuestionSentenceSupport({
+            sentence: question.correctSentence,
+            explanation: question.explanation,
+          })?.chineseMeaning,
+          questionTranslation: getReadingChineseSupport(passage.id, question)?.question,
           explanation: question.explanation,
         })),
         answers: userAnswers.map((answer) => ({

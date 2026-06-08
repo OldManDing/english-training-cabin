@@ -15,6 +15,7 @@ import {
 import { ChoiceOption, MemoryReviewTask, ReviewCompletionEvidence, ReviewItem } from '../types';
 import type { ReviewGateStatus } from '../domain/review/reviewGate';
 import { isReviewItemDue, sortWrongQuestionReviewItems } from '../domain/review/reviewQueue';
+import { resolveRedoQuestionTranslation } from '../domain/review/redoTranslation';
 
 interface ReviewSectionProps {
   onTriggerModal?: (title: string, body: string) => void;
@@ -168,6 +169,10 @@ export default function ReviewSection({
   const redoOptions = redoQuestion?.options
     ? (['A', 'B', 'C', 'D'] as ChoiceOption[]).filter((option) => Boolean(redoQuestion.options?.[option]))
     : [];
+  const redoTranslation = useMemo(
+    () => activeReview ? resolveRedoQuestionTranslation(activeReview) : null,
+    [activeReview],
+  );
   const simpleRecallAnswer = activeReview && activeTask ? buildSimpleRecallAnswer(activeReview, activeTask) : '';
   const redoCorrect = getRedoCorrect(activeReview, redoAnswer);
   const feedbackVisible = Boolean(activeReview && (!redoQuestion || answerRevealed));
@@ -480,6 +485,38 @@ export default function ReviewSection({
                     <p className="rounded-2xl bg-white p-3 text-sm font-semibold leading-7 text-slate-700">
                       {redoQuestion.explanation}
                     </p>
+                  ) : null}
+
+                  {redoTranslation ? (
+                    <div data-testid="review-redo-translation" className="space-y-3 rounded-2xl border border-[#cfe6f2] bg-white p-4">
+                      <div className="flex items-center gap-2 text-xs font-black text-[#003178]">
+                        <Sparkles className="h-4 w-4" />
+                        选完后的中文翻译
+                      </div>
+                      {redoTranslation.prompt ? (
+                        <p data-testid="review-redo-prompt-translation" className="text-sm font-bold leading-6 text-slate-800">
+                          题意：{redoTranslation.prompt}
+                        </p>
+                      ) : null}
+                      {redoTranslation.options && redoOptions.length > 0 ? (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {redoOptions.map((option) => redoTranslation.options?.[option] ? (
+                            <div
+                              key={option}
+                              data-testid={`review-redo-option-translation-${option}`}
+                              className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs font-bold leading-5 text-slate-600"
+                            >
+                              <span className="font-black text-[#003178]">{option}.</span> {redoTranslation.options[option]}
+                            </div>
+                          ) : null)}
+                        </div>
+                      ) : null}
+                      {redoTranslation.context ? (
+                        <p data-testid="review-redo-context-translation" className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-800">
+                          原文/证据句：{redoTranslation.context}
+                        </p>
+                      ) : null}
+                    </div>
                   ) : null}
 
                   <div className="grid gap-3 lg:grid-cols-2">

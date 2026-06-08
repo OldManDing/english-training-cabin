@@ -22,7 +22,13 @@ describe('buildChoicePracticeReport', () => {
             D: 'A warning about online learning.',
           },
           correctAnswer: 'B',
+          questionTranslation: '这道题问主旨是什么。',
+          optionTranslations: {
+            A: '图书馆政策细节。',
+            B: '自然可以帮助专注并降低压力。',
+          },
           correctSentence: 'Natural environments may reduce stress and improve concentration.',
+          correctSentenceTranslation: '自然环境可能减轻压力并提高专注力。',
           explanation: 'The correct option paraphrases reduce stress and improve concentration.',
           type: '同义替换',
         },
@@ -48,6 +54,14 @@ describe('buildChoicePracticeReport', () => {
       userAnswer: 'A',
       options: {
         B: 'Nature can support focus and lower stress.',
+      },
+      translation: {
+        prompt: '这道题问主旨是什么。',
+        context: '自然环境可能减轻压力并提高专注力。',
+        options: {
+          A: '图书馆政策细节。',
+          B: '自然可以帮助专注并降低压力。',
+        },
       },
     });
     expect(report.reviewItems[0].memoryTask).toMatchObject({

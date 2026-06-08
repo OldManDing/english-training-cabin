@@ -7,6 +7,7 @@ import {
   CET4_MOCK_EXAM,
   CET4_MOCK_EXAM_BANK,
   CET4_READING_BANK,
+  CET4_TRANSLATION_PROMPT_BANK,
   CET4_WRITING_PROMPT_BANK,
 } from '../../src/questionBank';
 import { registerAndEnterApp, registerApiAccount } from './helpers/auth';
@@ -165,6 +166,143 @@ async function installSpeechSynthesisMock(page: Page) {
   });
 }
 
+async function seedPracticeReplayEvidence(page: Page) {
+  const vocabularyItem = CET4_VOCABULARY_BANK[0];
+  const listeningQuestion = CET4_LISTENING_PRACTICE_QUESTIONS.find((question) => question.questionTypeId === 'long-conversation');
+  const translationPrompt = CET4_TRANSLATION_PROMPT_BANK[0];
+  if (!listeningQuestion) throw new Error('Expected a long-conversation listening question');
+
+  await page.evaluate(
+    async ({ vocabulary, listening, translation }) => {
+      function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
+        return new Promise((resolve, reject) => {
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+      }
+
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('english-training-cabin');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      const now = new Date().toISOString();
+      const sessions = [
+        {
+          id: 'seed-vocabulary-session',
+          examId: 'cet4',
+          moduleId: 'vocabulary',
+          modeId: 'vocabulary-audio-choice',
+          startedAt: now,
+          finishedAt: now,
+          plannedMinutes: 12,
+          questionIds: [vocabulary.id],
+          status: 'completed',
+        },
+        {
+          id: 'seed-listening-session',
+          examId: 'cet4',
+          moduleId: 'listening',
+          modeId: 'listening-focus-practice',
+          startedAt: now,
+          finishedAt: now,
+          plannedMinutes: 10,
+          questionIds: ['1'],
+          status: 'completed',
+        },
+        {
+          id: 'seed-translation-session',
+          examId: 'cet4',
+          moduleId: 'translation',
+          modeId: 'translation-practice',
+          startedAt: now,
+          finishedAt: now,
+          plannedMinutes: 30,
+          questionIds: [translation.id],
+          status: 'completed',
+        },
+      ];
+      const attempts = [
+        {
+          id: 'seed-vocabulary-attempt',
+          sessionId: 'seed-vocabulary-session',
+          questionId: vocabulary.id,
+          examId: 'cet4',
+          moduleId: 'vocabulary',
+          questionTypeId: 'cet4-core-vocabulary',
+          answer: vocabulary.correctAnswer,
+          isCorrect: true,
+          elapsedSeconds: 36,
+          confidence: 5,
+          mistakeReasons: [],
+          createdAt: now,
+        },
+        {
+          id: 'seed-listening-attempt',
+          sessionId: 'seed-listening-session',
+          questionId: '1',
+          examId: 'cet4',
+          moduleId: 'listening',
+          questionTypeId: 'long-conversation',
+          answer: listening.correctAnswer,
+          isCorrect: true,
+          elapsedSeconds: 42,
+          confidence: 5,
+          mistakeReasons: [],
+          createdAt: now,
+        },
+        {
+          id: 'seed-translation-attempt',
+          sessionId: 'seed-translation-session',
+          questionId: translation.id,
+          examId: 'cet4',
+          moduleId: 'translation',
+          questionTypeId: translation.questionTypeId,
+          answer: 'In recent years, renewable energy has played an increasingly important role in urban development.',
+          isCorrect: false,
+          elapsedSeconds: 96,
+          confidence: 3,
+          mistakeReasons: ['中文干扰'],
+          aiFeedback: {
+            score: 69,
+            mistakeReasons: ['中文干扰'],
+            comments: ['历史翻译反馈已回显。'],
+            nextActions: ['先确定英文主干，再补充修饰成分。'],
+            confidence: 'medium',
+          },
+          createdAt: now,
+        },
+      ];
+
+      const tx = db.transaction(['practiceSessions', 'attempts'], 'readwrite');
+      const txComplete = new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      });
+      await Promise.all([
+        ...sessions.map((session) => requestToPromise(tx.objectStore('practiceSessions').put(session))),
+        ...attempts.map((attempt) => requestToPromise(tx.objectStore('attempts').put(attempt))),
+      ]);
+      await txComplete;
+      db.close();
+    },
+    {
+      vocabulary: {
+        id: vocabularyItem.id,
+        correctAnswer: vocabularyItem.correctAnswer,
+      },
+      listening: {
+        correctAnswer: listeningQuestion.correctAnswer,
+      },
+      translation: {
+        id: translationPrompt.id,
+        questionTypeId: translationPrompt.questionTypeId,
+      },
+    },
+  );
+}
+
 async function installFailingSpeechSynthesisMock(page: Page) {
   await page.route('**/api/practice/tts', async (route) => {
     await route.fulfill({
@@ -316,6 +454,9 @@ test('MVP critical reading flow persists local learning evidence', async ({ page
   await expect(page.getByTestId('review-direct-card')).toBeVisible();
   await page.getByTestId('review-redo-choice-A').click();
   await expect(page.getByTestId('review-direct-feedback')).toBeVisible();
+  await expect(page.getByTestId('review-redo-translation')).toBeVisible();
+  await expect(page.getByTestId('review-redo-prompt-translation')).toBeVisible();
+  await expect(page.getByTestId('review-redo-option-translation-A')).toBeVisible();
   await page.getByTestId('review-outcome-mastered').click();
   await expect(page.getByRole('heading', { name: '复习队列' })).toBeVisible();
 
@@ -493,6 +634,39 @@ test('practice question status numbers open the selected module question', async
   await page.getByTestId('practice-module-select-writing').click();
   await page.getByTestId('practice-question-status-writing-2').click();
   await expect(page.getByText(CET4_WRITING_PROMPT_BANK[1].title, { exact: true })).toBeVisible();
+});
+
+test('answered question status numbers replay saved answer evidence across modules', async ({ page }) => {
+  await installSpeechSynthesisMock(page);
+  await registerAndEnterApp(page, 'mvp-practice-replay-evidence');
+  await resetLocalLearningData(page);
+  await seedPracticeReplayEvidence(page);
+  await page.reload();
+
+  await page.getByRole('button', { name: '专项练习' }).click();
+
+  await page.getByTestId('practice-module-select-vocabulary').click();
+  await page.getByTestId('practice-question-filter-vocabulary-answered').click();
+  await page.getByTestId('practice-question-status-vocabulary-1').click();
+  await expect(page.getByTestId('vocabulary-attempt-replayed')).toBeVisible();
+  await expect(page.getByTestId('vocabulary-post-answer-support')).toBeVisible();
+  await expect(page.getByTestId('vocabulary-submit')).toHaveCount(0);
+  await page.getByTestId('vocabulary-back-to-practice').click();
+
+  await page.getByTestId('practice-module-select-listening').click();
+  await page.getByTestId('practice-question-filter-listening-answered').click();
+  await page.getByTestId('practice-question-status-listening-1').click();
+  await expect(page.getByTestId('listening-attempt-replayed')).toBeVisible();
+  await expect(page.getByTestId('listening-post-answer-support')).toBeVisible();
+  await expect(page.getByText('提交答案')).toHaveCount(0);
+  await page.getByTestId('listening-back-to-practice').click();
+
+  await page.getByTestId('practice-module-select-translation').click();
+  await page.getByTestId('practice-question-filter-translation-answered').click();
+  await page.getByTestId('practice-question-status-translation-1').click();
+  await expect(page.getByTestId('subjective-attempt-replayed')).toBeVisible();
+  await expect(page.locator('textarea')).toContainText('renewable energy');
+  await expect(page.getByText('历史翻译反馈已回显。')).toBeVisible();
 });
 
 /* test.skip('practice hub reflects in-progress draft counts before a module is fully completed', async ({ page }) => {

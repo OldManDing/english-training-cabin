@@ -393,8 +393,15 @@ export default function ListeningTraining({
           id: question.id,
           question: question.question,
           options: question.options,
+          optionTranslations: question.chineseSupport?.options,
           correctAnswer: question.correctAnswer,
           trapType: question.trapType,
+          correctSentence: question.transcriptionPoint,
+          correctSentenceTranslation: getQuestionSentenceSupport({
+            sentence: question.transcriptionPoint,
+            explanation: question.explanation,
+          })?.chineseMeaning,
+          questionTranslation: question.chineseSupport?.question,
           explanation: question.explanation,
         })),
         answers: questions.map((question) => ({

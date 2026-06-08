@@ -15,12 +15,15 @@ export interface ChoicePracticeQuestion {
   id: number | string;
   question: string;
   options?: Partial<Record<ChoiceAnswer, string>>;
+  optionTranslations?: Partial<Record<ChoiceAnswer, string>>;
   correctAnswer: ChoiceAnswer;
   type?: string;
   trapType?: string;
   moduleId?: string;
   questionTypeId?: string;
   correctSentence?: string;
+  correctSentenceTranslation?: string;
+  questionTranslation?: string;
   explanation?: string;
 }
 
@@ -258,6 +261,11 @@ function buildReviewItem(params: {
       explanation: params.question.explanation,
       context: params.question.correctSentence,
       sourceLabel: labels.contextLabel,
+      translation: {
+        prompt: params.question.questionTranslation,
+        context: params.question.correctSentenceTranslation,
+        options: params.question.optionTranslations,
+      },
     },
     learningMethod: 'wrong-question-redo-active-recall',
     retrievalCount: 0,

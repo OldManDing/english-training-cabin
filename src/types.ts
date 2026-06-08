@@ -184,6 +184,11 @@ export interface ReviewRedoQuestion {
   userAnswer?: string;
   explanation?: string;
   sourceLabel?: string;
+  translation?: {
+    prompt?: string;
+    context?: string;
+    options?: Partial<Record<ChoiceOption, string>>;
+  };
 }
 
 export interface MemoryReviewTask {

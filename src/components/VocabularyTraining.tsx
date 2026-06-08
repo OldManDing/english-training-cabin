@@ -332,12 +332,18 @@ export default function VocabularyTraining({ items, initialQuestionId, replayAtt
         id: item.id,
         question: `${item.word} ${item.phonetic}: ${item.example}`,
         options: item.options,
+        optionTranslations: getVocabularyQuestionSupport(item).optionTranslations.reduce<Partial<Record<Choice, string>>>((result, translation) => {
+          result[translation.key] = translation.chineseMeaning;
+          return result;
+        }, {}),
         correctAnswer: item.correctAnswer,
         type: '词义辨析与听音识别',
         trapType: '关键语块漏听',
         moduleId: 'vocabulary',
         questionTypeId: 'cet4-core-vocabulary',
         correctSentence: `${item.collocation}. ${item.example}`,
+        correctSentenceTranslation: getVocabularySentenceSupport(item).chineseMeaning,
+        questionTranslation: getVocabularyQuestionSupport(item).prompt.chineseMeaning,
         explanation: item.explanation,
       })),
       answers: finalAnswers.map((answer) => ({
