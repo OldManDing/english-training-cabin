@@ -291,6 +291,12 @@ test('MVP critical reading flow persists local learning evidence', async ({ page
   await expect(page.getByTestId('practice-question-status-reading-1')).toBeVisible();
   await expect(page.getByTestId('practice-question-status-reading-5')).toBeVisible();
   await expect(page.getByTestId('practice-question-status-reading-6')).toHaveCount(0);
+  await page.getByTestId('practice-question-status-reading-1').click();
+  await expect(page.getByTestId('reading-attempt-replayed')).toBeVisible();
+  await expect(page.getByTestId('reading-post-answer-support')).toBeVisible();
+  await expect(page.getByTestId('reading-submit')).toHaveCount(0);
+  await page.getByTestId('reading-back-to-practice').click();
+  await page.getByTestId('practice-module-select-reading').click();
   await page.getByTestId('practice-question-filter-reading-unanswered').click();
   await expect(page.getByTestId('practice-question-status-reading-1')).toHaveCount(0);
   await expect(page.getByTestId('practice-question-status-reading-6')).toBeVisible();

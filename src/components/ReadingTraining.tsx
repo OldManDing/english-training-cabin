@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, CheckCircle2, XCircle, ChevronRight, HelpCircle, Volume2, Headphones, Sparkles } from 'lucide-react';
-import { ChoiceOption, Passage, PracticeCompletionReport, Question, SkillArea } from '../types';
+import { Attempt, ChoiceOption, Passage, PracticeCompletionReport, Question, SkillArea } from '../types';
 import { getReadingChineseSupport } from '../domain/practice/chineseSupport';
+import { buildChoiceReplayAnswer } from '../domain/practice/attemptReplay';
 import {
   ChoiceConfidence,
   ChoicePracticeDraftAnswer,
@@ -19,6 +20,7 @@ import { pausePracticeSpeech, playPracticeSpeech, resumePracticeSpeech, stopPrac
 interface ReadingTrainingProps {
   passage: Passage;
   initialQuestionId?: string;
+  replayAttempt?: Attempt;
   onBack: () => void;
   onComplete: (score: number, report: PracticeCompletionReport) => void;
 }
@@ -33,6 +35,7 @@ const findQuestionIndexById = (passage: Passage, questionId?: string) => {
 
 const createEmptyReadingDraftState = (passage: Passage, initialQuestionId?: string) => ({
   restored: false,
+  replayed: false,
   startedAt: new Date().toISOString(),
   currentIdx: findQuestionIndexById(passage, initialQuestionId),
   selectedOpt: null as ChoiceOption | null,
@@ -41,8 +44,34 @@ const createEmptyReadingDraftState = (passage: Passage, initialQuestionId?: stri
   answers: [] as ReadingAnswer[],
 });
 
-const loadReadingDraftState = (passage: Passage, initialQuestionId?: string) => {
+const createReadingReplayState = (passage: Passage, initialQuestionId: string | undefined, replayAttempt?: Attempt) => {
+  if (!initialQuestionId || !replayAttempt) return null;
+  const currentIdx = findQuestionIndexById(passage, initialQuestionId);
+  const currentQuestion = passage.questions[currentIdx];
+  if (!currentQuestion) return null;
+  const replayAnswer = buildChoiceReplayAnswer(replayAttempt, currentQuestion.correctAnswer);
+  if (!replayAnswer) return null;
+
+  const answers: ReadingAnswer[] = [];
+  answers[currentIdx] = replayAnswer;
+
+  return {
+    restored: false,
+    replayed: true,
+    startedAt: new Date().toISOString(),
+    currentIdx,
+    selectedOpt: replayAnswer.selected,
+    confidence: replayAnswer.confidence,
+    isSubmitted: true,
+    answers,
+  };
+};
+
+const loadReadingDraftState = (passage: Passage, initialQuestionId?: string, replayAttempt?: Attempt) => {
   const fallback = createEmptyReadingDraftState(passage, initialQuestionId);
+  const replay = createReadingReplayState(passage, initialQuestionId, replayAttempt);
+  if (replay) return replay;
+
   const draft = loadPracticeDraft<ReadingPracticeDraft>(practiceDraftKeys.reading(passage.id));
   if (!draft || draft.version !== 1 || draft.passageId !== passage.id || passage.questions.length === 0) {
     return fallback;
@@ -57,6 +86,7 @@ const loadReadingDraftState = (passage: Passage, initialQuestionId?: string) => 
 
   return {
     restored: !initialQuestionId,
+    replayed: false,
     startedAt: draft.startedAt ?? fallback.startedAt,
     currentIdx,
     selectedOpt: isSubmitted ? savedAnswer?.selected ?? draft.selectedOpt ?? null : draft.selectedOpt ?? null,
@@ -66,8 +96,8 @@ const loadReadingDraftState = (passage: Passage, initialQuestionId?: string) => 
   };
 };
 
-export default function ReadingTraining({ passage, initialQuestionId, onBack, onComplete }: ReadingTrainingProps) {
-  const [initialDraft] = useState(() => loadReadingDraftState(passage, initialQuestionId));
+export default function ReadingTraining({ passage, initialQuestionId, replayAttempt, onBack, onComplete }: ReadingTrainingProps) {
+  const [initialDraft] = useState(() => loadReadingDraftState(passage, initialQuestionId, replayAttempt));
   const draftKey = practiceDraftKeys.reading(passage.id);
   const isFirstQuestionSync = useRef(true);
   const [currentIdx, setCurrentIdx] = useState(initialDraft.currentIdx);
@@ -415,7 +445,14 @@ export default function ReadingTraining({ passage, initialQuestionId, onBack, on
           <h3 className="font-extrabold text-sm text-[#003178] tracking-tight truncate max-w-xs sm:max-w-md">
             {trainingTitle}：{passage.title}
           </h3>
-          {initialDraft.restored ? (
+          {initialDraft.replayed ? (
+            <span
+              data-testid="reading-attempt-replayed"
+              className="rounded-full bg-[#eef7fc] px-2.5 py-1 text-[11px] font-black text-[#003178]"
+            >
+              已回显上次作答
+            </span>
+          ) : initialDraft.restored ? (
             <span
               data-testid="reading-draft-restored"
               className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-700"

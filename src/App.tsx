@@ -37,6 +37,7 @@ import {
   buildUnpracticedReadingPassages,
   filterPassageForUnpracticedQuestions,
   filterUnpracticedItems,
+  findLatestPracticeAttempt,
   getPracticedQuestionIds,
 } from './domain/practice/practicedQuestions';
 
@@ -263,6 +264,14 @@ function StudyApp() {
     () => getPracticedQuestionIds(persistedAttempts, 'listening'),
     [persistedAttempts],
   );
+  const practiceJumpAttempt = useMemo(() => {
+    if (!practiceJumpTarget) return undefined;
+    return findLatestPracticeAttempt({
+      attempts: persistedAttempts,
+      moduleId: practiceJumpTarget.moduleId,
+      questionId: practiceJumpTarget.questionId,
+    });
+  }, [persistedAttempts, practiceJumpTarget]);
 
   useEffect(() => {
     resetViewportScroll();
@@ -781,6 +790,7 @@ function StudyApp() {
         <Suspense fallback={<WorkspaceLoadingFallback />}>
           <ListeningTraining
             initialQuestionId={practiceJumpTarget?.moduleId === 'listening' ? practiceJumpTarget.questionId : undefined}
+            replayAttempt={practiceJumpTarget?.moduleId === 'listening' ? practiceJumpAttempt : undefined}
             practicedQuestionIds={practicedListeningQuestionIds}
             onBack={handleBackFromPractice}
             onComplete={(score, report) => {
@@ -807,6 +817,7 @@ function StudyApp() {
         <Suspense fallback={<WorkspaceLoadingFallback />}>
           <VocabularyTraining
             initialQuestionId={practiceJumpTarget?.moduleId === 'vocabulary' ? practiceJumpTarget.questionId : undefined}
+            replayAttempt={practiceJumpTarget?.moduleId === 'vocabulary' ? practiceJumpAttempt : undefined}
             items={practiceJumpTarget?.moduleId === 'vocabulary' ? CET4_VOCABULARY_BANK : unpracticedVocabularyItems}
             onBack={handleBackFromPractice}
             onComplete={handleCompleteVocabularyPractice}
@@ -822,6 +833,13 @@ function StudyApp() {
                 ? practiceJumpTarget.questionId
                 : undefined
             }
+            replayAttempt={
+              practiceJumpTarget?.moduleId === 'reading'
+              || practiceJumpTarget?.moduleId === 'grammar'
+              || practiceJumpTarget?.moduleId === 'cloze'
+                ? practiceJumpAttempt
+                : undefined
+            }
             passage={customPassage}
             onBack={handleBackFromPractice}
             onComplete={handleCompletePractice}
@@ -831,6 +849,7 @@ function StudyApp() {
         <Suspense fallback={<WorkspaceLoadingFallback />}>
           <SubjectiveTraining
             initialPromptId={practiceJumpTarget?.moduleId === subjectivePracticeMode ? practiceJumpTarget.questionId : undefined}
+            replayAttempt={practiceJumpTarget?.moduleId === subjectivePracticeMode ? practiceJumpAttempt : undefined}
             mode={subjectivePracticeMode}
             onBack={handleBackFromPractice}
             onComplete={handleCompleteSubjectivePractice}

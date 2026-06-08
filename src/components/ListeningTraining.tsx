@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Headphones, ArrowLeft, Play, Pause, ChevronDown, ChevronUp, CheckCircle, XCircle, Sparkles, Volume2, RotateCcw, Award, ArrowRight, Sparkle, RefreshCw } from 'lucide-react';
-import { ChoiceOption, PracticeCompletionReport, QuestionChineseSupport } from '../types';
+import { Attempt, ChoiceOption, PracticeCompletionReport, QuestionChineseSupport } from '../types';
 import { getListeningChineseSupport } from '../domain/practice/chineseSupport';
+import { buildListeningReplayAnswer } from '../domain/practice/attemptReplay';
 import { getQuestionSentenceSupport } from '../domain/practice/sentenceTranslations';
 import {
   ListeningConfidence,
@@ -20,6 +21,7 @@ import { SelectField } from './controls/FormControls';
 
 interface ListeningTrainingProps {
   initialQuestionId?: string;
+  replayAttempt?: Attempt;
   onBack: () => void;
   onComplete: (score: number, report: PracticeCompletionReport) => void;
   practicedQuestionIds?: Iterable<string>;
@@ -95,12 +97,27 @@ const findListeningQuestionIndexById = (questions: QuestionItem[], questionId?: 
   return targetIndex >= 0 ? targetIndex : 0;
 };
 
-const loadListeningDraftState = (baseQuestions: QuestionItem[], initialQuestionId?: string) => {
+const loadListeningDraftState = (baseQuestions: QuestionItem[], initialQuestionId?: string, replayAttempt?: Attempt) => {
   const startedAt = new Date().toISOString();
+  const replayAnswer = buildListeningReplayAnswer(replayAttempt);
+  if (initialQuestionId && replayAttempt && replayAnswer) {
+    const currentQuestionIndex = findListeningQuestionIndexById(baseQuestions, initialQuestionId);
+    return {
+      restored: false,
+      replayed: true,
+      startedAt,
+      currentQuestionIndex,
+      questions: baseQuestions.map((question) => (
+        question.id === initialQuestionId ? { ...question, ...replayAnswer } : question
+      )),
+    };
+  }
+
   const draft = loadPracticeDraft<ListeningPracticeDraft>(practiceDraftKeys.listening);
   if (!draft || draft.version !== 1) {
     return {
       restored: false,
+      replayed: false,
       startedAt,
       currentQuestionIndex: findListeningQuestionIndexById(baseQuestions, initialQuestionId),
       questions: baseQuestions,
@@ -115,6 +132,7 @@ const loadListeningDraftState = (baseQuestions: QuestionItem[], initialQuestionI
 
   return {
     restored: !initialQuestionId,
+    replayed: false,
     startedAt: draft.startedAt ?? startedAt,
     currentQuestionIndex: initialQuestionId
       ? findListeningQuestionIndexById(questions, initialQuestionId)
@@ -125,13 +143,14 @@ const loadListeningDraftState = (baseQuestions: QuestionItem[], initialQuestionI
 
 export default function ListeningTraining({
   initialQuestionId,
+  replayAttempt,
   onBack,
   onComplete,
   practicedQuestionIds,
   onAddToReview,
 }: ListeningTrainingProps) {
   const [baseQuestions] = useState(() => buildActiveListeningQuestions(practicedQuestionIds, initialQuestionId));
-  const [initialDraft] = useState(() => loadListeningDraftState(baseQuestions, initialQuestionId));
+  const [initialDraft] = useState(() => loadListeningDraftState(baseQuestions, initialQuestionId, replayAttempt));
   const [startedAt] = useState(() => initialDraft.startedAt);
 
   // Playback States
@@ -427,7 +446,14 @@ export default function ListeningTraining({
             <p className="text-[11px] text-gray-400">
               CET-4 原创模拟长对话 · {questions.length} 题结构化精听
             </p>
-            {initialDraft.restored ? (
+            {initialDraft.replayed ? (
+              <span
+                data-testid="listening-attempt-replayed"
+                className="mt-1 inline-flex rounded-full bg-[#eef7fc] px-2.5 py-1 text-[11px] font-black text-[#003178]"
+              >
+                已回显上次作答
+              </span>
+            ) : initialDraft.restored ? (
               <span
                 data-testid="listening-draft-restored"
                 className="mt-1 inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-700"

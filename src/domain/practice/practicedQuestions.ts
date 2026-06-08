@@ -42,6 +42,37 @@ export function getPracticedQuestionIds(attempts: Attempt[], moduleId: string): 
   );
 }
 
+const PRACTICE_PROGRESS_MODULE_IDS = new Set<PracticeProgressModuleId>([
+  'vocabulary',
+  'cloze',
+  'grammar',
+  'reading',
+  'listening',
+  'writing',
+  'translation',
+  'mock',
+]);
+
+function isPracticeProgressModuleId(value: string): value is PracticeProgressModuleId {
+  return PRACTICE_PROGRESS_MODULE_IDS.has(value as PracticeProgressModuleId);
+}
+
+export function findLatestPracticeAttempt(params: {
+  attempts: Attempt[];
+  moduleId: string;
+  questionId: string | number;
+}): Attempt | undefined {
+  const questionId = String(params.questionId);
+  return params.attempts
+    .filter((attempt) => {
+      const moduleMatches = isPracticeProgressModuleId(params.moduleId)
+        ? matchesPracticeModuleAttempt(attempt, params.moduleId)
+        : attempt.moduleId === params.moduleId;
+      return moduleMatches && String(attempt.questionId) === questionId;
+    })
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+}
+
 export function filterUnpracticedItems<T extends { id: string | number }>(
   items: T[],
   attempts: Attempt[],

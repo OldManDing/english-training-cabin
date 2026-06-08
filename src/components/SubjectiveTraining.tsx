@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, CheckCircle2, FileText, Languages, Loader2, RefreshCw, Sparkles } from 'lucide-react';
-import { PracticeCompletionReport } from '../types';
+import { Attempt, PracticeCompletionReport } from '../types';
 import { buildSubjectivePracticeReport, SubjectivePracticeAnalysis } from '../domain/practice/reports';
+import { readAttemptTextAnswer } from '../domain/practice/attemptReplay';
 import {
   SubjectivePracticeDraft,
   clampDraftIndex,
@@ -19,6 +20,7 @@ type SubjectiveMode = 'writing' | 'translation';
 interface SubjectiveTrainingProps {
   mode: SubjectiveMode;
   initialPromptId?: string;
+  replayAttempt?: Attempt;
   onBack: () => void;
   onComplete: (score: number, report: PracticeCompletionReport) => void;
 }
@@ -80,13 +82,35 @@ const loadSubjectiveDraftState = (
   mode: SubjectiveMode,
   promptBank: typeof CET4_WRITING_PROMPT_BANK | typeof CET4_TRANSLATION_PROMPT_BANK,
   initialPromptId?: string,
+  replayAttempt?: Attempt,
 ) => {
   const targetIndex = findSubjectivePromptIndex(promptBank, initialPromptId);
+  const replayPrompt = promptBank[targetIndex];
+  if (initialPromptId && replayAttempt && replayPrompt) {
+    return {
+      restored: false,
+      replayed: true,
+      startedAt: new Date().toISOString(),
+      taskIndex: targetIndex,
+      answer: readAttemptTextAnswer(replayAttempt),
+      analysis: replayAttempt.aiFeedback ? {
+        score: replayAttempt.aiFeedback.score ?? (replayAttempt.isCorrect ? 80 : 60),
+        mistakeReasons: replayAttempt.aiFeedback.mistakeReasons,
+        comments: replayAttempt.aiFeedback.comments,
+        nextActions: replayAttempt.aiFeedback.nextActions,
+        sampleAnswer: replayPrompt.sampleAnswer,
+        confidence: replayAttempt.aiFeedback.confidence,
+      } satisfies SubjectivePracticeAnalysis : null,
+    };
+  }
+
   const fallback = {
     restored: false,
+    replayed: false,
     startedAt: new Date().toISOString(),
     taskIndex: targetIndex,
     answer: '',
+    analysis: null,
   };
   const draft = loadPracticeDraft<SubjectivePracticeDraft>(practiceDraftKeys.subjective(mode));
   if (!draft || draft.version !== 1 || draft.mode !== mode) return fallback;
@@ -96,22 +120,24 @@ const loadSubjectiveDraftState = (
 
   return {
     restored: !initialPromptId,
+    replayed: false,
     startedAt: draft.startedAt ?? fallback.startedAt,
     taskIndex: initialPromptId ? targetIndex : draftTaskIndex,
     answer: typeof draft.answer === 'string' ? draft.answer : '',
+    analysis: null,
   };
 };
 
-export default function SubjectiveTraining({ mode, initialPromptId, onBack, onComplete }: SubjectiveTrainingProps) {
+export default function SubjectiveTraining({ mode, initialPromptId, replayAttempt, onBack, onComplete }: SubjectiveTrainingProps) {
   const task = TASKS[mode];
   const promptBank = mode === 'writing' ? CET4_WRITING_PROMPT_BANK : CET4_TRANSLATION_PROMPT_BANK;
-  const [initialDraft] = useState(() => loadSubjectiveDraftState(mode, promptBank, initialPromptId));
+  const [initialDraft] = useState(() => loadSubjectiveDraftState(mode, promptBank, initialPromptId, replayAttempt));
   const isFirstModeSync = useRef(true);
   const draftKey = practiceDraftKeys.subjective(mode);
   const [taskIndex, setTaskIndex] = useState(initialDraft.taskIndex);
   const [startedAt, setStartedAt] = useState(() => initialDraft.startedAt);
   const [answer, setAnswer] = useState(initialDraft.answer);
-  const [analysis, setAnalysis] = useState<SubjectivePracticeAnalysis | null>(null);
+  const [analysis, setAnalysis] = useState<SubjectivePracticeAnalysis | null>(initialDraft.analysis);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const promptItem = promptBank[taskIndex % promptBank.length];
@@ -124,13 +150,13 @@ export default function SubjectiveTraining({ mode, initialPromptId, onBack, onCo
       isFirstModeSync.current = false;
       return;
     }
-    const nextDraft = loadSubjectiveDraftState(mode, promptBank, initialPromptId);
+    const nextDraft = loadSubjectiveDraftState(mode, promptBank, initialPromptId, replayAttempt);
     setTaskIndex(nextDraft.taskIndex);
     setStartedAt(nextDraft.startedAt);
     setAnswer(nextDraft.answer);
-    setAnalysis(null);
+    setAnalysis(nextDraft.analysis);
     setErrorMessage(null);
-  }, [mode, initialPromptId]);
+  }, [mode, initialPromptId, replayAttempt]);
 
   const handleNextPrompt = () => {
     const nextTaskIndex = (taskIndex + 1) % promptBank.length;
@@ -228,7 +254,14 @@ export default function SubjectiveTraining({ mode, initialPromptId, onBack, onCo
               {task.title}
             </h2>
             <p className="text-[11px] text-slate-400 font-bold">CET-4 {task.label} · AI 反馈 · 错因复习入队</p>
-            {initialDraft.restored ? (
+            {initialDraft.replayed ? (
+              <span
+                data-testid="subjective-attempt-replayed"
+                className="mt-1 inline-flex rounded-full bg-[#eef7fc] px-2.5 py-1 text-[11px] font-black text-[#003178]"
+              >
+                已回显上次作答
+              </span>
+            ) : initialDraft.restored ? (
               <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-700">
                 已恢复上次草稿
               </span>

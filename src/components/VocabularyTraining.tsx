@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, CheckCircle2, ChevronRight, Headphones, PauseCircle, Volume2, XCircle } from 'lucide-react';
 import { VocabularyPracticeItem, VOCABULARY_SESSION_SIZE } from '../data';
-import { ChoiceOption, PracticeCompletionReport } from '../types';
+import { Attempt, ChoiceOption, PracticeCompletionReport } from '../types';
+import { buildChoiceReplayAnswer } from '../domain/practice/attemptReplay';
 import {
   ChoiceConfidence,
   ChoicePracticeDraftAnswer,
@@ -19,6 +20,7 @@ import { pausePracticeSpeech, playPracticeSpeech, resumePracticeSpeech, stopPrac
 interface VocabularyTrainingProps {
   items: VocabularyPracticeItem[];
   initialQuestionId?: string;
+  replayAttempt?: Attempt;
   onBack: () => void;
   onComplete: (score: number, report: PracticeCompletionReport) => void;
 }
@@ -41,6 +43,7 @@ const findVocabularyQuestionLocation = (items: VocabularyPracticeItem[], questio
 
 const createEmptyVocabularyDraftState = (items: VocabularyPracticeItem[] = [], initialQuestionId?: string) => ({
   restored: false,
+  replayed: false,
   startedAt: new Date().toISOString(),
   ...findVocabularyQuestionLocation(items, initialQuestionId),
   selectedOpt: null as Choice | null,
@@ -49,8 +52,34 @@ const createEmptyVocabularyDraftState = (items: VocabularyPracticeItem[] = [], i
   answers: [] as VocabularyAnswer[],
 });
 
-const loadVocabularyDraftState = (items: VocabularyPracticeItem[], initialQuestionId?: string) => {
+const createVocabularyReplayState = (items: VocabularyPracticeItem[], initialQuestionId?: string, replayAttempt?: Attempt) => {
+  if (!initialQuestionId || !replayAttempt) return null;
+  const location = findVocabularyQuestionLocation(items, initialQuestionId);
+  const item = items[location.packIndex * VOCABULARY_SESSION_SIZE + location.currentIdx];
+  if (!item) return null;
+  const replayAnswer = buildChoiceReplayAnswer(replayAttempt, item.correctAnswer);
+  if (!replayAnswer) return null;
+
+  const answers: VocabularyAnswer[] = [];
+  answers[location.currentIdx] = replayAnswer;
+
+  return {
+    restored: false,
+    replayed: true,
+    startedAt: new Date().toISOString(),
+    ...location,
+    selectedOpt: replayAnswer.selected,
+    confidence: replayAnswer.confidence,
+    isSubmitted: true,
+    answers,
+  };
+};
+
+const loadVocabularyDraftState = (items: VocabularyPracticeItem[], initialQuestionId?: string, replayAttempt?: Attempt) => {
   const fallback = createEmptyVocabularyDraftState(items, initialQuestionId);
+  const replay = createVocabularyReplayState(items, initialQuestionId, replayAttempt);
+  if (replay) return replay;
+
   if (initialQuestionId) return fallback;
 
   const draft = loadPracticeDraft<VocabularyPracticeDraft>(practiceDraftKeys.vocabulary);
@@ -69,6 +98,7 @@ const loadVocabularyDraftState = (items: VocabularyPracticeItem[], initialQuesti
 
   return {
     restored: true,
+    replayed: false,
     startedAt: draft.startedAt ?? fallback.startedAt,
     packIndex,
     currentIdx,
@@ -79,8 +109,8 @@ const loadVocabularyDraftState = (items: VocabularyPracticeItem[], initialQuesti
   };
 };
 
-export default function VocabularyTraining({ items, initialQuestionId, onBack, onComplete }: VocabularyTrainingProps) {
-  const [initialDraft] = useState(() => loadVocabularyDraftState(items, initialQuestionId));
+export default function VocabularyTraining({ items, initialQuestionId, replayAttempt, onBack, onComplete }: VocabularyTrainingProps) {
+  const [initialDraft] = useState(() => loadVocabularyDraftState(items, initialQuestionId, replayAttempt));
   const isFirstQuestionSync = useRef(true);
   const submittedRevealRef = useRef<HTMLDivElement | null>(null);
   const shouldScrollToSubmittedSupportRef = useRef(false);
@@ -357,7 +387,14 @@ export default function VocabularyTraining({ items, initialQuestionId, onBack, o
             <div className="text-sm font-black text-slate-500">
               CET-4 核心词汇听音练习 · 本组 {currentIdx + 1}/{sessionItems.length} · 词库 {items.length}
             </div>
-            {initialDraft.restored ? (
+            {initialDraft.replayed ? (
+              <span
+                data-testid="vocabulary-attempt-replayed"
+                className="rounded-full bg-[#eef7fc] px-2.5 py-1 text-[11px] font-black text-[#003178]"
+              >
+                已回显上次作答
+              </span>
+            ) : initialDraft.restored ? (
               <span
                 data-testid="vocabulary-draft-restored"
                 className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-700"
