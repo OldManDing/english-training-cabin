@@ -7,15 +7,18 @@ import {
   Clock,
   Lightbulb,
   ListTodo,
+  PauseCircle,
   Play,
   RefreshCw,
   Sparkles,
   Target,
+  Volume2,
 } from 'lucide-react';
 import { ChoiceOption, MemoryReviewTask, ReviewCompletionEvidence, ReviewItem } from '../types';
 import type { ReviewGateStatus } from '../domain/review/reviewGate';
 import { isReviewItemDue, sortWrongQuestionReviewItems } from '../domain/review/reviewQueue';
 import { resolveRedoQuestionTranslation } from '../domain/review/redoTranslation';
+import { pausePracticeSpeech, playPracticeSpeech, resumePracticeSpeech, stopPracticeSpeech } from '../lib/practiceSpeech';
 
 interface ReviewSectionProps {
   onTriggerModal?: (title: string, body: string) => void;
@@ -134,6 +137,28 @@ function formatRedoAnswer(item: ReviewItem, value?: string): string {
   return optionText ? `${normalized}. ${optionText}` : normalized;
 }
 
+function buildRedoSpeechText(item: ReviewItem): string {
+  const redoQuestion = item.redoQuestion;
+  if (!redoQuestion) return '';
+
+  const parts: string[] = [];
+  if (redoQuestion.sourceLabel) parts.push(redoQuestion.sourceLabel);
+  if (redoQuestion.context) parts.push(redoQuestion.context);
+  parts.push(redoQuestion.prompt);
+
+  if (redoQuestion.options) {
+    (['A', 'B', 'C', 'D'] as ChoiceOption[]).forEach((option) => {
+      const optionText = redoQuestion.options?.[option]?.trim();
+      if (optionText) parts.push(`${option}. ${optionText}`);
+    });
+  }
+
+  return parts
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
 export default function ReviewSection({
   onTriggerModal,
   persistedReviewCount = 0,
@@ -149,6 +174,7 @@ export default function ReviewSection({
   const [reviewStartedAt, setReviewStartedAt] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [redoSpeechState, setRedoSpeechState] = useState<'idle' | 'playing' | 'paused'>('idle');
 
   const completedReviewIdSet = useMemo(() => new Set(completedReviewIds), [completedReviewIds]);
   const sortedReviewItems = useMemo(
@@ -173,6 +199,7 @@ export default function ReviewSection({
     () => activeReview ? resolveRedoQuestionTranslation(activeReview) : null,
     [activeReview],
   );
+  const redoSpeechText = useMemo(() => activeReview ? buildRedoSpeechText(activeReview) : '', [activeReview]);
   const simpleRecallAnswer = activeReview && activeTask ? buildSimpleRecallAnswer(activeReview, activeTask) : '';
   const redoCorrect = getRedoCorrect(activeReview, redoAnswer);
   const feedbackVisible = Boolean(activeReview && (!redoQuestion || answerRevealed));
@@ -186,7 +213,11 @@ export default function ReviewSection({
     setNoteAnswer('');
     setAnswerRevealed(!activeReview?.redoQuestion);
     setReviewStartedAt(activeReview ? new Date().toISOString() : null);
+    setRedoSpeechState('idle');
+    stopPracticeSpeech();
   }, [activeReview?.id]);
+
+  useEffect(() => () => stopPracticeSpeech(), []);
 
   const triggerToast = (message: string) => {
     setToastMessage(message);
@@ -207,6 +238,42 @@ export default function ReviewSection({
     setRedoAnswer(option);
     setAnswerRevealed(true);
     setReviewStartedAt((value) => value ?? new Date().toISOString());
+  };
+
+  const toggleRedoSpeech = async () => {
+    if (!redoSpeechText) return;
+
+    if (redoSpeechState === 'playing') {
+      if (pausePracticeSpeech()) {
+        setRedoSpeechState('paused');
+        triggerToast('错题语音已暂停，再次点击可继续播放。');
+      } else {
+        stopPracticeSpeech();
+        setRedoSpeechState('idle');
+      }
+      return;
+    }
+
+    if (redoSpeechState === 'paused') {
+      const resumed = await resumePracticeSpeech();
+      if (resumed) {
+        setRedoSpeechState('playing');
+        triggerToast('错题语音继续播放。');
+        return;
+      }
+      setRedoSpeechState('idle');
+    }
+
+    await playPracticeSpeech(redoSpeechText, {
+      rate: activeReview?.skillArea === 'listening' ? 0.88 : 0.92,
+      preferLocalAudio: true,
+      onStart: () => setRedoSpeechState('playing'),
+      onEnd: () => setRedoSpeechState('idle'),
+      onError: (message) => {
+        setRedoSpeechState('idle');
+        triggerToast(message || '错题语音播放失败，请稍后重试。');
+      },
+    });
   };
 
   const completeReview = async (reviewOutcome: ReviewOutcome) => {
@@ -376,9 +443,30 @@ export default function ReviewSection({
                     </div>
                   ) : null}
                   <div className="rounded-2xl border border-[#cfe6f2] bg-[#f8fbff] p-4">
-                    <div className="mb-2 flex items-center gap-2 text-sm font-black text-[#003178]">
-                      <Play className="h-4 w-4" />
-                      重做原题
+                    <div className="mb-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-2 text-sm font-black text-[#003178]">
+                        <Play className="h-4 w-4" />
+                        重做原题
+                      </div>
+                      {redoSpeechText ? (
+                        <button
+                          type="button"
+                          data-testid="review-redo-speech-toggle"
+                          onClick={toggleRedoSpeech}
+                          className="ui-button ui-button-secondary ui-button-compact self-start"
+                        >
+                          {redoSpeechState === 'playing' ? (
+                            <PauseCircle className="h-4 w-4" />
+                          ) : (
+                            <Volume2 className="h-4 w-4" />
+                          )}
+                          {redoSpeechState === 'playing'
+                            ? '暂停语音'
+                            : redoSpeechState === 'paused'
+                            ? '继续语音'
+                            : '播放语音'}
+                        </button>
+                      ) : null}
                     </div>
                     <p className="whitespace-pre-line text-base font-bold leading-7 text-slate-900">
                       {redoQuestion.prompt}

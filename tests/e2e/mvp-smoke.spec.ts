@@ -359,6 +359,7 @@ async function chooseComboboxOption(page: Page, label: string, optionName: strin
 }
 
 test('MVP critical reading flow persists local learning evidence', async ({ page }) => {
+  await installSpeechSynthesisMock(page);
   await registerAndEnterApp(page, 'mvp-reading');
   await resetLocalLearningData(page);
   await page.reload();
@@ -452,6 +453,16 @@ test('MVP critical reading flow persists local learning evidence', async ({ page
   await page.getByRole('button', { name: '复习队列' }).click();
   await expect(page.getByRole('heading', { name: '复习队列' })).toBeVisible();
   await expect(page.getByTestId('review-direct-card')).toBeVisible();
+  const speechCallCountBeforeReview = await page.evaluate(() => (window as any).__speechSynthesisCalls?.length ?? 0);
+  await page.getByTestId('review-redo-speech-toggle').click();
+  await expect(page.getByTestId('review-redo-speech-toggle')).toContainText('暂停语音');
+  await expect
+    .poll(async () => page.evaluate(() => (window as any).__speechSynthesisCalls?.length ?? 0))
+    .toBeGreaterThan(speechCallCountBeforeReview);
+  const reviewSpeechText = await page.evaluate(() => (window as any).__speechSynthesisCalls?.at(-1) ?? '');
+  expect(reviewSpeechText).toContain('阅读定位句');
+  const practicedReadingQuestions = CET4_READING_BANK.flatMap((passage) => passage.questions).slice(0, 5);
+  expect(practicedReadingQuestions.some((question) => reviewSpeechText.includes(question.question))).toBe(true);
   await page.getByTestId('review-redo-choice-A').click();
   await expect(page.getByTestId('review-direct-feedback')).toBeVisible();
   await expect(page.getByTestId('review-redo-translation')).toBeVisible();
