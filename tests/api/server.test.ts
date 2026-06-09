@@ -344,6 +344,66 @@ describe('server API', () => {
     });
   });
 
+  it('blocks empty local learning snapshots from overwriting cloud evidence', async () => {
+    const saasApp = createApp({
+      saasStore: createInMemorySaasStore(),
+      saasSessionSecret: 'cloud-overwrite-guard-secret',
+    });
+    const registerResponse = await request(saasApp)
+      .post('/api/auth/register')
+      .send({
+        email: `cloud-overwrite-${Date.now()}@example.com`,
+        inviteCode: LOCAL_REGISTRATION_INVITE_CODE,
+        password: 'secure-password-1',
+        name: 'Cloud Guard Learner',
+        organizationName: 'Cloud Guard Team',
+      })
+      .expect(201);
+    const token = registerResponse.body.token as string;
+    const backup = createSmokeLearningBackup('overwrite-guard');
+
+    await request(saasApp)
+      .put('/api/cloud/learning-data')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ backup })
+      .expect(200);
+
+    const emptyLocalBackup = {
+      app: 'english-training-cabin',
+      schemaVersion: 1,
+      exportedAt: new Date().toISOString(),
+      data: {
+        studyGoals: [{ id: 'local-default-goal' }],
+        practiceSessions: [],
+        attempts: [],
+        reviewItems: [],
+        skillProfiles: [
+          { id: 'local-reading-profile', skillArea: 'reading', subSkillId: 'diagnostic', score: 60, confidence: 3, evidenceCount: 0, lastUpdatedAt: new Date().toISOString() },
+        ],
+      },
+    };
+
+    const blocked = await request(saasApp)
+      .put('/api/cloud/learning-data')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ backup: emptyLocalBackup })
+      .expect(409);
+
+    expect(blocked.body.error).toBe('empty_learning_snapshot_overwrite_blocked');
+
+    const cloudResponse = await request(saasApp)
+      .get('/api/cloud/learning-data')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(cloudResponse.body.snapshot.counts).toMatchObject({
+      practiceSessions: 1,
+      attempts: 1,
+      reviewItems: 1,
+    });
+    assertSmokeLearningBackupRoundTrip(cloudResponse.body.snapshot);
+  });
+
   it('allows repeated organization names without blocking public self-service signup', async () => {
     const saasApp = createApp({
       saasStore: createInMemorySaasStore(),

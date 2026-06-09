@@ -56,6 +56,7 @@ import {
   SaasSessionPayload,
   SaasStore,
   summarizeLearningSnapshot,
+  shouldBlockEmptyLearningSnapshotOverwrite,
   toPublicAccountContext,
   toPublicContentAssets,
   toPublicDataRequests,
@@ -2379,6 +2380,15 @@ Return JSON only with this shape:
     }
 
     const backup = validateLearningBackup(req.body?.backup ?? req.body);
+    const existingSnapshot = await saasStore.getLearningSnapshot(account.organization.id, account.user.id);
+    if (shouldBlockEmptyLearningSnapshotOverwrite(existingSnapshot, backup)) {
+      throw new SaasApiError(
+        409,
+        'empty_learning_snapshot_overwrite_blocked',
+        '当前浏览器没有练习、答题或复习记录，已停止覆盖云端已有学习数据。请先从云端恢复，再继续同步。',
+      );
+    }
+
     const snapshot = await saasStore.saveLearningSnapshot({
       organizationId: account.organization.id,
       userId: account.user.id,

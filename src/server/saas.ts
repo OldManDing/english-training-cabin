@@ -1602,3 +1602,18 @@ export function summarizeLearningSnapshot(snapshot: CloudLearningSnapshotRecord)
     },
   };
 }
+
+export function countLearningEvidenceRecords(backup: LearningBackupSnapshot): number {
+  return backup.data.practiceSessions.length + backup.data.attempts.length + backup.data.reviewItems.length;
+}
+
+export function shouldBlockEmptyLearningSnapshotOverwrite(
+  existingSnapshot: CloudLearningSnapshotRecord | undefined,
+  incomingBackup: LearningBackupSnapshot,
+): boolean {
+  return Boolean(
+    existingSnapshot &&
+    countLearningEvidenceRecords(existingSnapshot.backup) > 0 &&
+    countLearningEvidenceRecords(incomingBackup) === 0,
+  );
+}
