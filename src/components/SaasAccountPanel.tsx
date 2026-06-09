@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Cloud, Copy, DownloadCloud, KeyRound, LogIn, LogOut, RefreshCw, ShieldCheck, UploadCloud, UserPlus } from 'lucide-react';
 import { exportLearningData, importLearningData } from '../lib/storage/db';
+import { getLearningBackupCounts, shouldBlockEmptyCloudRestore } from '../lib/storage/learningDataSummary';
 import { apiRequest, clearStoredAuthToken, getStoredAuthToken, setStoredAuthToken } from '../lib/api';
 import SaasOperationsPanel from './SaasOperationsPanel';
 import LegalLinks from './LegalLinks';
@@ -312,6 +313,16 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
 
       if (!response.snapshot) {
         setStatusText('云端暂无数据。');
+        return;
+      }
+
+      const localBackup = await exportLearningData();
+      const localCounts = getLearningBackupCounts(localBackup);
+      const cloudCounts = getLearningBackupCounts(response.snapshot.backup);
+      if (shouldBlockEmptyCloudRestore(localCounts, cloudCounts)) {
+        const warning = '云端备份没有练习、答题、复习或能力画像记录，当前浏览器里仍有本地学习数据。本次已停止恢复，避免空云端快照覆盖本地答题记录。请先同步到云端，或导出本地学习数据后再恢复。';
+        onTriggerModal?.('已停止空云端恢复', warning);
+        setStatusText('已停止恢复：云端没有学习记录，未覆盖本地数据。');
         return;
       }
 
