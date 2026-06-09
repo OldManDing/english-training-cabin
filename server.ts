@@ -1,5 +1,6 @@
 import express, { NextFunction, Request, Response } from 'express';
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'path';
@@ -100,6 +101,8 @@ const PRACTICE_TTS_MAX_CHARACTERS = 2_500;
 const PRACTICE_TTS_DEFAULT_COMMANDS = ['espeak-ng', 'espeak'];
 const DEFAULT_EDGE_TTS_COMMAND = '/opt/edge-tts/bin/edge-tts';
 const DEFAULT_EDGE_TTS_VOICE = 'en-US-JennyNeural';
+const PRACTICE_TTS_CACHE_VERSION = 'practice-tts-v2';
+const PRACTICE_TTS_CACHE_MAX_FILES = 400;
 
 function isProductionServerRuntime() {
   return process.env.NODE_ENV === 'production' || path.basename(process.argv[1] ?? '') === 'server.cjs';
@@ -1532,6 +1535,141 @@ async function runPracticeSpeechToAudio(text: string, outputRoot: string, option
   }
 }
 
+type PracticeTtsCacheStatus = 'hit' | 'miss' | 'wait';
+
+type CachedPracticeTtsAudio = {
+  path: string;
+  contentType: string;
+  fileName: string;
+  cacheStatus: PracticeTtsCacheStatus;
+};
+
+const practiceTtsInFlight = new Map<string, Promise<CachedPracticeTtsAudio>>();
+
+export function buildPracticeTtsCacheKey(text: string, browserRate?: number) {
+  return createHash('sha256')
+    .update(JSON.stringify({
+      version: PRACTICE_TTS_CACHE_VERSION,
+      text,
+      rate: clampPracticeSpeechRate(browserRate),
+      platform: process.platform,
+      edgeEnabled: isEdgeTtsEnabled(),
+      edgeVoice: getEdgeTtsVoice(),
+      edgeCommand: getEdgeTtsCommand(),
+      systemCommands: getConfiguredPracticeTtsCommands(),
+    }))
+    .digest('hex')
+    .slice(0, 32);
+}
+
+function getPracticeTtsCacheRoot() {
+  return path.join(getGeneratedListeningAudioRoot(), 'practice-tts-cache');
+}
+
+function getPracticeTtsCacheCandidates(cacheRoot: string, cacheKey: string) {
+  return [
+    {
+      path: path.join(cacheRoot, `${cacheKey}.mp3`),
+      contentType: 'audio/mpeg',
+      fileName: 'practice-tts.mp3',
+    },
+    {
+      path: path.join(cacheRoot, `${cacheKey}.wav`),
+      contentType: 'audio/wav',
+      fileName: 'practice-tts.wav',
+    },
+  ];
+}
+
+async function findCachedPracticeTtsAudio(cacheRoot: string, cacheKey: string): Promise<CachedPracticeTtsAudio | null> {
+  for (const candidate of getPracticeTtsCacheCandidates(cacheRoot, cacheKey)) {
+    try {
+      const stat = await fs.stat(candidate.path);
+      if (stat.isFile() && stat.size > 128) {
+        return { ...candidate, cacheStatus: 'hit' };
+      }
+    } catch {
+      // Try the next supported audio format.
+    }
+  }
+  return null;
+}
+
+async function prunePracticeTtsCache(cacheRoot: string) {
+  try {
+    const entries = await fs.readdir(cacheRoot, { withFileTypes: true });
+    const audioEntries = await Promise.all(entries
+      .filter((entry) => entry.isFile() && /\.(?:mp3|wav)$/i.test(entry.name))
+      .map(async (entry) => {
+        const absolutePath = path.join(cacheRoot, entry.name);
+        const stat = await fs.stat(absolutePath);
+        return { path: absolutePath, mtimeMs: stat.mtimeMs };
+      }));
+    const staleEntries = audioEntries
+      .sort((a, b) => b.mtimeMs - a.mtimeMs)
+      .slice(PRACTICE_TTS_CACHE_MAX_FILES);
+    await Promise.all(staleEntries.map((entry) => fs.rm(entry.path, { force: true })));
+  } catch {
+    // Cache pruning is best-effort and must not block TTS playback.
+  }
+}
+
+async function generatePracticeTtsCacheAudio(
+  text: string,
+  cacheRoot: string,
+  cacheKey: string,
+  options: { browserRate?: number } = {},
+): Promise<CachedPracticeTtsAudio> {
+  const tempRoot = path.join(cacheRoot, 'tmp');
+  await fs.mkdir(tempRoot, { recursive: true });
+
+  const generatedAudio = await runPracticeSpeechToAudio(text, tempRoot, options);
+  const extension = generatedAudio.contentType === 'audio/mpeg' ? 'mp3' : 'wav';
+  const cachedPath = path.join(cacheRoot, `${cacheKey}.${extension}`);
+
+  try {
+    await fs.rename(generatedAudio.path, cachedPath);
+  } catch (error) {
+    await fs.rm(generatedAudio.path, { force: true });
+    const existingAudio = await findCachedPracticeTtsAudio(cacheRoot, cacheKey);
+    if (existingAudio) return { ...existingAudio, cacheStatus: 'wait' };
+    throw error;
+  }
+
+  void prunePracticeTtsCache(cacheRoot);
+  return {
+    path: cachedPath,
+    contentType: generatedAudio.contentType,
+    fileName: generatedAudio.fileName,
+    cacheStatus: 'miss',
+  };
+}
+
+async function getCachedPracticeSpeechAudio(
+  text: string,
+  options: { browserRate?: number } = {},
+): Promise<CachedPracticeTtsAudio> {
+  const cacheRoot = getPracticeTtsCacheRoot();
+  await fs.mkdir(cacheRoot, { recursive: true });
+  const cacheKey = buildPracticeTtsCacheKey(text, options.browserRate);
+  const cachedAudio = await findCachedPracticeTtsAudio(cacheRoot, cacheKey);
+  if (cachedAudio) return cachedAudio;
+
+  const existingGeneration = practiceTtsInFlight.get(cacheKey);
+  if (existingGeneration) {
+    const audio = await existingGeneration;
+    return { ...audio, cacheStatus: 'wait' };
+  }
+
+  const generation = generatePracticeTtsCacheAudio(text, cacheRoot, cacheKey, options);
+  practiceTtsInFlight.set(cacheKey, generation);
+  try {
+    return await generation;
+  } finally {
+    practiceTtsInFlight.delete(cacheKey);
+  }
+}
+
 async function ensureGeneratedListeningAudio(paper: LocalRealPaperFile) {
   const audioRoot = getGeneratedListeningAudioRoot();
   await fs.mkdir(audioRoot, { recursive: true });
@@ -1727,12 +1865,10 @@ export function createApp(options: CreateAppOptions = {}) {
     }
     const rawRate = Number(req.body?.rate ?? 0.9);
     const browserRate = Number.isFinite(rawRate) ? Math.max(0.6, Math.min(1.4, rawRate)) : 0.9;
-    const outputRoot = path.join(getGeneratedListeningAudioRoot(), 'practice-tts');
-    await fs.mkdir(outputRoot, { recursive: true });
-    let audio: Awaited<ReturnType<typeof runPracticeSpeechToAudio>>;
+    let audio: Awaited<ReturnType<typeof getCachedPracticeSpeechAudio>>;
 
     try {
-      audio = await runPracticeSpeechToAudio(rawText, outputRoot, { browserRate });
+      audio = await getCachedPracticeSpeechAudio(rawText, { browserRate });
     } catch (error) {
       if (error instanceof PracticeTtsUnavailableError) {
         res.status(501).json({
@@ -1744,10 +1880,10 @@ export function createApp(options: CreateAppOptions = {}) {
       throw error;
     }
     res.type(audio.contentType);
-    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Cache-Control', 'private, max-age=86400');
     res.setHeader('Content-Disposition', `inline; filename="${audio.fileName}"`);
+    res.setHeader('X-Practice-TTS-Cache', audio.cacheStatus);
     res.sendFile(audio.path, (error) => {
-      fs.rm(audio.path, { force: true }).catch(() => undefined);
       if (error && 'code' in error && error.code === 'ECONNABORTED') return;
       if (error) next(error);
     });

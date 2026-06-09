@@ -16,15 +16,26 @@ type PracticeSpeechOptions = {
   onError?: (message: string) => void;
 };
 
+type PracticeSpeechAudioCacheEntry = {
+  promise: Promise<Blob>;
+  blob?: Blob;
+  createdAt: number;
+  lastUsedAt: number;
+};
+
 type PracticeSpeechVoiceChoice = {
   voice: SpeechSynthesisVoice | null;
   hasEnglishVoice: boolean;
 };
 
+const PRACTICE_SPEECH_AUDIO_CACHE_MAX_ITEMS = 12;
+const PRACTICE_SPEECH_AUDIO_CACHE_TTL_MS = 10 * 60 * 1_000;
+
 let activeAudio: HTMLAudioElement | null = null;
 let activeObjectUrl: string | null = null;
 let activeSource: PracticeSpeechSource = 'none';
 let activeRunId = 0;
+const practiceSpeechAudioCache = new Map<string, PracticeSpeechAudioCacheEntry>();
 
 function clampSpeechRate(rate?: number) {
   if (!Number.isFinite(rate)) return 0.9;
@@ -73,6 +84,82 @@ function canUseServerPracticeTts() {
   return window.location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(window.location.hostname);
 }
 
+function buildPracticeSpeechAudioCacheKey(text: string, rate?: number) {
+  return JSON.stringify({
+    text,
+    rate: clampSpeechRate(rate),
+  });
+}
+
+function prunePracticeSpeechAudioCache() {
+  const now = Date.now();
+  for (const [key, entry] of practiceSpeechAudioCache.entries()) {
+    if (now - entry.createdAt > PRACTICE_SPEECH_AUDIO_CACHE_TTL_MS) {
+      practiceSpeechAudioCache.delete(key);
+    }
+  }
+
+  if (practiceSpeechAudioCache.size <= PRACTICE_SPEECH_AUDIO_CACHE_MAX_ITEMS) return;
+
+  const staleEntries = Array.from(practiceSpeechAudioCache.entries())
+    .sort(([, a], [, b]) => a.lastUsedAt - b.lastUsedAt)
+    .slice(0, practiceSpeechAudioCache.size - PRACTICE_SPEECH_AUDIO_CACHE_MAX_ITEMS);
+  staleEntries.forEach(([key]) => practiceSpeechAudioCache.delete(key));
+}
+
+async function fetchPracticeSpeechAudio(text: string, rate?: number) {
+  const response = await apiFetch('/api/practice/tts', {
+    method: 'POST',
+    body: JSON.stringify({
+      text,
+      rate: clampSpeechRate(rate),
+    }),
+  }, null);
+  if (!response.ok) throw new Error(`Local TTS failed with ${response.status}`);
+  return response.blob();
+}
+
+function getPracticeSpeechAudio(text: string, rate?: number) {
+  const cacheKey = buildPracticeSpeechAudioCacheKey(text, rate);
+  const now = Date.now();
+  const cached = practiceSpeechAudioCache.get(cacheKey);
+  if (cached && now - cached.createdAt <= PRACTICE_SPEECH_AUDIO_CACHE_TTL_MS) {
+    cached.lastUsedAt = now;
+    return cached.blob ? Promise.resolve(cached.blob) : cached.promise;
+  }
+
+  const entry: PracticeSpeechAudioCacheEntry = {
+    createdAt: now,
+    lastUsedAt: now,
+    promise: fetchPracticeSpeechAudio(text, rate),
+  };
+  entry.promise
+    .then((blob) => {
+      entry.blob = blob;
+      return blob;
+    })
+    .catch(() => {
+      if (practiceSpeechAudioCache.get(cacheKey) === entry) {
+        practiceSpeechAudioCache.delete(cacheKey);
+      }
+    });
+  practiceSpeechAudioCache.set(cacheKey, entry);
+  prunePracticeSpeechAudioCache();
+  return entry.promise;
+}
+
+export async function preloadPracticeSpeech(rawText: string, options: Pick<PracticeSpeechOptions, 'rate' | 'preferLocalAudio'> = {}) {
+  const text = rawText.trim();
+  if (!text || options.preferLocalAudio === false || !canUseServerPracticeTts()) return false;
+
+  try {
+    await getPracticeSpeechAudio(text, options.rate);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function playBrowserSpeech(text: string, runId: number, options: PracticeSpeechOptions): PracticeSpeechSource {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
     options.onError?.('当前浏览器不支持语音朗读。');
@@ -86,13 +173,16 @@ function playBrowserSpeech(text: string, runId: number, options: PracticeSpeechO
   if (voice) utterance.voice = voice;
   utterance.lang = voice?.lang ?? 'en-US';
   utterance.rate = clampSpeechRate(options.rate);
+  let endedBeforeStart = false;
   utterance.onend = () => {
     if (runId !== activeRunId) return;
+    endedBeforeStart = true;
     activeSource = 'none';
     options.onEnd?.();
   };
   utterance.onerror = () => {
     if (runId !== activeRunId) return;
+    endedBeforeStart = true;
     activeSource = 'none';
     options.onError?.(
       hasEnglishVoice
@@ -101,6 +191,7 @@ function playBrowserSpeech(text: string, runId: number, options: PracticeSpeechO
     );
   };
   window.speechSynthesis.speak(utterance);
+  if (endedBeforeStart) return 'none';
   options.onStart?.();
   return 'browser-tts';
 }
@@ -175,15 +266,7 @@ export async function playPracticeSpeech(
 
   if (options.preferLocalAudio !== false && canUseServerPracticeTts()) {
     try {
-      const response = await apiFetch('/api/practice/tts', {
-        method: 'POST',
-        body: JSON.stringify({
-          text,
-          rate: clampSpeechRate(options.rate),
-        }),
-      }, null);
-      if (!response.ok) throw new Error(`Local TTS failed with ${response.status}`);
-      const audioBlob = await response.blob();
+      const audioBlob = await getPracticeSpeechAudio(text, options.rate);
       if (runId !== activeRunId) return { source: 'none' };
 
       const objectUrl = URL.createObjectURL(audioBlob);

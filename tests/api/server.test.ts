@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { buildContentSecurityPolicy, buildEdgeTtsArguments, createApp } from '../../server';
+import { buildContentSecurityPolicy, buildEdgeTtsArguments, buildPracticeTtsCacheKey, createApp } from '../../server';
 import { assertSmokeLearningBackupRoundTrip, createSmokeLearningBackup, getSmokeReviewEvidenceIds } from '../../scripts/smoke-learning-backup.mjs';
 import { CET4_MOCK_EXAM } from '../../src/questionBank';
 import {
@@ -135,7 +135,15 @@ describe('server API', () => {
 
     if (response.status === 200) {
       expect(response.headers['content-type']).toMatch(/audio\/(?:mpeg|wav)/);
+      expect(response.headers['x-practice-tts-cache']).toMatch(/^(?:hit|miss|wait)$/);
       expect(response.body.length).toBeGreaterThan(128);
+
+      const cachedResponse = await request(app)
+        .post('/api/practice/tts')
+        .send({ text: 'adapt', rate: 0.8 })
+        .expect(200);
+      expect(cachedResponse.headers['x-practice-tts-cache']).toBe('hit');
+      expect(cachedResponse.body.length).toBe(response.body.length);
       return;
     }
 
@@ -148,6 +156,25 @@ describe('server API', () => {
 
     expect(args).toContain('--rate=-7%');
     expect(args).not.toContain('-7%');
+  });
+
+  it('keeps practice TTS cache keys scoped to text, rate, and voice config', () => {
+    const originalVoice = process.env.PRACTICE_EDGE_TTS_VOICE;
+    try {
+      process.env.PRACTICE_EDGE_TTS_VOICE = 'en-US-JennyNeural';
+      const baseKey = buildPracticeTtsCacheKey('adapt quickly', 0.9);
+      expect(buildPracticeTtsCacheKey('adapt quickly', 1.1)).not.toBe(baseKey);
+      expect(buildPracticeTtsCacheKey('adapt slowly', 0.9)).not.toBe(baseKey);
+
+      process.env.PRACTICE_EDGE_TTS_VOICE = 'en-US-GuyNeural';
+      expect(buildPracticeTtsCacheKey('adapt quickly', 0.9)).not.toBe(baseKey);
+    } finally {
+      if (originalVoice === undefined) {
+        delete process.env.PRACTICE_EDGE_TTS_VOICE;
+      } else {
+        process.env.PRACTICE_EDGE_TTS_VOICE = originalVoice;
+      }
+    }
   });
 
   it('accepts allowed product telemetry events and exposes observability summary', async () => {

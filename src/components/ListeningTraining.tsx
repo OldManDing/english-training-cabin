@@ -15,7 +15,7 @@ import {
   savePracticeDraft,
 } from '../domain/practice/draftProgress';
 import { buildChoicePracticeReport } from '../domain/practice/reports';
-import { pausePracticeSpeech, playPracticeSpeech, resumePracticeSpeech, stopPracticeSpeech } from '../lib/practiceSpeech';
+import { pausePracticeSpeech, playPracticeSpeech, preloadPracticeSpeech, resumePracticeSpeech, stopPracticeSpeech } from '../lib/practiceSpeech';
 import { CET4_LISTENING_PRACTICE_QUESTIONS, CET4_MOCK_EXAM } from '../questionBank';
 import { SelectField } from './controls/FormControls';
 
@@ -265,12 +265,16 @@ export default function ListeningTraining({
 
   useEffect(() => {
     if (!autoPlaybackEnabled || autoPlaybackAttempted) return;
+    void preloadPracticeSpeech(LISTENING_TRANSCRIPT_TEXT, {
+      rate: audioSpeed,
+      preferLocalAudio: true,
+    });
     const timer = window.setTimeout(() => {
       setAutoPlaybackAttempted(true);
       void startAudioPlayback('auto');
     }, 350);
     return () => window.clearTimeout(timer);
-  }, [autoPlaybackEnabled, autoPlaybackAttempted]);
+  }, [autoPlaybackEnabled, autoPlaybackAttempted, audioSpeed]);
 
   const toggleAudioPlayback = async () => {
     if (isPlaying) {

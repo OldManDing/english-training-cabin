@@ -15,7 +15,7 @@ import {
 } from '../domain/practice/draftProgress';
 import { buildChoicePracticeReport } from '../domain/practice/reports';
 import { getVocabularyQuestionSupport, getVocabularySentenceSupport } from '../domain/practice/sentenceTranslations';
-import { pausePracticeSpeech, playPracticeSpeech, resumePracticeSpeech, stopPracticeSpeech } from '../lib/practiceSpeech';
+import { pausePracticeSpeech, playPracticeSpeech, preloadPracticeSpeech, resumePracticeSpeech, stopPracticeSpeech } from '../lib/practiceSpeech';
 
 interface VocabularyTrainingProps {
   items: VocabularyPracticeItem[];
@@ -29,6 +29,7 @@ type Choice = ChoiceOption;
 type Confidence = ChoiceConfidence;
 type VocabularyAnswer = ChoicePracticeDraftAnswer;
 type SpeechTarget = 'word' | 'example' | 'auto';
+const AUTO_SPEECH_RATE = 0.84;
 
 const findVocabularyQuestionLocation = (items: VocabularyPracticeItem[], questionId?: string) => {
   if (!questionId) return { packIndex: 0, currentIdx: 0 };
@@ -133,6 +134,9 @@ export default function VocabularyTraining({ items, initialQuestionId, replayAtt
     (packIndex + 1) * VOCABULARY_SESSION_SIZE,
   );
   const currentItem = sessionItems[currentIdx] ?? sessionItems[0];
+  const nextItem = sessionItems[currentIdx + 1];
+  const currentAutoSpeechText = currentItem ? `${currentItem.word}. ${currentItem.example}` : '';
+  const nextAutoSpeechText = nextItem ? `${nextItem.word}. ${nextItem.example}` : '';
   const sentenceSupport = currentItem ? getVocabularySentenceSupport(currentItem) : null;
   const questionSupport = currentItem ? getVocabularyQuestionSupport(currentItem) : null;
   const progress = Math.round(((currentIdx + (isSubmitted ? 1 : 0)) / sessionItems.length) * 100);
@@ -266,11 +270,21 @@ export default function VocabularyTraining({ items, initialQuestionId, replayAtt
   useEffect(() => {
     if (!autoSpeakEnabled || !currentItem) return;
     setSpeechNotice('自动播报已开启：进入新单词后会自动朗读单词和例句。');
+    void preloadPracticeSpeech(currentAutoSpeechText, {
+      rate: AUTO_SPEECH_RATE,
+      preferLocalAudio: true,
+    });
+    if (nextAutoSpeechText) {
+      void preloadPracticeSpeech(nextAutoSpeechText, {
+        rate: AUTO_SPEECH_RATE,
+        preferLocalAudio: true,
+      });
+    }
     const timer = window.setTimeout(() => {
-      speak(`${currentItem.word}. ${currentItem.example}`, 0.84, 'auto', 'auto');
+      speak(currentAutoSpeechText, AUTO_SPEECH_RATE, 'auto', 'auto');
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [autoSpeakEnabled, currentItem?.id]);
+  }, [autoSpeakEnabled, currentAutoSpeechText, nextAutoSpeechText]);
 
   useEffect(() => {
     return () => {
