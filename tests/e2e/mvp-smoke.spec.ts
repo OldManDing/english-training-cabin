@@ -1247,6 +1247,47 @@ test('vocabulary practice plays audio controls, scores answers, and persists rev
   await expect(page.getByRole('heading', { name: CET4_VOCABULARY_BANK[VOCABULARY_SESSION_SIZE].word })).toBeVisible();
 });
 
+test('generated vocabulary phrase choices stay English before submission', async ({ page }) => {
+  await installSpeechSynthesisMock(page);
+  await registerAndEnterApp(page, 'mvp-vocabulary-generated-choices');
+  await resetLocalLearningData(page);
+  await page.reload();
+
+  const targetIndex = CET4_VOCABULARY_BANK.findIndex((item) => item.word === 'accurate strategy');
+  expect(targetIndex).toBeGreaterThanOrEqual(0);
+  const targetItem = CET4_VOCABULARY_BANK[targetIndex];
+  const packIndex = Math.floor(targetIndex / VOCABULARY_SESSION_SIZE);
+  const currentIdx = targetIndex % VOCABULARY_SESSION_SIZE;
+
+  await page.evaluate(({ packIndex, currentIdx }) => {
+    const now = new Date().toISOString();
+    localStorage.setItem('english-training-cabin:practice-draft:vocabulary', JSON.stringify({
+      version: 1,
+      startedAt: now,
+      packIndex,
+      currentIdx,
+      selectedOpt: null,
+      confidence: null,
+      isSubmitted: false,
+      answers: [],
+      updatedAt: now,
+    }));
+  }, { packIndex, currentIdx });
+
+  await page.getByRole('button', { name: '\u4e13\u9879\u7ec3\u4e60' }).click();
+  await page.getByTestId('practice-module-action-vocabulary').click();
+
+  await expect(page.getByRole('heading', { name: targetItem.word })).toBeVisible();
+  await expect(page.getByTestId('vocabulary-question-translation')).toHaveCount(0);
+  await expect(page.getByTestId(`vocabulary-option-translation-${targetItem.correctAnswer}`)).toHaveCount(0);
+
+  const choiceTexts = await Promise.all(
+    (['A', 'B', 'C', 'D'] as const).map(async (choice) =>
+      page.getByRole('button', { name: new RegExp(`^${choice}\\. `) }).textContent()),
+  );
+  expect(choiceTexts.join('\n')).not.toMatch(/[\u4e00-\u9fff]/u);
+});
+
 test('vocabulary practice keeps a visible message when browser speech synthesis fails', async ({ page }) => {
   await installFailingSpeechSynthesisMock(page);
   await registerAndEnterApp(page, 'mvp-vocabulary-speech-failure');

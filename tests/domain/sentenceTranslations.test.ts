@@ -3,6 +3,18 @@ import { CET4_VOCABULARY_BANK } from '../../src/data';
 import { getVocabularyQuestionSupport, getVocabularySentenceSupport } from '../../src/domain/practice/sentenceTranslations';
 
 describe('practice sentence and vocabulary Chinese support', () => {
+  it('keeps raw vocabulary choices English-only before submission', () => {
+    const leakedChoices = CET4_VOCABULARY_BANK.flatMap((item) =>
+      Object.entries(item.options).map(([key, text]) => ({
+        word: item.word,
+        key,
+        text,
+      })),
+    ).filter(({ text }) => /[\u4e00-\u9fff]/u.test(text));
+
+    expect(leakedChoices).toEqual([]);
+  });
+
   it('builds submitted vocabulary prompt and option translations from real item data', () => {
     const adapt = CET4_VOCABULARY_BANK.find((item) => item.word === 'adapt');
     expect(adapt).toBeTruthy();
