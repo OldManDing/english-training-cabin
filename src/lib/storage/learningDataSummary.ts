@@ -57,3 +57,7 @@ export function hasLearningActivity(counts: LearningDataCounts): boolean {
 export function shouldBlockEmptyCloudRestore(localCounts: LearningDataCounts, cloudCounts: LearningDataCounts): boolean {
   return hasLearningActivity(localCounts) && !hasLearningActivity(cloudCounts);
 }
+
+export function shouldAutoRestoreCloudSnapshot(localCounts: LearningDataCounts, cloudCounts: LearningDataCounts): boolean {
+  return !hasLearningActivity(localCounts) && hasLearningActivity(cloudCounts);
+}

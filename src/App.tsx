@@ -27,10 +27,12 @@ import {
   persistSkillProfiles,
   upsertActiveGoal,
 } from './lib/storage/db';
+import { restoreCloudLearningDataWhenLocalEmpty } from './lib/storage/cloudLearningAutoRestore';
 import { buildDailyPlan } from './domain/planner/dailyPlan';
 import { buildReviewGateStatus } from './domain/review/reviewGate';
 import { getDueWrongQuestionReviewItems } from './domain/review/reviewQueue';
 import { trackTelemetry } from './lib/telemetry';
+import { getStoredAuthToken } from './lib/api';
 import { OnboardingDiagnosticReport } from './domain/diagnostic/onboardingDiagnostic';
 import { getExamRegistryEntry } from './exams/registry';
 import {
@@ -344,6 +346,22 @@ function StudyApp() {
     let mounted = true;
 
     async function loadStudyState() {
+      const token = getStoredAuthToken();
+      if (token) {
+        try {
+          const autoRestore = await restoreCloudLearningDataWhenLocalEmpty(token);
+          if (mounted && autoRestore.status === 'restored') {
+            handleTriggerModal(
+              '已同步云端学习数据',
+              `这台设备已自动恢复云端学习记录：练习 ${autoRestore.importedCounts.practiceSessions} 组、答题 ${autoRestore.importedCounts.attempts} 条、复习 ${autoRestore.importedCounts.reviewItems} 项、画像 ${autoRestore.importedCounts.skillProfiles} 项。`,
+            );
+          }
+        } catch (error) {
+          console.error('Failed to auto restore cloud learning data:', error);
+          trackTelemetry('client_error', { area: 'cloud_learning_auto_restore' });
+        }
+      }
+
       const [goal, reviewItems, skillProfiles, practiceSessions, attempts] = await Promise.all([
         getOrCreateActiveGoal(),
         loadReviewItems(),

@@ -1,6 +1,38 @@
 import { expect, test } from '@playwright/test';
+import { createSmokeLearningBackup } from '../../scripts/smoke-learning-backup.mjs';
+import { registerApiAccount } from './helpers/auth';
 
 const REGISTRATION_INVITE_CODE = process.env.E2E_REGISTRATION_INVITE_CODE || 'ETC-LOCAL-2026';
+
+async function countLocalLearningData(page: import('@playwright/test').Page) {
+  return page.evaluate(async () => {
+    function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
+      return new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('english-training-cabin');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const stores = ['studyGoals', 'practiceSessions', 'attempts', 'reviewItems', 'skillProfiles'];
+    const existingStores = stores.filter((store) => db.objectStoreNames.contains(store));
+    if (existingStores.length === 0) {
+      db.close();
+      return {};
+    }
+    const tx = db.transaction(existingStores, 'readonly');
+    const counts: Record<string, number> = {};
+    for (const store of existingStores) {
+      counts[store] = await requestToPromise(tx.objectStore(store).count());
+    }
+    db.close();
+    return counts;
+  });
+}
 
 test('SaaS registration shows a visible error for invalid invite codes', async ({ page }) => {
   await page.goto('/');
@@ -101,4 +133,32 @@ test('SaaS account trial can sync and restore local learning data', async ({ pag
   await page.getByTestId('saas-auth-submit').click();
   await expect(page.getByText('邀请已接受，您已加入团队。')).toBeVisible();
   await expect(page.getByTestId('saas-recovery-code')).toBeVisible();
+});
+
+test('SaaS login on a new device automatically restores existing cloud learning data', async ({ page, request }) => {
+  const account = await registerApiAccount(request, 'auto-cloud-restore');
+  const backup = createSmokeLearningBackup('auto-cloud-restore');
+
+  await request
+    .put('/api/cloud/learning-data', {
+      headers: { Authorization: `Bearer ${account.token}` },
+      data: { backup },
+    })
+    .then((response) => expect(response.ok()).toBe(true));
+
+  await page.goto('/');
+  await page.getByTestId('saas-email-input').fill(account.email);
+  await page.getByTestId('saas-password-input').fill(account.password);
+  await page.getByTestId('saas-auth-submit').click();
+
+  await expect(page.getByText('已同步云端学习数据', { exact: true })).toBeVisible();
+
+  const counts = await countLocalLearningData(page);
+  expect(counts).toMatchObject({
+    studyGoals: 1,
+    practiceSessions: 1,
+    attempts: 1,
+    reviewItems: 1,
+    skillProfiles: 1,
+  });
 });

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   countLearningActivity,
   getLearningBackupCounts,
+  shouldAutoRestoreCloudSnapshot,
   shouldBlockEmptyCloudRestore,
 } from '../../src/lib/storage/learningDataSummary';
 
@@ -52,5 +53,33 @@ describe('learning data summary', () => {
     expect(shouldBlockEmptyCloudRestore(localCounts, emptyCloudCounts)).toBe(true);
     expect(shouldBlockEmptyCloudRestore(localCounts, activeCloudCounts)).toBe(false);
     expect(shouldBlockEmptyCloudRestore(emptyCloudCounts, emptyCloudCounts)).toBe(false);
+  });
+
+  it('auto-restores only on devices without local learning activity', () => {
+    const localWithDefaultGoalOnly = {
+      studyGoals: 1,
+      practiceSessions: 0,
+      attempts: 0,
+      reviewItems: 0,
+      skillProfiles: 0,
+    };
+    const localWithAttempts = {
+      ...localWithDefaultGoalOnly,
+      attempts: 2,
+    };
+    const cloudWithActivity = {
+      studyGoals: 1,
+      practiceSessions: 2,
+      attempts: 12,
+      reviewItems: 3,
+      skillProfiles: 4,
+    };
+    const emptyCloud = {
+      ...localWithDefaultGoalOnly,
+    };
+
+    expect(shouldAutoRestoreCloudSnapshot(localWithDefaultGoalOnly, cloudWithActivity)).toBe(true);
+    expect(shouldAutoRestoreCloudSnapshot(localWithAttempts, cloudWithActivity)).toBe(false);
+    expect(shouldAutoRestoreCloudSnapshot(localWithDefaultGoalOnly, emptyCloud)).toBe(false);
   });
 });
