@@ -2,7 +2,7 @@ import { apiRequest } from '../api';
 import { exportLearningData, importLearningData } from './db';
 import {
   getLearningBackupCounts,
-  hasLearningActivity,
+  hasLearningEvidence,
   shouldAutoRestoreCloudSnapshot,
   type LearningDataCounts,
 } from './learningDataSummary';
@@ -42,7 +42,7 @@ export async function restoreCloudLearningDataWhenLocalEmpty(token: string): Pro
   const localBackup = await exportLearningData();
   const localCounts = getLearningBackupCounts(localBackup);
 
-  if (hasLearningActivity(localCounts)) {
+  if (hasLearningEvidence(localCounts)) {
     return {
       status: 'skipped-local-has-activity',
       localCounts,

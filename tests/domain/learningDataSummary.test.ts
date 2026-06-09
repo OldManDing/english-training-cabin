@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   countLearningActivity,
+  countLearningEvidence,
   getLearningBackupCounts,
   shouldAutoRestoreCloudSnapshot,
   shouldBlockEmptyCloudRestore,
@@ -28,9 +29,10 @@ describe('learning data summary', () => {
       skillProfiles: 1,
     });
     expect(countLearningActivity(counts)).toBe(4);
+    expect(countLearningEvidence(counts)).toBe(3);
   });
 
-  it('blocks restoring an empty cloud snapshot over existing local learning activity', () => {
+  it('blocks restoring an empty cloud snapshot over existing local answer evidence', () => {
     const localCounts = {
       studyGoals: 1,
       practiceSessions: 2,
@@ -49,19 +51,28 @@ describe('learning data summary', () => {
       ...emptyCloudCounts,
       attempts: 1,
     };
+    const localWithProfileOnly = {
+      ...emptyCloudCounts,
+      skillProfiles: 5,
+    };
 
     expect(shouldBlockEmptyCloudRestore(localCounts, emptyCloudCounts)).toBe(true);
     expect(shouldBlockEmptyCloudRestore(localCounts, activeCloudCounts)).toBe(false);
     expect(shouldBlockEmptyCloudRestore(emptyCloudCounts, emptyCloudCounts)).toBe(false);
+    expect(shouldBlockEmptyCloudRestore(localWithProfileOnly, emptyCloudCounts)).toBe(false);
   });
 
-  it('auto-restores only on devices without local learning activity', () => {
+  it('auto-restores only on devices without local answer evidence', () => {
     const localWithDefaultGoalOnly = {
       studyGoals: 1,
       practiceSessions: 0,
       attempts: 0,
       reviewItems: 0,
       skillProfiles: 0,
+    };
+    const localWithProfileOnly = {
+      ...localWithDefaultGoalOnly,
+      skillProfiles: 5,
     };
     const localWithAttempts = {
       ...localWithDefaultGoalOnly,
@@ -79,6 +90,7 @@ describe('learning data summary', () => {
     };
 
     expect(shouldAutoRestoreCloudSnapshot(localWithDefaultGoalOnly, cloudWithActivity)).toBe(true);
+    expect(shouldAutoRestoreCloudSnapshot(localWithProfileOnly, cloudWithActivity)).toBe(true);
     expect(shouldAutoRestoreCloudSnapshot(localWithAttempts, cloudWithActivity)).toBe(false);
     expect(shouldAutoRestoreCloudSnapshot(localWithDefaultGoalOnly, emptyCloud)).toBe(false);
   });

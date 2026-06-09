@@ -15,6 +15,28 @@ import { registerAndEnterApp, registerApiAccount } from './helpers/auth';
 const universalDiagnosticTextAnswer =
   'With the development of online learning, more college students can arrange their study time flexibly. To reduce exam pressure, students should divide review tasks into several small steps. In my opinion, regular review and AI tools are useful because students can get feedback. For example, I often make grammar mistakes in English practice, so next time I will correct them carefully and explain my answer more naturally.';
 
+function createSilentWavBuffer() {
+  const sampleRate = 8_000;
+  const durationSeconds = 0.12;
+  const sampleCount = Math.floor(sampleRate * durationSeconds);
+  const dataSize = sampleCount * 2;
+  const buffer = Buffer.alloc(44 + dataSize);
+  buffer.write('RIFF', 0);
+  buffer.writeUInt32LE(36 + dataSize, 4);
+  buffer.write('WAVE', 8);
+  buffer.write('fmt ', 12);
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20);
+  buffer.writeUInt16LE(1, 22);
+  buffer.writeUInt32LE(sampleRate, 24);
+  buffer.writeUInt32LE(sampleRate * 2, 28);
+  buffer.writeUInt16LE(2, 32);
+  buffer.writeUInt16LE(16, 34);
+  buffer.write('data', 36);
+  buffer.writeUInt32LE(dataSize, 40);
+  return buffer;
+}
+
 async function clickDiagnosticOptions(page: Page, optionNames: RegExp[]) {
   let clicked = 0;
   for (const optionName of optionNames) {
@@ -103,6 +125,20 @@ async function resetLocalLearningData(page: Page) {
     }
     db.close();
   });
+}
+
+async function installServerTtsSuccessMock(page: Page) {
+  let requestCount = 0;
+  await page.route('**/api/practice/tts', async (route) => {
+    requestCount += 1;
+    await route.fulfill({
+      contentType: 'audio/wav',
+      body: createSilentWavBuffer(),
+    });
+  });
+  return {
+    requestCount: () => requestCount,
+  };
 }
 
 async function installSpeechSynthesisMock(page: Page) {
@@ -784,6 +820,19 @@ test('listening practice starts automatic speech playback', async ({ page }) => 
   await expect.poll(async () => page.evaluate(() => (window as any).__speechSynthesisCalls?.length ?? 0)).toBeGreaterThanOrEqual(1);
   const firstSpeechText = await page.evaluate(() => (window as any).__speechSynthesisCalls?.[0] ?? '');
   expect(firstSpeechText).toContain(CET4_MOCK_EXAM.listening.transcript.slice(0, 48));
+});
+
+test('listening automatic speech requests server TTS audio first', async ({ page }) => {
+  const serverTts = await installServerTtsSuccessMock(page);
+  await registerAndEnterApp(page, 'mvp-listening-server-tts');
+  await resetLocalLearningData(page);
+  await page.reload();
+
+  await page.getByRole('button', { name: '专项练习' }).click();
+  await page.getByRole('button', { name: '开始听力训练' }).click();
+
+  await expect(page.getByRole('heading', { name: /听力训练 - 长对话/ })).toBeVisible();
+  await expect.poll(serverTts.requestCount).toBeGreaterThanOrEqual(1);
 });
 
 test('MVP critical speaking retell flow persists review and ability evidence', async ({ page }) => {

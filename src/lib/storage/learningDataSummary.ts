@@ -21,6 +21,12 @@ const ACTIVITY_KEYS: Array<keyof Pick<LearningDataCounts, 'practiceSessions' | '
   'skillProfiles',
 ];
 
+const LEARNING_EVIDENCE_KEYS: Array<keyof Pick<LearningDataCounts, 'practiceSessions' | 'attempts' | 'reviewItems'>> = [
+  'practiceSessions',
+  'attempts',
+  'reviewItems',
+];
+
 function getDataRecord(value: unknown): Record<string, unknown> | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const data = (value as { data?: unknown }).data;
@@ -54,10 +60,18 @@ export function hasLearningActivity(counts: LearningDataCounts): boolean {
   return countLearningActivity(counts) > 0;
 }
 
+export function countLearningEvidence(counts: LearningDataCounts): number {
+  return LEARNING_EVIDENCE_KEYS.reduce((total, key) => total + Math.max(0, counts[key]), 0);
+}
+
+export function hasLearningEvidence(counts: LearningDataCounts): boolean {
+  return countLearningEvidence(counts) > 0;
+}
+
 export function shouldBlockEmptyCloudRestore(localCounts: LearningDataCounts, cloudCounts: LearningDataCounts): boolean {
-  return hasLearningActivity(localCounts) && !hasLearningActivity(cloudCounts);
+  return hasLearningEvidence(localCounts) && !hasLearningEvidence(cloudCounts);
 }
 
 export function shouldAutoRestoreCloudSnapshot(localCounts: LearningDataCounts, cloudCounts: LearningDataCounts): boolean {
-  return !hasLearningActivity(localCounts) && hasLearningActivity(cloudCounts);
+  return !hasLearningEvidence(localCounts) && hasLearningEvidence(cloudCounts);
 }

@@ -181,7 +181,7 @@ export default function VocabularyTraining({ items, initialQuestionId, replayAtt
   const speak = async (text: string, rate = 0.82, source: 'auto' | 'manual' = 'manual', target: SpeechTarget = 'word') => {
     await playPracticeSpeech(text, {
       rate,
-      preferLocalAudio: source === 'manual',
+      preferLocalAudio: true,
       onStart: () => {
         setIsSpeaking(true);
         setActiveSpeechTarget(target);

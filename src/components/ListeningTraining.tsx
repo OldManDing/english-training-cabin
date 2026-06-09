@@ -240,7 +240,7 @@ export default function ListeningTraining({
   const startAudioPlayback = async (source: 'auto' | 'manual' = 'manual') => {
     await playPracticeSpeech(LISTENING_TRANSCRIPT_TEXT, {
       rate: audioSpeed,
-      preferLocalAudio: source === 'manual',
+      preferLocalAudio: true,
       onStart: () => {
         setIsPlaying(true);
         setIsPlaybackPaused(false);

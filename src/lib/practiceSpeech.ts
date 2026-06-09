@@ -101,6 +101,7 @@ function playBrowserSpeech(text: string, runId: number, options: PracticeSpeechO
     );
   };
   window.speechSynthesis.speak(utterance);
+  options.onStart?.();
   return 'browser-tts';
 }
 
@@ -171,7 +172,6 @@ export async function playPracticeSpeech(
   clearActiveAudio();
   cancelBrowserSpeech();
   activeSource = 'none';
-  options.onStart?.();
 
   if (options.preferLocalAudio !== false && canUseServerPracticeTts()) {
     try {
@@ -205,6 +205,7 @@ export async function playPracticeSpeech(
       };
       await audio.play();
       activeSource = 'local-tts';
+      options.onStart?.();
       return { source: 'local-tts' };
     } catch {
       if (runId !== activeRunId) return { source: 'none' };

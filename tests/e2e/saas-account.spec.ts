@@ -34,6 +34,65 @@ async function countLocalLearningData(page: import('@playwright/test').Page) {
   });
 }
 
+async function seedLocalProfileOnlyLearningData(page: import('@playwright/test').Page) {
+  await page.evaluate(async () => {
+    await new Promise<void>((resolve, reject) => {
+      const deleteRequest = indexedDB.deleteDatabase('english-training-cabin');
+      deleteRequest.onsuccess = () => resolve();
+      deleteRequest.onerror = () => reject(deleteRequest.error);
+      deleteRequest.onblocked = () => resolve();
+    });
+
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('english-training-cabin', 1);
+      request.onupgradeneeded = () => {
+        const database = request.result;
+        const stores = {
+          studyGoals: ['examId', 'status', 'updatedAt'],
+          practiceSessions: ['examId', 'moduleId', 'status', 'startedAt', 'finishedAt'],
+          attempts: ['sessionId', 'questionId', 'examId', 'moduleId', 'questionTypeId', 'createdAt'],
+          reviewItems: ['targetType', 'targetId', 'examId', 'moduleId', 'skillArea', 'nextReviewAt', 'priorityScore'],
+          skillProfiles: ['skillArea', 'subSkillId', 'lastUpdatedAt'],
+        };
+        Object.entries(stores).forEach(([storeName, indexes]) => {
+          if (database.objectStoreNames.contains(storeName)) return;
+          const store = database.createObjectStore(storeName, { keyPath: 'id' });
+          indexes.forEach((indexName) => store.createIndex(indexName, indexName));
+        });
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const now = new Date().toISOString();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(['studyGoals', 'skillProfiles'], 'readwrite');
+      tx.objectStore('studyGoals').put({
+        id: 'local-default-goal',
+        examId: 'cet4',
+        examDate: '2026-06-13',
+        targetScore: 550,
+        dailyMinutes: 60,
+        prioritySkills: ['reading', 'listening', 'vocabulary', 'speaking'],
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+      });
+      tx.objectStore('skillProfiles').put({
+        id: 'local-profile-only',
+        skillArea: 'reading',
+        subSkillId: 'diagnostic',
+        score: 60,
+        confidence: 3,
+        evidenceCount: 0,
+        lastUpdatedAt: now,
+      });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  });
+}
+
 test('SaaS registration shows a visible error for invalid invite codes', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: '英语训练舱' })).toBeVisible();
@@ -147,6 +206,36 @@ test('SaaS login on a new device automatically restores existing cloud learning 
     .then((response) => expect(response.ok()).toBe(true));
 
   await page.goto('/');
+  await page.getByTestId('saas-email-input').fill(account.email);
+  await page.getByTestId('saas-password-input').fill(account.password);
+  await page.getByTestId('saas-auth-submit').click();
+
+  await expect(page.getByText('已同步云端学习数据', { exact: true })).toBeVisible();
+
+  const counts = await countLocalLearningData(page);
+  expect(counts).toMatchObject({
+    studyGoals: 1,
+    practiceSessions: 1,
+    attempts: 1,
+    reviewItems: 1,
+    skillProfiles: 1,
+  });
+});
+
+test('SaaS login restores cloud learning data when the device only has local profiles', async ({ page, request }) => {
+  const account = await registerApiAccount(request, 'profile-only-auto-cloud-restore');
+  const backup = createSmokeLearningBackup('profile-only-auto-cloud-restore');
+
+  await request
+    .put('/api/cloud/learning-data', {
+      headers: { Authorization: `Bearer ${account.token}` },
+      data: { backup },
+    })
+    .then((response) => expect(response.ok()).toBe(true));
+
+  await page.goto('/');
+  await seedLocalProfileOnlyLearningData(page);
+  await page.reload();
   await page.getByTestId('saas-email-input').fill(account.email);
   await page.getByTestId('saas-password-input').fill(account.password);
   await page.getByTestId('saas-auth-submit').click();
