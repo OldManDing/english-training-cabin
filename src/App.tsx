@@ -55,6 +55,7 @@ const ListeningTraining = lazy(() => import('./components/ListeningTraining'));
 const SettingsSection = lazy(() => import('./components/SettingsSection'));
 const VocabularyTraining = lazy(() => import('./components/VocabularyTraining'));
 const MockExam = lazy(() => import('./components/MockExam'));
+const AnsweredQuestionHistory = lazy(() => import('./components/AnsweredQuestionHistory'));
 
 function getDaysRemaining(examDate?: string): number {
   if (!examDate) return 0;
@@ -660,7 +661,7 @@ function StudyApp() {
             onStartMockExam={() => startLearningWithReviewReminder('阶段模考', () => setActiveTab('mock'))}
             onStartOnboarding={() => setShowOnboarding(true)}
             onViewReview={() => setActiveTab('review')}
-            onViewHistory={() => setActiveTab('practice')}
+            onViewHistory={() => setActiveTab('history')}
             onStartSpeaking={() => startLearningWithReviewReminder('口语重说', () => setActiveTab('speaking'))}
             onOpenSettings={() => setActiveTab('settings')}
             onTriggerModal={handleTriggerModal}
@@ -696,6 +697,13 @@ function StudyApp() {
             skillProfiles={persistedSkillProfiles}
             dailyPlan={dailyPlan}
             readingPassages={unpracticedReadingPassages}
+            persistedAttempts={persistedAttempts}
+            persistedPracticeSessions={persistedPracticeSessions}
+          />
+        );
+      case 'history':
+        return (
+          <AnsweredQuestionHistory
             persistedAttempts={persistedAttempts}
             persistedPracticeSessions={persistedPracticeSessions}
           />
