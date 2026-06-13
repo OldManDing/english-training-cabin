@@ -51,7 +51,7 @@ describe('CET-4 syllabus-aligned question bank coverage', () => {
     expect(CET4_LISTENING_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(1_000);
     expect(CET4_WORD_BANK_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(1_500);
     expect(CET4_LONG_MATCHING_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(1_000);
-    expect(CET4_GRAMMAR_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(10);
+    expect(CET4_GRAMMAR_PRACTICE_QUESTIONS).toHaveLength(500);
     expect(CET4_CLOZE_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(1_500);
     expect(CET4_READING_BANK.length).toBeGreaterThanOrEqual(300);
     expect(CET4_READING_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(4_000);
@@ -86,6 +86,15 @@ describe('CET-4 syllabus-aligned question bank coverage', () => {
     expect(firstSessionAnswerCounts.every((count) => count > 0)).toBe(true);
     expect(Math.max(...firstSessionAnswerCounts)).toBeLessThanOrEqual(16);
     expect(Math.min(...firstSessionAnswerCounts)).toBeGreaterThanOrEqual(4);
+  });
+
+  it('keeps CET-4 grammar-structure answers distributed across A-D', () => {
+    const answerCounts = countBy(CET4_GRAMMAR_PRACTICE_QUESTIONS, (item) => item.correctAnswer);
+    const counts = ['A', 'B', 'C', 'D'].map((choice) => answerCounts[choice] ?? 0);
+
+    expect(CET4_GRAMMAR_PRACTICE_QUESTIONS).toHaveLength(500);
+    expect(counts.every((count) => count > 0)).toBe(true);
+    expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(10);
   });
 
   it('adds a 2025 degree-English outline bank without incorrectly adding listening', () => {
@@ -125,6 +134,7 @@ describe('CET-4 syllabus-aligned question bank coverage', () => {
     ];
     const readingPracticeQuestionIds = CET4_READING_PRACTICE_QUESTIONS.map((question) => question.id);
     const listeningPracticeQuestionIds = CET4_LISTENING_PRACTICE_QUESTIONS.map((question) => question.id);
+    const grammarPracticeQuestionIds = CET4_GRAMMAR_PRACTICE_QUESTIONS.map((question) => question.id);
     const degreeQuestionIds = [
       ...DEGREE_ENGLISH_MOCK_EXAM.vocabularyStructure.map((question) => question.id),
       ...DEGREE_ENGLISH_MOCK_EXAM.useOfEnglish.questions.map((question) => question.id),
@@ -139,6 +149,7 @@ describe('CET-4 syllabus-aligned question bank coverage', () => {
     expect(new Set(mockQuestionIds).size).toBe(mockQuestionIds.length);
     expect(new Set(readingPracticeQuestionIds).size).toBe(readingPracticeQuestionIds.length);
     expect(new Set(listeningPracticeQuestionIds).size).toBe(listeningPracticeQuestionIds.length);
+    expect(new Set(grammarPracticeQuestionIds).size).toBe(grammarPracticeQuestionIds.length);
     expect(new Set(degreeQuestionIds).size).toBe(degreeQuestionIds.length);
   });
 });

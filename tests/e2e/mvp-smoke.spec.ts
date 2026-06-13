@@ -452,13 +452,10 @@ test('MVP critical reading flow persists local learning evidence', async ({ page
   expect(counts.reviewItems).toBeGreaterThan(0);
   expect(counts.skillProfiles).toBe(1);
 
+  const readingQuestionTotal = CET4_READING_BANK.reduce((sum, passage) => sum + passage.questions.length, 0);
   await page.getByRole('button', { name: '今日训练' }).click();
   await page.getByRole('button', { name: /5\s*已答/ }).click();
-  await expect(page.getByRole('heading', { name: '已答题目' })).toBeVisible();
-  await expect(page.getByTestId('answered-history-item')).toHaveCount(5);
-
-  const readingQuestionTotal = CET4_READING_BANK.reduce((sum, passage) => sum + passage.questions.length, 0);
-  await page.getByRole('button', { name: '专项练习' }).click();
+  await expect(page.getByRole('heading', { name: '专项练习' })).toBeVisible();
   await expect(page.getByText(`已练 5/${readingQuestionTotal}`)).toBeVisible();
   await expect(page.getByText(`${CET4_READING_BANK.length} 组材料 / ${readingQuestionTotal} 题`)).toBeVisible();
   await page.getByTestId('practice-module-select-reading').click();

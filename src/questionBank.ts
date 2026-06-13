@@ -2,6 +2,7 @@ import { INITIAL_PASSAGE, CET4_VOCABULARY_BANK, type VocabularyPracticeItem } fr
 import { Passage, Question } from './types';
 
 type Choice = 'A' | 'B' | 'C' | 'D';
+const CHOICES: readonly Choice[] = ['A', 'B', 'C', 'D'];
 
 export interface QuestionBankCoverageItem {
   moduleId: string;
@@ -2705,7 +2706,48 @@ export const CET4_READING_PRACTICE_QUESTIONS: Cet4MockChoiceQuestion[] = [
   ...CET4_CAREFUL_READING_PRACTICE_QUESTIONS,
 ];
 
-const CET4_GRAMMAR_STRUCTURE_ROWS = [
+type GrammarStructureRow = readonly [
+  id: string,
+  title: string,
+  prompt: string,
+  optionA: string,
+  optionB: string,
+  optionC: string,
+  optionD: string,
+  answer: Choice,
+  explanation: string,
+  focus: string,
+];
+
+interface GrammarStructureContext {
+  slug: string;
+  learners: string;
+  learner: string;
+  coach: string;
+  skill: string;
+  event: string;
+  resource: string;
+  organizer: string;
+  reason: string;
+  pluralMistakes: string;
+  artifact: string;
+  actionObject: string;
+  actionVerb: string;
+  habit: string;
+  futureEvent: string;
+  topic: string;
+}
+
+interface GrammarStructureFrame {
+  slug: string;
+  focus: string;
+  prompt: (context: GrammarStructureContext) => string;
+  options: Record<Choice, string>;
+  answer: Choice;
+  explanation: string;
+}
+
+const CET4_CORE_GRAMMAR_STRUCTURE_ROWS = [
   ['grammar-to-review', '语法结构 1', 'Students are encouraged ___ their mistakes before the next quiz.', 'review', 'reviewing', 'to review', 'reviewed', 'C', 'be encouraged to do sth. 是固定结构。', '非谓语|固定搭配'],
   ['grammar-has-improved', '语法结构 2', 'Her listening ability ___ a lot since she started daily practice.', 'improves', 'has improved', 'improved', 'will improve', 'B', 'since 引导到现在的时间段，主句用现在完成时。', '时态|现在完成时'],
   ['grammar-was-organized', '语法结构 3', 'The online workshop ___ by the student union last Friday.', 'organizes', 'organized', 'was organized', 'has organizing', 'C', 'workshop 与 organize 是被动关系，last Friday 用一般过去时被动。', '被动语态|校园活动'],
@@ -2716,18 +2758,648 @@ const CET4_GRAMMAR_STRUCTURE_ROWS = [
   ['grammar-in-order-to', '语法结构 8', 'She took notes carefully ___ remember the main ideas.', 'so that', 'in order to', 'because of', 'as soon as', 'B', 'in order to 后接动词原形，表示目的。', '目的表达|非谓语'],
   ['grammar-neither-nor', '语法结构 9', 'The answer is ___ accurate nor complete.', 'either', 'neither', 'both', 'not only', 'B', 'neither...nor... 表示“两者都不”。', '并列结构|固定搭配'],
   ['grammar-should-be-kept', '语法结构 10', 'Personal learning data should ___ safely.', 'keep', 'kept', 'be kept', 'keeping', 'C', 'data 与 keep 是被动关系，should 后接 be done。', '情态动词被动语态|数据安全'],
+] satisfies readonly GrammarStructureRow[];
+
+const GRAMMAR_STRUCTURE_CONTEXTS: readonly GrammarStructureContext[] = [
+  {
+    slug: 'reading-notes',
+    learners: 'Students',
+    learner: 'one student',
+    coach: 'the reading coach',
+    skill: 'reading accuracy',
+    event: 'the reading workshop',
+    resource: 'reading checklist',
+    organizer: 'the learning center',
+    reason: 'the heavy rain',
+    pluralMistakes: 'reading mistakes',
+    artifact: 'report',
+    actionObject: 'the paragraph notes',
+    actionVerb: 'remember',
+    habit: 'daily reading practice',
+    futureEvent: 'the reading quiz',
+    topic: 'survey data',
+  },
+  {
+    slug: 'listening-drills',
+    learners: 'Learners',
+    learner: 'a learner',
+    coach: 'the listening teacher',
+    skill: 'listening comprehension',
+    event: 'the listening session',
+    resource: 'audio worksheet',
+    organizer: 'the English club',
+    reason: 'a network problem',
+    pluralMistakes: 'listening mistakes',
+    artifact: 'summary',
+    actionObject: 'the dialogue keywords',
+    actionVerb: 'review',
+    habit: 'shadowing short conversations',
+    futureEvent: 'the listening test',
+    topic: 'campus interviews',
+  },
+  {
+    slug: 'writing-feedback',
+    learners: 'Writers',
+    learner: 'a writer',
+    coach: 'the writing tutor',
+    skill: 'paragraph organization',
+    event: 'the feedback meeting',
+    resource: 'draft checklist',
+    organizer: 'the writing center',
+    reason: 'a schedule change',
+    pluralMistakes: 'sentence mistakes',
+    artifact: 'draft',
+    actionObject: 'the topic sentence',
+    actionVerb: 'revise',
+    habit: 'rewriting topic sentences',
+    futureEvent: 'the essay deadline',
+    topic: 'peer feedback',
+  },
+  {
+    slug: 'translation-practice',
+    learners: 'Translators',
+    learner: 'a translator',
+    coach: 'the translation coach',
+    skill: 'sentence transformation',
+    event: 'the translation clinic',
+    resource: 'translation guide',
+    organizer: 'the language lab',
+    reason: 'limited classroom time',
+    pluralMistakes: 'translation mistakes',
+    artifact: 'version',
+    actionObject: 'the Chinese source text',
+    actionVerb: 'compare',
+    habit: 'checking subject-verb order',
+    futureEvent: 'the translation task',
+    topic: 'community service',
+  },
+  {
+    slug: 'vocabulary-review',
+    learners: 'Reviewers',
+    learner: 'a reviewer',
+    coach: 'the vocabulary coach',
+    skill: 'word choice',
+    event: 'the vocabulary clinic',
+    resource: 'word list',
+    organizer: 'the course team',
+    reason: 'a power failure',
+    pluralMistakes: 'word-choice mistakes',
+    artifact: 'vocabulary log',
+    actionObject: 'the collocation list',
+    actionVerb: 'memorize',
+    habit: 'reviewing collocations',
+    futureEvent: 'the vocabulary check',
+    topic: 'daily learning',
+  },
+  {
+    slug: 'grammar-correction',
+    learners: 'Classmates',
+    learner: 'a classmate',
+    coach: 'the grammar teacher',
+    skill: 'grammar accuracy',
+    event: 'the correction class',
+    resource: 'grammar handout',
+    organizer: 'the teaching group',
+    reason: 'the classroom repair',
+    pluralMistakes: 'grammar mistakes',
+    artifact: 'exercise sheet',
+    actionObject: 'the tense rules',
+    actionVerb: 'understand',
+    habit: 'checking sample sentences',
+    futureEvent: 'the grammar quiz',
+    topic: 'fixed expressions',
+  },
+  {
+    slug: 'exam-planning',
+    learners: 'Candidates',
+    learner: 'a candidate',
+    coach: 'the exam adviser',
+    skill: 'time management',
+    event: 'the exam briefing',
+    resource: 'review schedule',
+    organizer: 'the exam office',
+    reason: 'the updated timetable',
+    pluralMistakes: 'planning mistakes',
+    artifact: 'plan',
+    actionObject: 'the practice schedule',
+    actionVerb: 'adjust',
+    habit: 'timing each exercise',
+    futureEvent: 'the mock exam',
+    topic: 'exam preparation',
+  },
+  {
+    slug: 'online-learning',
+    learners: 'Online learners',
+    learner: 'an online learner',
+    coach: 'the course mentor',
+    skill: 'independent learning',
+    event: 'the online seminar',
+    resource: 'learning platform',
+    organizer: 'the platform team',
+    reason: 'server maintenance',
+    pluralMistakes: 'submission mistakes',
+    artifact: 'learning record',
+    actionObject: 'the uploaded feedback',
+    actionVerb: 'save',
+    habit: 'watching short lessons',
+    futureEvent: 'the online quiz',
+    topic: 'digital learning',
+  },
+  {
+    slug: 'library-research',
+    learners: 'Researchers',
+    learner: 'a researcher',
+    coach: 'the library adviser',
+    skill: 'source evaluation',
+    event: 'the library talk',
+    resource: 'research guide',
+    organizer: 'the library staff',
+    reason: 'the public holiday',
+    pluralMistakes: 'citation mistakes',
+    artifact: 'research note',
+    actionObject: 'the source cards',
+    actionVerb: 'organize',
+    habit: 'reading reference notes',
+    futureEvent: 'the research presentation',
+    topic: 'library resources',
+  },
+  {
+    slug: 'campus-project',
+    learners: 'Project members',
+    learner: 'a project member',
+    coach: 'the project leader',
+    skill: 'team communication',
+    event: 'the project meeting',
+    resource: 'project form',
+    organizer: 'the student union',
+    reason: 'the venue change',
+    pluralMistakes: 'communication mistakes',
+    artifact: 'proposal',
+    actionObject: 'the survey results',
+    actionVerb: 'explain',
+    habit: 'summarizing meeting notes',
+    futureEvent: 'the project report',
+    topic: 'campus services',
+  },
+  {
+    slug: 'career-talk',
+    learners: 'Participants',
+    learner: 'a participant',
+    coach: 'the career adviser',
+    skill: 'formal expression',
+    event: 'the career talk',
+    resource: 'application form',
+    organizer: 'the career center',
+    reason: 'the speaker delay',
+    pluralMistakes: 'formal writing mistakes',
+    artifact: 'application letter',
+    actionObject: 'the interview questions',
+    actionVerb: 'prepare',
+    habit: 'practicing polite expressions',
+    futureEvent: 'the interview',
+    topic: 'career planning',
+  },
+  {
+    slug: 'science-report',
+    learners: 'Team members',
+    learner: 'a team member',
+    coach: 'the science teacher',
+    skill: 'report writing',
+    event: 'the science discussion',
+    resource: 'data table',
+    organizer: 'the science club',
+    reason: 'missing equipment',
+    pluralMistakes: 'data-description mistakes',
+    artifact: 'lab report',
+    actionObject: 'the experiment result',
+    actionVerb: 'describe',
+    habit: 'checking data tables',
+    futureEvent: 'the lab presentation',
+    topic: 'environmental data',
+  },
+  {
+    slug: 'culture-reading',
+    learners: 'Readers',
+    learner: 'a reader',
+    coach: 'the culture teacher',
+    skill: 'main-idea reading',
+    event: 'the culture lecture',
+    resource: 'reading passage',
+    organizer: 'the culture club',
+    reason: 'the museum visit',
+    pluralMistakes: 'inference mistakes',
+    artifact: 'reading response',
+    actionObject: 'the cultural examples',
+    actionVerb: 'connect',
+    habit: 'marking topic sentences',
+    futureEvent: 'the culture presentation',
+    topic: 'cultural heritage',
+  },
+  {
+    slug: 'news-listening',
+    learners: 'Listeners',
+    learner: 'a listener',
+    coach: 'the news trainer',
+    skill: 'news-note taking',
+    event: 'the news practice',
+    resource: 'news script',
+    organizer: 'the media group',
+    reason: 'the audio update',
+    pluralMistakes: 'detail mistakes',
+    artifact: 'listening note',
+    actionObject: 'the key facts',
+    actionVerb: 'identify',
+    habit: 'listening for numbers',
+    futureEvent: 'the news quiz',
+    topic: 'public transport',
+  },
+  {
+    slug: 'peer-review',
+    learners: 'Peer reviewers',
+    learner: 'a peer reviewer',
+    coach: 'the peer mentor',
+    skill: 'feedback quality',
+    event: 'the peer-review session',
+    resource: 'review form',
+    organizer: 'the class committee',
+    reason: 'the room change',
+    pluralMistakes: 'feedback mistakes',
+    artifact: 'review comment',
+    actionObject: 'the partner draft',
+    actionVerb: 'evaluate',
+    habit: 'using a feedback checklist',
+    futureEvent: 'the revision deadline',
+    topic: 'peer learning',
+  },
+  {
+    slug: 'speaking-rehearsal',
+    learners: 'Speakers',
+    learner: 'a speaker',
+    coach: 'the speaking coach',
+    skill: 'spoken fluency',
+    event: 'the speaking rehearsal',
+    resource: 'speech outline',
+    organizer: 'the speaking club',
+    reason: 'the microphone problem',
+    pluralMistakes: 'pronunciation mistakes',
+    artifact: 'speech draft',
+    actionObject: 'the opening sentence',
+    actionVerb: 'practice',
+    habit: 'recording short speeches',
+    futureEvent: 'the speaking task',
+    topic: 'campus life',
+  },
+  {
+    slug: 'study-group',
+    learners: 'Study partners',
+    learner: 'a study partner',
+    coach: 'the group leader',
+    skill: 'collaborative learning',
+    event: 'the study-group meeting',
+    resource: 'group worksheet',
+    organizer: 'the study group',
+    reason: 'a timetable conflict',
+    pluralMistakes: 'discussion mistakes',
+    artifact: 'group summary',
+    actionObject: 'the shared examples',
+    actionVerb: 'collect',
+    habit: 'explaining answers to others',
+    futureEvent: 'the group quiz',
+    topic: 'learning strategies',
+  },
+  {
+    slug: 'classroom-survey',
+    learners: 'Survey designers',
+    learner: 'a survey designer',
+    coach: 'the survey instructor',
+    skill: 'question design',
+    event: 'the survey class',
+    resource: 'questionnaire',
+    organizer: 'the research team',
+    reason: 'late responses',
+    pluralMistakes: 'survey mistakes',
+    artifact: 'survey report',
+    actionObject: 'the questionnaire items',
+    actionVerb: 'improve',
+    habit: 'checking response options',
+    futureEvent: 'the survey presentation',
+    topic: 'student habits',
+  },
+  {
+    slug: 'reading-speed',
+    learners: 'Fast readers',
+    learner: 'a fast reader',
+    coach: 'the speed-reading coach',
+    skill: 'reading speed',
+    event: 'the speed-reading drill',
+    resource: 'timing sheet',
+    organizer: 'the reading group',
+    reason: 'the delayed materials',
+    pluralMistakes: 'timing mistakes',
+    artifact: 'speed chart',
+    actionObject: 'the paragraph signals',
+    actionVerb: 'scan',
+    habit: 'timing each passage',
+    futureEvent: 'the speed test',
+    topic: 'time control',
+  },
+  {
+    slug: 'academic-presentation',
+    learners: 'Presenters',
+    learner: 'a presenter',
+    coach: 'the presentation coach',
+    skill: 'logical organization',
+    event: 'the presentation rehearsal',
+    resource: 'slide outline',
+    organizer: 'the academic office',
+    reason: 'the projector failure',
+    pluralMistakes: 'logic mistakes',
+    artifact: 'slide deck',
+    actionObject: 'the evidence order',
+    actionVerb: 'arrange',
+    habit: 'checking transitions',
+    futureEvent: 'the final presentation',
+    topic: 'academic communication',
+  },
+];
+
+const GRAMMAR_STRUCTURE_FRAMES: readonly GrammarStructureFrame[] = [
+  {
+    slug: 'be-encouraged-to',
+    focus: '非谓语|be encouraged to do',
+    prompt: (context) => `${context.learners} are encouraged ___ ${context.actionObject} before ${context.futureEvent}.`,
+    options: { A: 'review', B: 'reviewing', C: 'to review', D: 'reviewed' },
+    answer: 'C',
+    explanation: 'be encouraged to do sth. 是固定结构，to 后接动词原形。',
+  },
+  {
+    slug: 'present-perfect-since',
+    focus: '时态|现在完成时',
+    prompt: (context) => `${capitalizeFirst(context.skill)} ___ a lot since ${context.learner} started ${context.habit}.`,
+    options: { A: 'improves', B: 'has improved', C: 'improved', D: 'will improve' },
+    answer: 'B',
+    explanation: 'since 表示从过去延续到现在，主句通常用现在完成时。',
+  },
+  {
+    slug: 'past-passive',
+    focus: '被动语态|一般过去时',
+    prompt: (context) => `The ${context.resource} ___ by ${context.organizer} last Friday.`,
+    options: { A: 'organizes', B: 'organized', C: 'was organized', D: 'has organizing' },
+    answer: 'C',
+    explanation: '主语与 organize 是被动关系，last Friday 要用一般过去时被动。',
+  },
+  {
+    slug: 'because-of',
+    focus: '介词短语|原因表达',
+    prompt: (context) => `The ${context.event} was postponed ___ ${context.reason}.`,
+    options: { A: 'because', B: 'because of', C: 'although', D: 'so that' },
+    answer: 'B',
+    explanation: 'because of 后接名词或名词短语，because 后接完整从句。',
+  },
+  {
+    slug: 'fewer-countable',
+    focus: '数量词|可数名词复数',
+    prompt: (context) => `After feedback, ${lowerFirst(context.learners)} made ___ ${context.pluralMistakes}.`,
+    options: { A: 'less', B: 'fewer', C: 'little', D: 'much' },
+    answer: 'B',
+    explanation: 'mistakes 是可数名词复数，表示更少数量时用 fewer。',
+  },
+  {
+    slug: 'relative-which',
+    focus: '定语从句|关系代词',
+    prompt: (context) => `The ${context.artifact} ___ we discussed yesterday was based on ${context.topic}.`,
+    options: { A: 'who', B: 'which', C: 'where', D: 'whose' },
+    answer: 'B',
+    explanation: '先行词是物，关系词在从句中作宾语，用 which。',
+  },
+  {
+    slug: 'unless-condition',
+    focus: '条件状语从句|unless',
+    prompt: (context) => `${context.learners} will not improve ${context.skill} ___ they practice regularly.`,
+    options: { A: 'unless', B: 'because', C: 'although', D: 'while' },
+    answer: 'A',
+    explanation: 'unless 表示“除非”，符合“如果不练习就不会提升”的逻辑。',
+  },
+  {
+    slug: 'in-order-to',
+    focus: '目的表达|in order to',
+    prompt: (context) => `${capitalizeFirst(context.learner)} took notes carefully ___ ${context.actionVerb} ${context.actionObject}.`,
+    options: { A: 'so that', B: 'in order to', C: 'because of', D: 'as soon as' },
+    answer: 'B',
+    explanation: 'in order to 后接动词原形，表示目的。',
+  },
+  {
+    slug: 'neither-nor',
+    focus: '并列结构|neither...nor',
+    prompt: () => 'The explanation is ___ clear nor complete.',
+    options: { A: 'either', B: 'neither', C: 'both', D: 'not only' },
+    answer: 'B',
+    explanation: 'neither...nor... 表示“两者都不”。',
+  },
+  {
+    slug: 'modal-passive',
+    focus: '情态动词被动语态',
+    prompt: () => 'Personal learning records should ___ safely.',
+    options: { A: 'keep', B: 'kept', C: 'be kept', D: 'keeping' },
+    answer: 'C',
+    explanation: '情态动词 should 后的被动结构是 be done。',
+  },
+  {
+    slug: 'not-only-nearest',
+    focus: '主谓一致|就近原则',
+    prompt: (context) => `Not only ${lowerFirst(context.learners)} but also ${context.coach} ___ responsible for checking the answers.`,
+    options: { A: 'are', B: 'is', C: 'were', D: 'have' },
+    answer: 'B',
+    explanation: 'not only...but also... 连接主语时，谓语通常与靠近它的主语保持一致。',
+  },
+  {
+    slug: 'either-or-nearest',
+    focus: '主谓一致|either...or',
+    prompt: (context) => `Either ${context.coach} or ${lowerFirst(context.learners)} ___ going to present the result.`,
+    options: { A: 'is', B: 'are', C: 'was', D: 'has' },
+    answer: 'B',
+    explanation: 'either...or... 连接主语时，谓语与靠近它的复数主语保持一致。',
+  },
+  {
+    slug: 'so-that-purpose',
+    focus: '状语从句|so that',
+    prompt: () => 'The instructions were written clearly ___ everyone could follow them.',
+    options: { A: 'so that', B: 'because of', C: 'in spite of', D: 'unless' },
+    answer: 'A',
+    explanation: 'so that 引导目的状语从句，后面接完整句子。',
+  },
+  {
+    slug: 'such-that',
+    focus: '结果状语|such...that',
+    prompt: (context) => `It was ___ useful feedback that ${context.learner} revised the paragraph at once.`,
+    options: { A: 'so', B: 'such', C: 'too', D: 'very' },
+    answer: 'B',
+    explanation: 'such + 形容词 + 名词 + that 从句，表示结果。',
+  },
+  {
+    slug: 'the-more-the-more',
+    focus: '比较结构|the more...the more',
+    prompt: (context) => `The more carefully ${lowerFirst(context.learners)} review errors, ___ their next drafts become.`,
+    options: { A: 'the clear', B: 'clearer', C: 'the clearer', D: 'clearly' },
+    answer: 'C',
+    explanation: '“the + 比较级, the + 比较级”表示“越……越……”。',
+  },
+  {
+    slug: 'used-to-do',
+    focus: '固定结构|used to do',
+    prompt: (context) => `${capitalizeFirst(context.learner)} ___ make the same mistake, but now the answer is correct.`,
+    options: { A: 'used to', B: 'is used to', C: 'used for', D: 'was used by' },
+    answer: 'A',
+    explanation: 'used to do 表示过去常常做某事，现在情况已经变化。',
+  },
+  {
+    slug: 'be-used-to-doing',
+    focus: '固定结构|be used to doing',
+    prompt: (context) => `After a month, ${context.learner} is used to ___ aloud before class.`,
+    options: { A: 'read', B: 'reading', C: 'to read', D: 'reads' },
+    answer: 'B',
+    explanation: 'be used to doing 表示习惯于做某事，to 是介词。',
+  },
+  {
+    slug: 'look-forward-to-doing',
+    focus: '固定搭配|look forward to doing',
+    prompt: () => 'The group looks forward to ___ in the workshop.',
+    options: { A: 'participate', B: 'participating', C: 'to participate', D: 'participated' },
+    answer: 'B',
+    explanation: 'look forward to 中的 to 是介词，后接动名词。',
+  },
+  {
+    slug: 'had-better',
+    focus: '情态表达|had better do',
+    prompt: (context) => `${context.learners} had better ___ the rubric before submitting the task.`,
+    options: { A: 'check', B: 'to check', C: 'checking', D: 'checked' },
+    answer: 'A',
+    explanation: 'had better 后接动词原形。',
+  },
+  {
+    slug: 'prevent-from-doing',
+    focus: '固定搭配|prevent...from doing',
+    prompt: (context) => `The checklist prevents ${lowerFirst(context.learners)} from ___ important details.`,
+    options: { A: 'miss', B: 'missing', C: 'to miss', D: 'missed' },
+    answer: 'B',
+    explanation: 'prevent sb. from doing sth. 是固定结构。',
+  },
+  {
+    slug: 'despite-noun',
+    focus: '让步表达|despite',
+    prompt: (context) => `${capitalizeFirst(context.learner)} finished the task ___ the short deadline.`,
+    options: { A: 'although', B: 'despite', C: 'because', D: 'so that' },
+    answer: 'B',
+    explanation: 'despite 是介词，后接名词短语；although 后接完整从句。',
+  },
+  {
+    slug: 'no-sooner-had',
+    focus: '倒装结构|no sooner...than',
+    prompt: (context) => `No sooner ___ the quiz started than ${lowerFirst(context.learners)} noticed the time limit.`,
+    options: { A: 'did', B: 'had', C: 'has', D: 'will' },
+    answer: 'B',
+    explanation: 'no sooner 位于句首时，主句用部分倒装，常见结构是 no sooner had...than...',
+  },
+  {
+    slug: 'not-until-did',
+    focus: '倒装结构|not until',
+    prompt: (context) => `Not until ${context.event} ___ ${lowerFirst(context.learners)} understand the mistake.`,
+    options: { A: 'did', B: 'do', C: 'had', D: 'will' },
+    answer: 'A',
+    explanation: 'not until 位于句首时，主句用部分倒装；过去语境下用 did。',
+  },
+  {
+    slug: 'with-object-complement',
+    focus: 'with复合结构|现在分词',
+    prompt: (context) => `With ${context.futureEvent} ___, ${lowerFirst(context.learners)} made a review plan.`,
+    options: { A: 'approaches', B: 'approaching', C: 'approached', D: 'to approach' },
+    answer: 'B',
+    explanation: 'with + 宾语 + 现在分词表示主动或正在临近的状态。',
+  },
+  {
+    slug: 'essential-that-base',
+    focus: '虚拟语气|that从句动词原形',
+    prompt: () => 'It is essential that every learner ___ the instructions carefully.',
+    options: { A: 'reads', B: 'read', C: 'reading', D: 'to read' },
+    answer: 'B',
+    explanation: 'essential 后的 that 从句可用“should + 动词原形”，should 可省略。',
+  },
 ] as const;
 
+function capitalizeFirst(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function lowerFirst(value: string): string {
+  return value.charAt(0).toLowerCase() + value.slice(1);
+}
+
+function fillGrammarBlank(prompt: string, answer: string): string {
+  return prompt.replace('___', answer);
+}
+
+function rebalanceGrammarOptions(
+  options: Record<Choice, string>,
+  originalAnswer: Choice,
+  targetAnswer: Choice,
+): { options: Record<Choice, string>; answer: Choice } {
+  const correctOption = options[originalAnswer];
+  const distractors = CHOICES
+    .filter((choice) => choice !== originalAnswer)
+    .map((choice) => options[choice]);
+  const nextOptions = {} as Record<Choice, string>;
+  let distractorIndex = 0;
+
+  CHOICES.forEach((choice) => {
+    nextOptions[choice] = choice === targetAnswer ? correctOption : distractors[distractorIndex++];
+  });
+
+  return { options: nextOptions, answer: targetAnswer };
+}
+
+const GENERATED_GRAMMAR_STRUCTURE_ROWS: GrammarStructureRow[] = GRAMMAR_STRUCTURE_CONTEXTS
+  .flatMap((context) => GRAMMAR_STRUCTURE_FRAMES.map((frame) => {
+    const prompt = frame.prompt(context);
+    return {
+      frame,
+      prompt,
+      context,
+    };
+  }))
+  .slice(0, 500 - CET4_CORE_GRAMMAR_STRUCTURE_ROWS.length)
+  .map(({ frame, prompt, context }, index) => {
+    const title = `语法结构 ${CET4_CORE_GRAMMAR_STRUCTURE_ROWS.length + index + 1}`;
+    const { options, answer } = rebalanceGrammarOptions(frame.options, frame.answer, CHOICES[index % CHOICES.length]);
+
+    return [
+      `grammar-${context.slug}-${frame.slug}`,
+      title,
+      prompt,
+      options.A,
+      options.B,
+      options.C,
+      options.D,
+      answer,
+      `${frame.explanation} 本题语境：${context.topic}。`,
+      `${frame.focus}|${context.topic}`,
+    ];
+  });
+
+const CET4_GRAMMAR_STRUCTURE_ROWS: readonly GrammarStructureRow[] = [
+  ...CET4_CORE_GRAMMAR_STRUCTURE_ROWS,
+  ...GENERATED_GRAMMAR_STRUCTURE_ROWS,
+];
+
 export const CET4_GRAMMAR_PRACTICE_QUESTIONS: Cet4MockChoiceQuestion[] =
-  CET4_GRAMMAR_STRUCTURE_ROWS.map(([id, title, prompt, optionA, optionB, optionC, optionD, answer, explanation, focus], index) => makeMockChoiceQuestion({
+  CET4_GRAMMAR_STRUCTURE_ROWS.map(([id, title, prompt, optionA, optionB, optionC, optionD, answer, explanation, focus]) => makeMockChoiceQuestion({
     id: `cet4-${id}`,
     moduleId: 'grammar',
     questionTypeId: 'grammar-structure',
     title,
     prompt,
-    correctAnswer: answer as Choice,
-    correctOption: ({ A: optionA, B: optionB, C: optionC, D: optionD } as Record<Choice, string>)[answer as Choice],
-    correctSentence: `${prompt} (${focus})`,
+    correctAnswer: answer,
+    correctOption: ({ A: optionA, B: optionB, C: optionC, D: optionD } as Record<Choice, string>)[answer],
+    correctSentence: `${fillGrammarBlank(prompt, ({ A: optionA, B: optionB, C: optionC, D: optionD } as Record<Choice, string>)[answer])} (${focus})`,
     explanation,
     trapType: focus,
     wrongOptions: {
