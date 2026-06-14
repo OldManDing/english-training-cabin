@@ -64,7 +64,12 @@ const createVocabularyReplayState = (items: VocabularyPracticeItem[], initialQue
   if (!replayAnswer) return null;
 
   const answers: VocabularyAnswer[] = [];
-  answers[location.currentIdx] = replayAnswer;
+  answers[location.currentIdx] = {
+    ...replayAnswer,
+    questionId: String(item.id),
+    moduleId: 'vocabulary',
+    questionTypeId: 'cet4-core-vocabulary',
+  };
 
   return {
     restored: false,
@@ -321,7 +326,14 @@ export default function VocabularyTraining({ items, initialQuestionId, replayAtt
     if (!selectedOpt || !confidence) return;
     const correct = selectedOpt === currentItem.correctAnswer;
     const nextAnswers = [...answers];
-    nextAnswers[currentIdx] = { selected: selectedOpt, correct, confidence };
+    nextAnswers[currentIdx] = {
+      selected: selectedOpt,
+      correct,
+      confidence,
+      questionId: String(currentItem.id),
+      moduleId: 'vocabulary',
+      questionTypeId: 'cet4-core-vocabulary',
+    };
     shouldScrollToSubmittedSupportRef.current = true;
     setAnswers(nextAnswers);
     setIsSubmitted(true);

@@ -55,7 +55,12 @@ const createReadingReplayState = (passage: Passage, initialQuestionId: string | 
   if (!replayAnswer) return null;
 
   const answers: ReadingAnswer[] = [];
-  answers[currentIdx] = replayAnswer;
+  answers[currentIdx] = {
+    ...replayAnswer,
+    questionId: String(currentQuestion.id),
+    moduleId: currentQuestion.moduleId ?? passage.moduleId ?? 'reading',
+    questionTypeId: currentQuestion.questionTypeId ?? passage.questions[0]?.questionTypeId ?? 'careful-reading',
+  };
 
   return {
     restored: false,
@@ -238,7 +243,10 @@ export default function ReadingTraining({ passage, initialQuestionId, replayAtte
     newAnswers[currentIdx] = {
       selected: selectedOpt,
       correct,
-      confidence
+      confidence,
+      questionId: String(currentQuestion.id),
+      moduleId: currentQuestion.moduleId ?? passage.moduleId ?? 'reading',
+      questionTypeId: currentQuestion.questionTypeId ?? passage.questions[0]?.questionTypeId ?? 'careful-reading',
     };
     setUserAnswers(newAnswers);
     persistDraft({

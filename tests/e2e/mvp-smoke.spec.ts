@@ -755,10 +755,22 @@ test('submitted draft answers count as today records before finishing the sessio
     const attempts = await requestToPromise(tx.objectStore('attempts').count());
     db.close();
     const draft = JSON.parse(localStorage.getItem('english-training-cabin:practice-draft:vocabulary') ?? '{}');
-    return { sessions, attempts, draftAnswerCount: Array.isArray(draft.answers) ? draft.answers.length : 0 };
+    return {
+      sessions,
+      attempts,
+      draftAnswerCount: Array.isArray(draft.answers) ? draft.answers.length : 0,
+      draftQuestionIds: Array.isArray(draft.answers)
+        ? draft.answers.map((answer: { questionId?: string } | undefined) => answer?.questionId)
+        : [],
+    };
   });
 
-  expect(localCounts).toEqual({ sessions: 0, attempts: 0, draftAnswerCount: 3 });
+  expect(localCounts).toEqual({
+    sessions: 0,
+    attempts: 0,
+    draftAnswerCount: 3,
+    draftQuestionIds: CET4_VOCABULARY_BANK.slice(0, 3).map((item) => item.id),
+  });
 
   await page.getByTestId('vocabulary-back-to-practice').click();
   await expect(page.getByTestId('practice-question-status-vocabulary')).toContainText('已答 3 /');

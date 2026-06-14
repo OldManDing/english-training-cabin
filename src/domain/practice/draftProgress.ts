@@ -10,6 +10,9 @@ export interface ChoicePracticeDraftAnswer {
   selected: ChoiceOption;
   correct: boolean;
   confidence: ChoiceConfidence;
+  questionId?: string;
+  moduleId?: string;
+  questionTypeId?: string;
 }
 
 export interface ReadingPracticeDraft {

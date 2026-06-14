@@ -7,6 +7,7 @@ import {
 } from '../../questionBank';
 import { Attempt, ChoiceOption, Passage } from '../../types';
 import {
+  type ChoicePracticeDraftAnswer,
   loadPracticeDraft,
   practiceDraftKeys,
   type ChoiceConfidence,
@@ -68,7 +69,7 @@ function draftCreatedAt(draft: { updatedAt?: string; startedAt?: string }) {
 function appendDraftAttemptsFromAnswers(
   draftAttempts: Attempt[],
   params: {
-    answers: Array<{ selected?: ChoiceOption; correct?: boolean; confidence?: ChoiceConfidence } | undefined>;
+    answers: Array<ChoicePracticeDraftAnswer | undefined>;
     questions: Array<{ id: string | number; moduleId?: string; questionTypeId?: string }>;
     fallbackModuleId: string;
     fallbackQuestionTypeId: string;
@@ -78,13 +79,14 @@ function appendDraftAttemptsFromAnswers(
   params.answers.forEach((answer, index) => {
     if (!answer) return;
     const question = params.questions[index];
-    if (!question) return;
+    const questionId = answer.questionId ?? (question ? String(question.id) : undefined);
+    if (!questionId) return;
 
     draftAttempts.push(
       createDraftAttempt({
-        moduleId: question.moduleId ?? params.fallbackModuleId,
-        questionTypeId: question.questionTypeId ?? params.fallbackQuestionTypeId,
-        questionId: String(question.id),
+        moduleId: answer.moduleId ?? question?.moduleId ?? params.fallbackModuleId,
+        questionTypeId: answer.questionTypeId ?? question?.questionTypeId ?? params.fallbackQuestionTypeId,
+        questionId,
         answer: answer.selected,
         isCorrect: answer.correct,
         confidence: confidenceScore(answer.confidence),
