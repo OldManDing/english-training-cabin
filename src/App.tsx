@@ -41,7 +41,9 @@ import {
   filterUnpracticedItems,
   findLatestPracticeAttempt,
   getPracticedQuestionIds,
+  mergePracticeProgressAttempts,
 } from './domain/practice/practicedQuestions';
+import { buildDraftPracticeAttempts } from './domain/practice/draftAttempts';
 
 const ReadingTraining = lazy(() => import('./components/ReadingTraining'));
 const PracticeHub = lazy(() => import('./components/PracticeHub'));
@@ -266,6 +268,13 @@ function StudyApp() {
     () => getPracticedQuestionIds(persistedAttempts, 'listening'),
     [persistedAttempts],
   );
+  const visiblePracticeAttempts = useMemo(() => mergePracticeProgressAttempts({
+    persistedAttempts,
+    draftAttempts: buildDraftPracticeAttempts({
+      persistedAttempts,
+      readingPassages: CET4_READING_BANK,
+    }),
+  }), [activeTab, isListeningPracticing, isPracticing, isVocabularyPracticing, persistedAttempts, subjectivePracticeMode]);
   const practiceJumpAttempt = useMemo(() => {
     if (!practiceJumpTarget) return undefined;
     return findLatestPracticeAttempt({
@@ -699,10 +708,10 @@ function StudyApp() {
             abilityEvidenceCount={abilityEvidenceCount}
             dailyPlan={dailyPlan}
             reviewItemCount={reviewItemCount}
-            answeredQuestionCount={persistedAttempts.length}
+            answeredQuestionCount={visiblePracticeAttempts.length}
             reviewGateStatus={reviewGateStatus}
             skillProfiles={persistedSkillProfiles}
-            persistedAttempts={persistedAttempts}
+            persistedAttempts={visiblePracticeAttempts}
             persistedPracticeSessions={persistedPracticeSessions}
             persistedReviewItems={persistedReviewItems}
             targetExamName={activeExamName}
@@ -764,7 +773,7 @@ function StudyApp() {
             scoreChange={speakingScoreChange}
             persistedSkillProfiles={persistedSkillProfiles}
             persistedPracticeSessions={persistedPracticeSessions}
-            persistedAttempts={persistedAttempts}
+            persistedAttempts={visiblePracticeAttempts}
             persistedReviewItems={persistedReviewItems}
           />
         );
@@ -814,10 +823,10 @@ function StudyApp() {
             abilityEvidenceCount={abilityEvidenceCount}
             dailyPlan={dailyPlan}
             reviewItemCount={reviewItemCount}
-            answeredQuestionCount={persistedAttempts.length}
+            answeredQuestionCount={visiblePracticeAttempts.length}
             reviewGateStatus={reviewGateStatus}
             skillProfiles={persistedSkillProfiles}
-            persistedAttempts={persistedAttempts}
+            persistedAttempts={visiblePracticeAttempts}
             persistedPracticeSessions={persistedPracticeSessions}
             persistedReviewItems={persistedReviewItems}
             targetExamName={activeExamName}

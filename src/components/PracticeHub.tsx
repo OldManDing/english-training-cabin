@@ -14,7 +14,7 @@ import {
   Volume2,
   type LucideIcon,
 } from 'lucide-react';
-import { CET4_VOCABULARY_BANK, VOCABULARY_SESSION_SIZE } from '../data';
+import { CET4_VOCABULARY_BANK } from '../data';
 import {
   CET4_LISTENING_PRACTICE_QUESTIONS,
   CET4_CLOZE_PRACTICE_QUESTIONS,
@@ -30,21 +30,13 @@ import { buildTrainingCamps } from '../domain/productCoach';
 import {
   buildPracticeModuleProgress,
   buildPracticeQuestionStatusList,
-  filterUnpracticedItems,
-  matchesPracticeModuleAttempt,
   mergePracticeProgressAttempts,
   type PracticeQuestionDescriptor,
   type PracticeQuestionStatusItem,
   type PracticeModuleTotals,
   type PracticeProgressModuleId,
 } from '../domain/practice/practicedQuestions';
-import {
-  loadPracticeDraft,
-  practiceDraftKeys,
-  type ListeningPracticeDraft,
-  type ReadingPracticeDraft,
-  type VocabularyPracticeDraft,
-} from '../domain/practice/draftProgress';
+import { buildDraftPracticeAttempts } from '../domain/practice/draftAttempts';
 
 type PracticeModuleId = PracticeProgressModuleId;
 type PracticeStatusFilter = 'all' | 'answered' | 'unanswered';
@@ -131,13 +123,6 @@ const PRACTICE_MODULE_TOTALS: PracticeModuleTotals = {
   mock: CET4_MOCK_EXAM_BANK.length,
 };
 
-const GRAMMAR_DRAFT_PASSAGE_ID = 'cet4-grammar-structure-practice';
-const CLOZE_DRAFT_PASSAGE_ID = 'cet4-cloze-context-practice';
-const LISTENING_DRAFT_QUESTION_IDS = new Set(
-  CET4_LISTENING_PRACTICE_QUESTIONS
-    .filter((question) => question.questionTypeId === 'long-conversation')
-    .map((_, index) => String(index + 1)),
-);
 const QUESTION_STATUS_PREVIEW_LIMIT = 120;
 
 function buildPracticeQuestionBank(): Record<PracticeModuleId, PracticeQuestionDescriptor[]> {
@@ -196,50 +181,6 @@ function buildPracticeQuestionBank(): Record<PracticeModuleId, PracticeQuestionD
   };
 }
 
-function createDraftAttempt(params: {
-  moduleId: string;
-  questionTypeId: string;
-  questionId: string;
-}): Attempt {
-  return {
-    id: `draft-${params.moduleId}-${params.questionId}`,
-    sessionId: `draft-${params.moduleId}`,
-    questionId: params.questionId,
-    examId: 'cet4',
-    moduleId: params.moduleId,
-    questionTypeId: params.questionTypeId,
-    answer: 'draft',
-    isCorrect: true,
-    elapsedSeconds: 0,
-    mistakeReasons: [],
-    createdAt: 'draft',
-  };
-}
-
-function appendDraftAttemptsFromAnswers(
-  draftAttempts: Attempt[],
-  params: {
-    answers: unknown[];
-    questions: Array<{ id: string | number; moduleId?: string; questionTypeId?: string }>;
-    fallbackModuleId: string;
-    fallbackQuestionTypeId: string;
-  },
-) {
-  params.answers.forEach((answer, index) => {
-    if (!answer) return;
-    const question = params.questions[index];
-    if (!question) return;
-
-    draftAttempts.push(
-      createDraftAttempt({
-        moduleId: question.moduleId ?? params.fallbackModuleId,
-        questionTypeId: question.questionTypeId ?? params.fallbackQuestionTypeId,
-        questionId: String(question.id),
-      }),
-    );
-  });
-}
-
 export default function PracticeHub({
   examId,
   examName,
@@ -266,90 +207,12 @@ export default function PracticeHub({
   const isCet4 = examId === 'cet4';
   const practiceQuestionBank = useMemo(() => buildPracticeQuestionBank(), []);
   const mergedPracticeAttempts = useMemo(() => {
-    const draftAttempts: Attempt[] = [];
-    const filterDraftQuestions = (
-      questions: Array<{ id: string | number; moduleId?: string; questionTypeId?: string }>,
-      moduleId: PracticeModuleId,
-    ) => {
-      const unpracticedQuestions = questions.filter((question) => !persistedAttempts.some(
-        (attempt) =>
-          matchesPracticeModuleAttempt(attempt, moduleId)
-          && String(attempt.questionId) === String(question.id),
-      ));
-      return unpracticedQuestions.length > 0 ? unpracticedQuestions : questions;
-    };
-
-    const vocabularyDraft = loadPracticeDraft<VocabularyPracticeDraft>(practiceDraftKeys.vocabulary);
-    if (vocabularyDraft?.version === 1) {
-      const availableVocabularyItems = filterUnpracticedItems(CET4_VOCABULARY_BANK, persistedAttempts, 'vocabulary');
-      const packCount = Math.max(1, Math.ceil(availableVocabularyItems.length / VOCABULARY_SESSION_SIZE));
-      const packIndex = Math.min(Math.max(0, vocabularyDraft.packIndex), packCount - 1);
-      const sessionItems = availableVocabularyItems.slice(
-        packIndex * VOCABULARY_SESSION_SIZE,
-        (packIndex + 1) * VOCABULARY_SESSION_SIZE,
-      );
-
-      appendDraftAttemptsFromAnswers(draftAttempts, {
-        answers: Array.isArray(vocabularyDraft.answers) ? vocabularyDraft.answers : [],
-        questions: sessionItems.map((item) => ({
-          id: item.id,
-          moduleId: 'vocabulary',
-          questionTypeId: 'cet4-core-vocabulary',
-        })),
-        fallbackModuleId: 'vocabulary',
-        fallbackQuestionTypeId: 'cet4-core-vocabulary',
-      });
-    }
-
-    availableReadingPassages.forEach((passage) => {
-      const readingDraft = loadPracticeDraft<ReadingPracticeDraft>(practiceDraftKeys.reading(passage.id));
-      if (!readingDraft || readingDraft.version !== 1 || readingDraft.passageId !== passage.id) return;
-
-      appendDraftAttemptsFromAnswers(draftAttempts, {
-        answers: Array.isArray(readingDraft.answers) ? readingDraft.answers : [],
-        questions: passage.questions,
-        fallbackModuleId: passage.moduleId ?? 'reading',
-        fallbackQuestionTypeId: passage.questions[0]?.questionTypeId ?? 'careful-reading',
-      });
-    });
-
-    const grammarDraft = loadPracticeDraft<ReadingPracticeDraft>(practiceDraftKeys.reading(GRAMMAR_DRAFT_PASSAGE_ID));
-    if (grammarDraft?.version === 1 && grammarDraft.passageId === GRAMMAR_DRAFT_PASSAGE_ID) {
-      appendDraftAttemptsFromAnswers(draftAttempts, {
-        answers: Array.isArray(grammarDraft.answers) ? grammarDraft.answers : [],
-        questions: filterDraftQuestions(CET4_GRAMMAR_PRACTICE_QUESTIONS, 'grammar'),
-        fallbackModuleId: 'grammar',
-        fallbackQuestionTypeId: 'grammar-structure',
-      });
-    }
-
-    const clozeDraft = loadPracticeDraft<ReadingPracticeDraft>(practiceDraftKeys.reading(CLOZE_DRAFT_PASSAGE_ID));
-    if (clozeDraft?.version === 1 && clozeDraft.passageId === CLOZE_DRAFT_PASSAGE_ID) {
-      appendDraftAttemptsFromAnswers(draftAttempts, {
-        answers: Array.isArray(clozeDraft.answers) ? clozeDraft.answers : [],
-        questions: filterDraftQuestions(CET4_CLOZE_PRACTICE_QUESTIONS, 'cloze'),
-        fallbackModuleId: 'grammar',
-        fallbackQuestionTypeId: 'cloze-choice',
-      });
-    }
-
-    const listeningDraft = loadPracticeDraft<ListeningPracticeDraft>(practiceDraftKeys.listening);
-    if (listeningDraft?.version === 1 && listeningDraft.answersByQuestionId) {
-      Object.entries(listeningDraft.answersByQuestionId).forEach(([questionId, answer]) => {
-        if (!answer?.isSubmitted || !LISTENING_DRAFT_QUESTION_IDS.has(questionId)) return;
-        draftAttempts.push(
-          createDraftAttempt({
-            moduleId: 'listening',
-            questionTypeId: 'long-conversation',
-            questionId,
-          }),
-        );
-      });
-    }
-
     return mergePracticeProgressAttempts({
       persistedAttempts,
-      draftAttempts,
+      draftAttempts: buildDraftPracticeAttempts({
+        persistedAttempts,
+        readingPassages: availableReadingPassages,
+      }),
     });
   }, [availableReadingPassages, persistedAttempts]);
 

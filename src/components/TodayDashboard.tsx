@@ -466,7 +466,7 @@ export default function TodayDashboard({
                 onClick={onViewHistory}
                 className="ui-metric text-left transition hover:border-[#003178]/30"
               >
-                <div className="text-xl text-[#003178]">{answeredQuestionCount}</div>
+                <div data-testid="today-answered-question-count" className="text-xl text-[#003178]">{answeredQuestionCount}</div>
                 <div className="text-slate-500">已答</div>
               </button>
             </div>
@@ -477,7 +477,7 @@ export default function TodayDashboard({
                   <div className="text-slate-500">连续天</div>
                 </div>
                 <div>
-                  <div className="text-lg text-[#003178]">{motivation.weeklyAttempts}</div>
+                  <div data-testid="motivation-weekly-attempts" className="text-lg text-[#003178]">{motivation.weeklyAttempts}</div>
                   <div className="text-slate-500">本周答</div>
                 </div>
                 <div>

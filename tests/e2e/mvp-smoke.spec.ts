@@ -718,6 +718,50 @@ test('answered question status numbers replay saved answer evidence across modul
   await expect(page.getByText('历史翻译反馈已回显。')).toBeVisible();
 });
 
+test('submitted draft answers count as today records before finishing the session', async ({ page }) => {
+  await installSpeechSynthesisMock(page);
+  await registerAndEnterApp(page, 'mvp-draft-answer-record');
+  await resetLocalLearningData(page);
+  await page.reload();
+
+  await page.locator('aside button').nth(1).click();
+  await page.getByTestId('practice-module-action-vocabulary').click();
+  await page.locator('article.ui-panel button').filter({ hasText: /^A\.|^B\.|^C\.|^D\./ }).first().click();
+  await page.getByTestId('vocabulary-confidence-sure').click();
+  await page.getByTestId('vocabulary-submit').click();
+  await expect(page.getByTestId('vocabulary-post-answer-support')).toBeVisible();
+
+  const localCounts = await page.evaluate(async () => {
+    function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
+      return new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('english-training-cabin');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const tx = db.transaction(['practiceSessions', 'attempts'], 'readonly');
+    const sessions = await requestToPromise(tx.objectStore('practiceSessions').count());
+    const attempts = await requestToPromise(tx.objectStore('attempts').count());
+    db.close();
+    const draft = JSON.parse(localStorage.getItem('english-training-cabin:practice-draft:vocabulary') ?? '{}');
+    return { sessions, attempts, draftAnswerCount: Array.isArray(draft.answers) ? draft.answers.length : 0 };
+  });
+
+  expect(localCounts).toEqual({ sessions: 0, attempts: 0, draftAnswerCount: 1 });
+
+  await page.getByTestId('vocabulary-back-to-practice').click();
+  await expect(page.getByTestId('practice-question-status-vocabulary')).toContainText('已答 1 /');
+
+  await page.locator('aside button').first().click();
+  await expect(page.getByTestId('today-answered-question-count')).toHaveText('1');
+  await expect(page.getByTestId('motivation-weekly-attempts')).toHaveText('1');
+});
+
 /* test.skip('practice hub reflects in-progress draft counts before a module is fully completed', async ({ page }) => {
   await installSpeechSynthesisMock(page);
   await registerAndEnterApp(page, 'mvp-practice-draft-progress');
