@@ -467,7 +467,7 @@ export default function TodayDashboard({
                 className="ui-metric text-left transition hover:border-[#003178]/30"
               >
                 <div data-testid="today-answered-question-count" className="text-xl text-[#003178]">{answeredQuestionCount}</div>
-                <div className="text-slate-500">已答</div>
+                <div className="text-slate-500">今日已答</div>
               </button>
             </div>
             <div data-testid="motivation-snapshot" className="mt-4 rounded-2xl border border-white/70 bg-white/80 p-3">

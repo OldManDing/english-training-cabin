@@ -138,6 +138,28 @@ export function mergePracticeProgressAttempts(params: {
   return merged;
 }
 
+function localDateKey(date: Date): string | null {
+  const time = date.getTime();
+  if (!Number.isFinite(time)) return null;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function countPracticeAttemptsOnLocalDate(
+  attempts: Attempt[],
+  referenceDate = new Date(),
+): number {
+  const referenceKey = localDateKey(referenceDate);
+  if (!referenceKey) return 0;
+
+  return attempts.filter((attempt) => {
+    const attemptKey = localDateKey(new Date(attempt.createdAt));
+    return attemptKey === referenceKey;
+  }).length;
+}
+
 function countPracticedItems(params: {
   attempts: Attempt[];
   sessions: PracticeSession[];

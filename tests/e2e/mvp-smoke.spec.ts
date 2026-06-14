@@ -726,10 +726,16 @@ test('submitted draft answers count as today records before finishing the sessio
 
   await page.locator('aside button').nth(1).click();
   await page.getByTestId('practice-module-action-vocabulary').click();
-  await page.locator('article.ui-panel button').filter({ hasText: /^A\.|^B\.|^C\.|^D\./ }).first().click();
-  await page.getByTestId('vocabulary-confidence-sure').click();
-  await page.getByTestId('vocabulary-submit').click();
-  await expect(page.getByTestId('vocabulary-post-answer-support')).toBeVisible();
+  for (let index = 0; index < 3; index += 1) {
+    await page.locator('article.ui-panel button').filter({ hasText: /^A\.|^B\.|^C\.|^D\./ }).first().click();
+    await page.getByTestId('vocabulary-confidence-sure').click();
+    await page.getByTestId('vocabulary-submit').click();
+    await expect(page.getByTestId('vocabulary-post-answer-support')).toBeVisible();
+    if (index < 2) {
+      await page.getByTestId('vocabulary-next').click();
+      await expect(page.getByTestId('vocabulary-post-answer-support')).toHaveCount(0);
+    }
+  }
 
   const localCounts = await page.evaluate(async () => {
     function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
@@ -752,14 +758,14 @@ test('submitted draft answers count as today records before finishing the sessio
     return { sessions, attempts, draftAnswerCount: Array.isArray(draft.answers) ? draft.answers.length : 0 };
   });
 
-  expect(localCounts).toEqual({ sessions: 0, attempts: 0, draftAnswerCount: 1 });
+  expect(localCounts).toEqual({ sessions: 0, attempts: 0, draftAnswerCount: 3 });
 
   await page.getByTestId('vocabulary-back-to-practice').click();
-  await expect(page.getByTestId('practice-question-status-vocabulary')).toContainText('已答 1 /');
+  await expect(page.getByTestId('practice-question-status-vocabulary')).toContainText('已答 3 /');
 
   await page.locator('aside button').first().click();
-  await expect(page.getByTestId('today-answered-question-count')).toHaveText('1');
-  await expect(page.getByTestId('motivation-weekly-attempts')).toHaveText('1');
+  await expect(page.getByTestId('today-answered-question-count')).toHaveText('3');
+  await expect(page.getByTestId('motivation-weekly-attempts')).toHaveText('3');
 });
 
 /* test.skip('practice hub reflects in-progress draft counts before a module is fully completed', async ({ page }) => {

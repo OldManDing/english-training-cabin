@@ -3,6 +3,7 @@ import {
   buildPracticeModuleProgress,
   buildPracticeQuestionStatusList,
   buildUnpracticedReadingPassages,
+  countPracticeAttemptsOnLocalDate,
   filterPassageForUnpracticedQuestions,
   filterUnpracticedItems,
   getPracticedQuestionIds,
@@ -37,6 +38,10 @@ function makeSession(id: string, moduleId: string, modeId = moduleId): PracticeS
     questionIds: [],
     status: 'completed',
   };
+}
+
+function localIso(year: number, month: number, day: number, hour = 12): string {
+  return new Date(year, month - 1, day, hour).toISOString();
 }
 
 const passage: Passage = {
@@ -192,6 +197,17 @@ describe('practiced question filtering', () => {
 
     expect(progress.get('vocabulary')).toMatchObject({ practiced: 2, total: 10, remaining: 8 });
     expect(progress.get('listening')).toMatchObject({ practiced: 1, total: 8, remaining: 7 });
+  });
+
+  it('counts visible practice attempts for the current local day only', () => {
+    const attempts: Attempt[] = [
+      { ...makeAttempt('today-1', 'vocabulary'), createdAt: localIso(2026, 6, 14, 8) },
+      { ...makeAttempt('today-2', 'grammar'), createdAt: localIso(2026, 6, 14, 22) },
+      { ...makeAttempt('yesterday-1', 'reading'), createdAt: localIso(2026, 6, 13, 23) },
+      { ...makeAttempt('invalid-time', 'listening'), createdAt: '' },
+    ];
+
+    expect(countPracticeAttemptsOnLocalDate(attempts, new Date(2026, 5, 14, 12))).toBe(2);
   });
 
   it('builds per-question status for practiced and unpracticed objective items', () => {

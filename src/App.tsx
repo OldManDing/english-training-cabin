@@ -41,6 +41,7 @@ import {
   filterUnpracticedItems,
   findLatestPracticeAttempt,
   getPracticedQuestionIds,
+  countPracticeAttemptsOnLocalDate,
   mergePracticeProgressAttempts,
 } from './domain/practice/practicedQuestions';
 import { buildDraftPracticeAttempts } from './domain/practice/draftAttempts';
@@ -275,6 +276,10 @@ function StudyApp() {
       readingPassages: CET4_READING_BANK,
     }),
   }), [activeTab, isListeningPracticing, isPracticing, isVocabularyPracticing, persistedAttempts, subjectivePracticeMode]);
+  const todayAnsweredQuestionCount = useMemo(
+    () => countPracticeAttemptsOnLocalDate(visiblePracticeAttempts),
+    [visiblePracticeAttempts],
+  );
   const practiceJumpAttempt = useMemo(() => {
     if (!practiceJumpTarget) return undefined;
     return findLatestPracticeAttempt({
@@ -708,7 +713,7 @@ function StudyApp() {
             abilityEvidenceCount={abilityEvidenceCount}
             dailyPlan={dailyPlan}
             reviewItemCount={reviewItemCount}
-            answeredQuestionCount={visiblePracticeAttempts.length}
+            answeredQuestionCount={todayAnsweredQuestionCount}
             reviewGateStatus={reviewGateStatus}
             skillProfiles={persistedSkillProfiles}
             persistedAttempts={visiblePracticeAttempts}
@@ -823,7 +828,7 @@ function StudyApp() {
             abilityEvidenceCount={abilityEvidenceCount}
             dailyPlan={dailyPlan}
             reviewItemCount={reviewItemCount}
-            answeredQuestionCount={visiblePracticeAttempts.length}
+            answeredQuestionCount={todayAnsweredQuestionCount}
             reviewGateStatus={reviewGateStatus}
             skillProfiles={persistedSkillProfiles}
             persistedAttempts={visiblePracticeAttempts}
