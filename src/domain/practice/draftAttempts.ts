@@ -66,6 +66,19 @@ function draftCreatedAt(draft: { updatedAt?: string; startedAt?: string }) {
   return draft.updatedAt ?? draft.startedAt;
 }
 
+function attemptsBeforeDraftStarted(
+  persistedAttempts: Attempt[],
+  draft: { startedAt?: string },
+): Attempt[] {
+  const startedAt = new Date(draft.startedAt ?? '').getTime();
+  if (!Number.isFinite(startedAt)) return persistedAttempts;
+
+  return persistedAttempts.filter((attempt) => {
+    const createdAt = new Date(attempt.createdAt).getTime();
+    return Number.isFinite(createdAt) && createdAt < startedAt;
+  });
+}
+
 function appendDraftAttemptsFromAnswers(
   draftAttempts: Attempt[],
   params: {
@@ -109,6 +122,26 @@ function filterDraftQuestions(
   return unpracticedQuestions.length > 0 ? unpracticedQuestions : questions;
 }
 
+function buildVocabularyDraftQuestions(
+  draft: VocabularyPracticeDraft,
+  persistedAttempts: Attempt[],
+) {
+  const availableVocabularyItems = filterUnpracticedItems(CET4_VOCABULARY_BANK, persistedAttempts, 'vocabulary');
+  const availablePackCount = Math.max(1, Math.ceil(availableVocabularyItems.length / VOCABULARY_SESSION_SIZE));
+  const requestedPackIndex = Math.max(0, Math.floor(draft.packIndex));
+  const hasExplicitQuestionIds = Array.isArray(draft.answers) && draft.answers.some((answer) => answer?.questionId);
+  const sourceItems = !hasExplicitQuestionIds && requestedPackIndex >= availablePackCount
+    ? CET4_VOCABULARY_BANK
+    : availableVocabularyItems;
+  const packCount = Math.max(1, Math.ceil(sourceItems.length / VOCABULARY_SESSION_SIZE));
+  const packIndex = Math.min(requestedPackIndex, packCount - 1);
+
+  return sourceItems.slice(
+    packIndex * VOCABULARY_SESSION_SIZE,
+    (packIndex + 1) * VOCABULARY_SESSION_SIZE,
+  );
+}
+
 export function buildDraftPracticeAttempts(params: {
   persistedAttempts?: Attempt[];
   readingPassages?: Passage[];
@@ -119,13 +152,7 @@ export function buildDraftPracticeAttempts(params: {
 
   const vocabularyDraft = loadPracticeDraft<VocabularyPracticeDraft>(practiceDraftKeys.vocabulary);
   if (vocabularyDraft?.version === 1) {
-    const availableVocabularyItems = filterUnpracticedItems(CET4_VOCABULARY_BANK, persistedAttempts, 'vocabulary');
-    const packCount = Math.max(1, Math.ceil(availableVocabularyItems.length / VOCABULARY_SESSION_SIZE));
-    const packIndex = Math.min(Math.max(0, vocabularyDraft.packIndex), packCount - 1);
-    const sessionItems = availableVocabularyItems.slice(
-      packIndex * VOCABULARY_SESSION_SIZE,
-      (packIndex + 1) * VOCABULARY_SESSION_SIZE,
-    );
+    const sessionItems = buildVocabularyDraftQuestions(vocabularyDraft, persistedAttempts);
 
     appendDraftAttemptsFromAnswers(draftAttempts, {
       answers: Array.isArray(vocabularyDraft.answers) ? vocabularyDraft.answers : [],
@@ -143,21 +170,30 @@ export function buildDraftPracticeAttempts(params: {
   readingPassages.forEach((passage) => {
     const readingDraft = loadPracticeDraft<ReadingPracticeDraft>(practiceDraftKeys.reading(passage.id));
     if (!readingDraft || readingDraft.version !== 1 || readingDraft.passageId !== passage.id) return;
+    const draftStartAttempts = attemptsBeforeDraftStarted(persistedAttempts, readingDraft);
+    const fallbackModuleId = passage.moduleId ?? 'reading';
+    const draftQuestions = passage.questions.filter((question) => !draftStartAttempts.some(
+      (attempt) =>
+        matchesPracticeModuleAttempt(attempt, fallbackModuleId as PracticeProgressModuleId)
+        && String(attempt.questionId) === String(question.id),
+    ));
+    const questions = draftQuestions.length > 0 ? draftQuestions : passage.questions;
 
     appendDraftAttemptsFromAnswers(draftAttempts, {
       answers: Array.isArray(readingDraft.answers) ? readingDraft.answers : [],
-      questions: passage.questions,
-      fallbackModuleId: passage.moduleId ?? 'reading',
-      fallbackQuestionTypeId: passage.questions[0]?.questionTypeId ?? 'careful-reading',
+      questions,
+      fallbackModuleId,
+      fallbackQuestionTypeId: questions[0]?.questionTypeId ?? 'careful-reading',
       createdAt: draftCreatedAt(readingDraft),
     });
   });
 
   const grammarDraft = loadPracticeDraft<ReadingPracticeDraft>(practiceDraftKeys.reading(GRAMMAR_DRAFT_PASSAGE_ID));
   if (grammarDraft?.version === 1 && grammarDraft.passageId === GRAMMAR_DRAFT_PASSAGE_ID) {
+    const draftStartAttempts = attemptsBeforeDraftStarted(persistedAttempts, grammarDraft);
     appendDraftAttemptsFromAnswers(draftAttempts, {
       answers: Array.isArray(grammarDraft.answers) ? grammarDraft.answers : [],
-      questions: filterDraftQuestions(CET4_GRAMMAR_PRACTICE_QUESTIONS, 'grammar', persistedAttempts),
+      questions: filterDraftQuestions(CET4_GRAMMAR_PRACTICE_QUESTIONS, 'grammar', draftStartAttempts),
       fallbackModuleId: 'grammar',
       fallbackQuestionTypeId: 'grammar-structure',
       createdAt: draftCreatedAt(grammarDraft),
@@ -166,9 +202,10 @@ export function buildDraftPracticeAttempts(params: {
 
   const clozeDraft = loadPracticeDraft<ReadingPracticeDraft>(practiceDraftKeys.reading(CLOZE_DRAFT_PASSAGE_ID));
   if (clozeDraft?.version === 1 && clozeDraft.passageId === CLOZE_DRAFT_PASSAGE_ID) {
+    const draftStartAttempts = attemptsBeforeDraftStarted(persistedAttempts, clozeDraft);
     appendDraftAttemptsFromAnswers(draftAttempts, {
       answers: Array.isArray(clozeDraft.answers) ? clozeDraft.answers : [],
-      questions: filterDraftQuestions(CET4_CLOZE_PRACTICE_QUESTIONS, 'cloze', persistedAttempts),
+      questions: filterDraftQuestions(CET4_CLOZE_PRACTICE_QUESTIONS, 'cloze', draftStartAttempts),
       fallbackModuleId: 'grammar',
       fallbackQuestionTypeId: 'cloze-choice',
       createdAt: draftCreatedAt(clozeDraft),

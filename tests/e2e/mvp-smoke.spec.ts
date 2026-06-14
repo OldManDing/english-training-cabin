@@ -339,6 +339,77 @@ async function seedPracticeReplayEvidence(page: Page) {
   );
 }
 
+async function seedLegacyVocabularyDraftStatusGap(page: Page) {
+  const persistedVocabularyItems = [
+    ...CET4_VOCABULARY_BANK.slice(135, 240),
+    ...CET4_VOCABULARY_BANK.slice(255),
+  ];
+  const draftItems = CET4_VOCABULARY_BANK.slice(240, 255);
+
+  await page.evaluate(
+    async ({ persistedItems, draftAnswers }) => {
+      function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
+        return new Promise((resolve, reject) => {
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+      }
+
+      const now = '2026-06-14T10:00:00.000Z';
+      localStorage.setItem('english-training-cabin:practice-draft:vocabulary', JSON.stringify({
+        version: 1,
+        startedAt: now,
+        packIndex: 6,
+        currentIdx: 14,
+        selectedOpt: draftAnswers.at(-1)?.selected ?? 'A',
+        confidence: 'sure',
+        isSubmitted: true,
+        answers: draftAnswers,
+        updatedAt: now,
+      }));
+
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('english-training-cabin');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      const tx = db.transaction(['attempts'], 'readwrite');
+      const txComplete = new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      });
+      await Promise.all(persistedItems.map((item, index) => requestToPromise(tx.objectStore('attempts').put({
+        id: `legacy-vocabulary-attempt-${index}`,
+        sessionId: 'legacy-vocabulary-session',
+        questionId: item.id,
+        examId: 'cet4',
+        moduleId: 'vocabulary',
+        questionTypeId: 'cet4-core-vocabulary',
+        answer: item.correctAnswer,
+        isCorrect: true,
+        elapsedSeconds: 10,
+        confidence: 5,
+        mistakeReasons: [],
+        createdAt: '2026-06-14T09:00:00.000Z',
+      }))));
+      await txComplete;
+      db.close();
+    },
+    {
+      persistedItems: persistedVocabularyItems.map((item) => ({
+        id: item.id,
+        correctAnswer: item.correctAnswer,
+      })),
+      draftAnswers: draftItems.map((item) => ({
+        selected: item.correctAnswer,
+        correct: true,
+        confidence: 'sure',
+      })),
+    },
+  );
+}
+
 async function installFailingSpeechSynthesisMock(page: Page) {
   await page.route('**/api/practice/tts', async (route) => {
     await route.fulfill({
@@ -716,6 +787,27 @@ test('answered question status numbers replay saved answer evidence across modul
   await expect(page.getByTestId('subjective-attempt-replayed')).toBeVisible();
   await expect(page.locator('textarea')).toContainText('renewable energy');
   await expect(page.getByText('历史翻译反馈已回显。')).toBeVisible();
+});
+
+test('legacy vocabulary draft answers keep their original 241 to 255 status numbers', async ({ page }) => {
+  await installSpeechSynthesisMock(page);
+  await registerAndEnterApp(page, 'mvp-legacy-vocabulary-draft-status');
+  await resetLocalLearningData(page);
+  await seedLegacyVocabularyDraftStatusGap(page);
+  await page.reload();
+
+  await page.locator('aside button').nth(1).click();
+  await page.getByTestId('practice-module-select-vocabulary').click();
+  await page.getByTestId('practice-question-filter-vocabulary-answered').click();
+
+  await expect(page.getByTestId('practice-question-status-vocabulary-121')).toHaveCount(0);
+  await expect(page.getByTestId('practice-question-status-vocabulary-241')).toBeVisible();
+  await expect(page.getByTestId('practice-question-status-vocabulary-255')).toBeVisible();
+
+  await page.getByTestId('practice-question-status-vocabulary-241').click();
+  await expect(page.getByRole('heading', { name: CET4_VOCABULARY_BANK[240].word })).toBeVisible();
+  await expect(page.getByTestId('vocabulary-attempt-replayed')).toBeVisible();
+  await expect(page.getByTestId('vocabulary-submit')).toHaveCount(0);
 });
 
 test('submitted draft answers count as today records before finishing the session', async ({ page }) => {

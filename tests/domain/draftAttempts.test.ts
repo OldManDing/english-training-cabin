@@ -3,6 +3,7 @@ import { CET4_VOCABULARY_BANK } from '../../src/data';
 import { CET4_READING_BANK } from '../../src/questionBank';
 import { buildDraftPracticeAttempts } from '../../src/domain/practice/draftAttempts';
 import { practiceDraftKeys } from '../../src/domain/practice/draftProgress';
+import type { Attempt } from '../../src/types';
 
 function createLocalStorageMock(): Storage {
   const store = new Map<string, string>();
@@ -32,6 +33,22 @@ function installLocalStorage() {
   const localStorage = createLocalStorageMock();
   vi.stubGlobal('window', { localStorage });
   return localStorage;
+}
+
+function makeVocabularyAttempt(questionId: string): Attempt {
+  return {
+    id: `attempt-${questionId}`,
+    sessionId: 'session-vocabulary',
+    questionId,
+    examId: 'cet4',
+    moduleId: 'vocabulary',
+    questionTypeId: 'cet4-core-vocabulary',
+    answer: 'A',
+    isCorrect: true,
+    elapsedSeconds: 10,
+    mistakeReasons: [],
+    createdAt: '2026-06-14T09:00:00.000Z',
+  };
 }
 
 describe('draft practice attempts', () => {
@@ -66,6 +83,39 @@ describe('draft practice attempts', () => {
 
     expect(attempts.find((attempt) => attempt.moduleId === 'vocabulary')?.questionId).toBe(answeredItem.id);
     expect(attempts.find((attempt) => attempt.moduleId === 'vocabulary')?.questionId).not.toBe(CET4_VOCABULARY_BANK[0].id);
+  });
+
+  it('does not clamp a legacy vocabulary draft from questions 241-255 back to 121-135', () => {
+    const localStorage = installLocalStorage();
+    const now = '2026-06-14T10:00:00.000Z';
+    localStorage.setItem(practiceDraftKeys.vocabulary, JSON.stringify({
+      version: 1,
+      startedAt: now,
+      packIndex: 6,
+      currentIdx: 14,
+      selectedOpt: 'A',
+      confidence: 'sure',
+      isSubmitted: true,
+      answers: Array.from({ length: 15 }, () => ({
+        selected: 'A',
+        correct: true,
+        confidence: 'sure',
+      })),
+      updatedAt: now,
+    }));
+    const persistedAttempts = [
+      ...CET4_VOCABULARY_BANK.slice(135, 240),
+      ...CET4_VOCABULARY_BANK.slice(255),
+    ].map((item) => makeVocabularyAttempt(item.id));
+
+    const attempts = buildDraftPracticeAttempts({ persistedAttempts });
+
+    expect(attempts
+      .filter((attempt) => attempt.moduleId === 'vocabulary')
+      .map((attempt) => attempt.questionId)).toEqual(CET4_VOCABULARY_BANK.slice(240, 255).map((item) => item.id));
+    expect(attempts
+      .filter((attempt) => attempt.moduleId === 'vocabulary')
+      .map((attempt) => attempt.questionId)).not.toContain(CET4_VOCABULARY_BANK[120].id);
   });
 
   it('keeps the explicit reading question id when a passage has been filtered', () => {

@@ -283,11 +283,11 @@ function StudyApp() {
   const practiceJumpAttempt = useMemo(() => {
     if (!practiceJumpTarget) return undefined;
     return findLatestPracticeAttempt({
-      attempts: persistedAttempts,
+      attempts: visiblePracticeAttempts,
       moduleId: practiceJumpTarget.moduleId,
       questionId: practiceJumpTarget.questionId,
     });
-  }, [persistedAttempts, practiceJumpTarget]);
+  }, [practiceJumpTarget, visiblePracticeAttempts]);
 
   useEffect(() => {
     resetViewportScroll();
