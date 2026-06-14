@@ -759,14 +759,29 @@ export default function OnboardingDiagnostic({
             <div className="ui-panel w-full max-w-3xl sm:p-8">
               <div className="ui-page-eyebrow mb-5">
                 <GraduationCap className="h-4 w-4" />
-                入门诊断
+                3 分钟启动
               </div>
               <h1 className="text-3xl font-black leading-tight text-[#071e27] sm:text-5xl">
-                入门诊断
+                入门诊断：先得到今天该做什么
               </h1>
               <p className="mt-4 max-w-2xl text-sm font-semibold leading-7 text-slate-600">
-                先用 {ONBOARDING_DIAGNOSTIC_EXPECTED_ITEM_COUNT} 个随机小任务生成学习基线；这不是官方成绩。
+                第一次不用理解所有模块：选目标、设时间、做 {ONBOARDING_DIAGNOSTIC_EXPECTED_ITEM_COUNT} 个小任务，系统会生成第一版今日计划；这不是官方成绩。
               </p>
+              <div data-testid="onboarding-three-minute-start" className="mt-5 grid gap-3 sm:grid-cols-3">
+                {[
+                  ['1', '选目标考试', '当前完整闭环先开放 CET-4'],
+                  ['2', '设目标分和时间', '让计划匹配真实投入'],
+                  ['3', '完成小诊断', '直接回到今日教练'],
+                ].map(([stepNo, title, body]) => (
+                  <div key={stepNo} className="rounded-2xl border border-[#dde5ee] bg-[#f8fafc] p-3">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#003178] text-xs font-black text-white">
+                      {stepNo}
+                    </div>
+                    <div className="mt-3 text-sm font-black text-[#003178]">{title}</div>
+                    <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">{body}</p>
+                  </div>
+                ))}
+              </div>
               <div className="mt-6 rounded-3xl border border-[#cfe6f2] bg-[#f7fbff] p-4">
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <label className="text-sm font-black text-[#003178]" htmlFor="diagnostic-exam-select">

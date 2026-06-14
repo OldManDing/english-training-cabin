@@ -554,6 +554,34 @@ function StudyApp() {
     startLearningWithReviewReminder(mode === 'writing' ? '写作训练' : '翻译训练', () => setSubjectivePracticeMode(mode));
   };
 
+  const handleStartVariantPractice = (moduleId: string) => {
+    if (moduleId === 'vocabulary') {
+      handleStartVocabularyPractice();
+      return;
+    }
+    if (moduleId === 'grammar') {
+      handleStartGrammarPractice();
+      return;
+    }
+    if (moduleId === 'cloze') {
+      handleStartClozePractice();
+      return;
+    }
+    if (moduleId === 'listening') {
+      handleStartListeningPractice();
+      return;
+    }
+    if (moduleId === 'writing' || moduleId === 'translation') {
+      handleStartSubjectivePractice(moduleId);
+      return;
+    }
+    if (moduleId === 'mock') {
+      startLearningWithReviewReminder('阶段模考', () => setActiveTab('mock'));
+      return;
+    }
+    handleStartReadingPractice();
+  };
+
   const handleBackFromPractice = () => {
     setPracticeJumpTarget(null);
     setIsPracticing(false);
@@ -674,6 +702,9 @@ function StudyApp() {
             answeredQuestionCount={persistedAttempts.length}
             reviewGateStatus={reviewGateStatus}
             skillProfiles={persistedSkillProfiles}
+            persistedAttempts={persistedAttempts}
+            persistedPracticeSessions={persistedPracticeSessions}
+            persistedReviewItems={persistedReviewItems}
             targetExamName={activeExamName}
             strategy={dailyStrategy}
             onStrategyChange={setDailyStrategy}
@@ -717,6 +748,7 @@ function StudyApp() {
             persistedReviewItems={persistedReviewItems}
             reviewGateStatus={reviewGateStatus}
             onCompleteReviewItem={handleCompleteReviewItem}
+            onStartVariantPractice={handleStartVariantPractice}
           />
         );
       case 'speaking':
@@ -733,6 +765,7 @@ function StudyApp() {
             persistedSkillProfiles={persistedSkillProfiles}
             persistedPracticeSessions={persistedPracticeSessions}
             persistedAttempts={persistedAttempts}
+            persistedReviewItems={persistedReviewItems}
           />
         );
       case 'import':
@@ -784,6 +817,9 @@ function StudyApp() {
             answeredQuestionCount={persistedAttempts.length}
             reviewGateStatus={reviewGateStatus}
             skillProfiles={persistedSkillProfiles}
+            persistedAttempts={persistedAttempts}
+            persistedPracticeSessions={persistedPracticeSessions}
+            persistedReviewItems={persistedReviewItems}
             targetExamName={activeExamName}
             strategy={dailyStrategy}
             onStrategyChange={setDailyStrategy}

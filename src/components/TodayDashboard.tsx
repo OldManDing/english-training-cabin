@@ -4,7 +4,8 @@ import {
   Headphones, Mic, BarChart2,
   BookMarked, Edit2, History, Sliders, Volume2
 } from 'lucide-react';
-import { DailyPlan, SkillProfile } from '../types';
+import { Attempt, DailyPlan, PracticeSession, ReviewItem, SkillProfile } from '../types';
+import { buildMotivationSnapshot, buildTodayCoachInsight } from '../domain/productCoach';
 import type { ReviewGateStatus } from '../domain/review/reviewGate';
 import LaunchReadinessNotice from './LaunchReadinessNotice';
 
@@ -34,6 +35,9 @@ interface TodayDashboardProps {
   answeredQuestionCount?: number;
   reviewGateStatus?: ReviewGateStatus;
   skillProfiles?: SkillProfile[];
+  persistedAttempts?: Attempt[];
+  persistedPracticeSessions?: PracticeSession[];
+  persistedReviewItems?: ReviewItem[];
   strategy: 'efficient' | 'review';
   onStrategyChange: (strategy: 'efficient' | 'review') => void;
 }
@@ -64,6 +68,9 @@ export default function TodayDashboard({
   answeredQuestionCount = 0,
   reviewGateStatus,
   skillProfiles = [],
+  persistedAttempts = [],
+  persistedPracticeSessions = [],
+  persistedReviewItems = [],
   strategy,
   onStrategyChange,
 }: TodayDashboardProps) {
@@ -122,6 +129,20 @@ export default function TodayDashboard({
     ? Math.max(8, Math.min(100, Math.round((estimatedScore / Math.max(425, targetScore)) * 100)))
     : 8;
   const hasAbilityEvidence = skillProfiles.length > 0 || abilityEvidenceCount > 0;
+  const coachInsight = buildTodayCoachInsight({
+    dailyPlan,
+    skillProfiles,
+    reviewItemCount,
+    answeredQuestionCount,
+    abilityEvidenceCount,
+    estimatedScore,
+    targetScore,
+  });
+  const motivation = buildMotivationSnapshot({
+    sessions: persistedPracticeSessions,
+    attempts: persistedAttempts,
+    reviewItems: persistedReviewItems,
+  });
   const quickActionLabel = displayedTask?.type === 'diagnostic'
     ? '下一步推荐'
     : displayedTask?.type === 'review'
@@ -267,13 +288,13 @@ export default function TodayDashboard({
             <div className="min-w-0">
               <div className="ui-page-eyebrow mb-3">
                 <BookOpen className="h-4 w-4" />
-                今日学习路径
+                今日教练
               </div>
               <h2 className="text-2xl font-black tracking-tight text-[#101828] sm:text-3xl">
                 今日训练
               </h2>
               <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-600">
-                先完成最重要的一项；复习会提醒，但不阻止你自主练习。
+                只保留一个最该做的主动作，并说明为什么做、做完会改变什么。
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -300,6 +321,24 @@ export default function TodayDashboard({
             </div>
           </div>
         </header>
+
+        {!hasAbilityEvidence && (
+          <section data-testid="three-minute-start" className="ui-panel-soft">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <span className="ui-chip ui-chip-accent">3 分钟启动</span>
+                <h3 className="mt-3 text-lg font-black text-[#003178]">先选目标、做小诊断、生成今日计划</h3>
+                <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
+                  新用户不需要先理解所有模块；完成诊断后，首页会直接给出今天最该做的一项。
+                </p>
+              </div>
+              <button type="button" onClick={onStartOnboarding} className="ui-button ui-button-primary shrink-0">
+                <Sparkles className="h-4 w-4 text-emerald-300" />
+                立即启动
+              </button>
+            </div>
+          </section>
+        )}
 
         {reviewGateStatus?.locked && (
           <section data-testid="review-gate-banner" className="ui-panel-soft">
@@ -337,10 +376,10 @@ export default function TodayDashboard({
               <div className="min-w-0">
                 <span className="ui-chip ui-chip-accent">今天先做 · {primarySkillLabel}</span>
                 <h3 data-testid="today-primary-task-title" className="mt-4 text-2xl font-black leading-tight text-[#0d47a1] sm:text-3xl">
-                  {displayedTask?.title ?? '入门诊断：建立初始能力画像'}
+                  {coachInsight.headline}
                 </h3>
                 <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-slate-600">
-                  {displayedTask?.reason ?? '完成诊断后，系统会基于真实弱项安排训练。'}
+                  {coachInsight.reason}
                 </p>
               </div>
               <span className="ui-chip shrink-0">
@@ -354,6 +393,19 @@ export default function TodayDashboard({
               <span className="ui-chip">{targetExamName}</span>
               <span className="ui-chip">证据 {abilityEvidenceCount} 条</span>
               <span className="ui-chip">{strategy === 'efficient' ? '高效模式' : '巩固模式'}</span>
+            </div>
+
+            <div data-testid="today-coach-insight" className="mt-5 grid gap-3 md:grid-cols-3">
+              {[
+                ['完成收益', coachInsight.expectedGain],
+                ['判断证据', coachInsight.proof],
+                ['当前风险', coachInsight.risk],
+              ].map(([title, body]) => (
+                <div key={title} className="rounded-2xl border border-[#dde5ee] bg-[#f8fafc] p-3">
+                  <div className="text-[11px] font-black text-[#003178]">{title}</div>
+                  <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">{body}</p>
+                </div>
+              ))}
             </div>
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -417,6 +469,23 @@ export default function TodayDashboard({
                 <div className="text-xl text-[#003178]">{answeredQuestionCount}</div>
                 <div className="text-slate-500">已答</div>
               </button>
+            </div>
+            <div data-testid="motivation-snapshot" className="mt-4 rounded-2xl border border-white/70 bg-white/80 p-3">
+              <div className="grid grid-cols-3 gap-2 text-center text-[11px] font-black">
+                <div>
+                  <div className="text-lg text-[#003178]">{motivation.streakDays}</div>
+                  <div className="text-slate-500">连续天</div>
+                </div>
+                <div>
+                  <div className="text-lg text-[#003178]">{motivation.weeklyAttempts}</div>
+                  <div className="text-slate-500">本周答</div>
+                </div>
+                <div>
+                  <div className="text-lg text-[#003178]">{motivation.repairedMistakes}</div>
+                  <div className="text-slate-500">已修复</div>
+                </div>
+              </div>
+              <p className="mt-2 text-xs font-bold leading-5 text-slate-600">{motivation.message}</p>
             </div>
           </aside>
         </section>

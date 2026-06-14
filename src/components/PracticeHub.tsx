@@ -26,6 +26,7 @@ import {
   CET4_WRITING_PROMPT_BANK,
 } from '../questionBank';
 import { Attempt, DailyPlan, Passage, PracticeSession, SkillProfile } from '../types';
+import { buildTrainingCamps } from '../domain/productCoach';
 import {
   buildPracticeModuleProgress,
   buildPracticeQuestionStatusList,
@@ -567,6 +568,7 @@ export default function PracticeHub({
     : filteredQuestionStatuses.slice(0, QUESTION_STATUS_PREVIEW_LIMIT);
   const selectedStatusPracticedCount = selectedQuestionStatuses.filter((item) => item.practiced).length;
   const selectedStatusRemainingCount = Math.max(0, selectedQuestionStatuses.length - selectedStatusPracticedCount);
+  const selectedTrainingCamps = buildTrainingCamps(selectedModule.id, skillProfiles);
   const visibleReadingPassages = readingPassages.slice(0, visibleReadingCount);
   const toggleStatusExpanded = () => {
     setExpandedStatusModuleIds((ids) => (
@@ -632,12 +634,13 @@ export default function PracticeHub({
                 专项练习
               </h2>
               <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
-                选择一个能力，直接开始训练。
+                按知识点训练营推进；题号列表负责回看和跳转，训练营负责告诉你这组题在修什么。
               </p>
               <div data-testid="practice-hub-summary" className="mt-3 flex flex-wrap gap-2 text-[11px] font-black">
                 <span className="ui-chip ui-chip-accent">已记录 {recordedAttemptCount} 次作答</span>
                 <span className="ui-chip">未练优先</span>
                 <span className="ui-chip">耗尽回流</span>
+                <span className="ui-chip">知识点训练营</span>
               </div>
             </div>
             <button
@@ -763,6 +766,41 @@ export default function PracticeHub({
             );
           })}
         </section>
+        )}
+
+        {isCet4 && selectedTrainingCamps.length > 0 && (
+          <section data-testid={`practice-training-camps-${selectedModule.id}`} className="ui-panel">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <span className="ui-chip ui-chip-accent">
+                  <ListChecks className="h-3.5 w-3.5" />
+                  {selectedModule.label}训练营
+                </span>
+                <h3 className="mt-3 text-lg font-black text-[#101828]">先按知识点修能力，再用题号回看证据</h3>
+              </div>
+              <button
+                type="button"
+                onClick={selectedModule.onStart}
+                className="ui-button ui-button-primary shrink-0"
+              >
+                进入{selectedTrainingCamps[0]?.title ?? selectedModule.label}训练营
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              {selectedTrainingCamps.map((camp) => (
+                <article key={camp.id} className="rounded-2xl border border-[#dde5ee] bg-[#f8fafc] p-4">
+                  <div className="text-sm font-black text-[#003178]">{camp.title}</div>
+                  <p className="mt-2 text-xs font-bold leading-5 text-slate-600">{camp.focus}</p>
+                  <div className="mt-3 space-y-2 text-[11px] font-semibold leading-5 text-slate-500">
+                    <p><span className="font-black text-slate-700">目标：</span>{camp.target}</p>
+                    <p><span className="font-black text-slate-700">方法：</span>{camp.method}</p>
+                    <p><span className="font-black text-slate-700">通过：</span>{camp.successMetric}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
         )}
 
         {isCet4 && (

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Activity, AlertCircle, Award, Check, Database, FileText, Globe, Sparkle, Zap } from 'lucide-react';
-import { Attempt, PracticeSession, SkillProfile } from '../types';
+import { Attempt, PracticeSession, ReviewItem, SkillProfile } from '../types';
+import { buildMotivationSnapshot, buildProgressTrustBrief } from '../domain/productCoach';
 import {
   buildAbilityEvidenceSummary,
   buildAbilityTimelineBars,
@@ -16,6 +17,7 @@ interface ProgressSectionProps {
   persistedSkillProfiles?: SkillProfile[];
   persistedPracticeSessions?: PracticeSession[];
   persistedAttempts?: Attempt[];
+  persistedReviewItems?: ReviewItem[];
 }
 
 const KNOWLEDGE_NODE_ICONS: Record<AbilityNodeIcon, React.ComponentType<{ className?: string }>> = {
@@ -56,6 +58,7 @@ export default function ProgressSection({
   persistedSkillProfiles = [],
   persistedPracticeSessions = [],
   persistedAttempts = [],
+  persistedReviewItems = [],
 }: ProgressSectionProps) {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<AbilityEvidenceTab>('reading');
@@ -68,6 +71,16 @@ export default function ProgressSection({
     sessions: persistedPracticeSessions,
     attempts: persistedAttempts,
     skillProfiles: persistedSkillProfiles,
+  });
+  const trustBrief = buildProgressTrustBrief({
+    profiles: persistedSkillProfiles,
+    sessions: persistedPracticeSessions,
+    attempts: persistedAttempts,
+  });
+  const motivation = buildMotivationSnapshot({
+    sessions: persistedPracticeSessions,
+    attempts: persistedAttempts,
+    reviewItems: persistedReviewItems,
   });
   const radarScale = 0.8;
   const { listening, reading, writing, speaking } = abilitySummary.scores;
@@ -90,11 +103,30 @@ export default function ProgressSection({
       <header className="ui-page-header-compact mb-6">
         <h2 className="text-2xl font-black tracking-tight text-[#101828]">能力地图</h2>
         <p className="mt-2 text-sm font-semibold text-slate-500 sm:text-base">
-          基于本地学习证据生成，非官方成绩。
+          基于本地学习证据生成，非官方成绩；每个结论都显示证据、弱因和下一步。
         </p>
       </header>
 
       <div className="space-y-5 lg:space-y-8">
+        <section data-testid="progress-trust-brief" className="ui-panel">
+          <div className="grid gap-3 md:grid-cols-4">
+            {[
+              ['本周变化', trustBrief.weeklyChange],
+              ['薄弱原因', trustBrief.weakReason],
+              ['下一步', trustBrief.nextAction],
+              ['可信度', trustBrief.evidenceQuality],
+            ].map(([title, body]) => (
+              <div key={title} className="rounded-2xl border border-[#dde5ee] bg-[#f8fafc] p-4">
+                <div className="text-xs font-black text-[#003178]">{title}</div>
+                <p className="mt-2 text-xs font-semibold leading-5 text-slate-600">{body}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 rounded-2xl border border-[#cfe6f2] bg-[#eef7fc] px-4 py-3 text-xs font-bold leading-6 text-[#003178]">
+            连续 {motivation.streakDays} 天 · 本周 {motivation.weeklyAttempts} 次作答 · 已修复 {motivation.repairedMistakes} 个错因。{motivation.message}
+          </div>
+        </section>
+
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-5 lg:gap-8">
           <section className="ui-panel transition-colors hover:border-[#003178] lg:col-span-2">
             <div className="mb-6 flex items-center justify-between">

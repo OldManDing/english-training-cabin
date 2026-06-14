@@ -14,8 +14,10 @@ import {
   savePracticeDraft,
 } from '../domain/practice/draftProgress';
 import { buildChoicePracticeReport } from '../domain/practice/reports';
+import { buildChoiceOptionInsights } from '../domain/productCoach';
 import { getQuestionSentenceSupport } from '../domain/practice/sentenceTranslations';
 import { pausePracticeSpeech, playPracticeSpeech, resumePracticeSpeech, stopPracticeSpeech } from '../lib/practiceSpeech';
+import ChoiceOptionInsightGrid from './ChoiceOptionInsightGrid';
 
 interface ReadingTrainingProps {
   passage: Passage;
@@ -673,6 +675,17 @@ export default function ReadingTraining({ passage, initialQuestionId, replayAtte
                     {currentFeedback.description}
                   </p>
                 </div>
+
+                <ChoiceOptionInsightGrid
+                  testIdPrefix="reading"
+                  insights={buildChoiceOptionInsights({
+                    options: currentQuestion.options,
+                    correctAnswer: currentQuestion.correctAnswer,
+                    selectedAnswer: selectedOpt,
+                    explanation: currentQuestion.explanation,
+                    trapType: currentQuestion.diagnostic?.behaviorDiagnosis?.[0],
+                  })}
+                />
 
                 {/* Explanation and Voice player */}
                 <div className="bg-neutral-50 p-5 rounded-2xl border border-neutral-200/80">

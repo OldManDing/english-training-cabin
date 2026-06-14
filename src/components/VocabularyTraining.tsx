@@ -14,8 +14,10 @@ import {
   savePracticeDraft,
 } from '../domain/practice/draftProgress';
 import { buildChoicePracticeReport } from '../domain/practice/reports';
+import { buildChoiceOptionInsights } from '../domain/productCoach';
 import { getVocabularyQuestionSupport, getVocabularySentenceSupport } from '../domain/practice/sentenceTranslations';
 import { pausePracticeSpeech, playPracticeSpeech, preloadPracticeSpeech, resumePracticeSpeech, stopPracticeSpeech } from '../lib/practiceSpeech';
+import ChoiceOptionInsightGrid from './ChoiceOptionInsightGrid';
 
 interface VocabularyTrainingProps {
   items: VocabularyPracticeItem[];
@@ -637,6 +639,17 @@ export default function VocabularyTraining({ items, initialQuestionId, replayAtt
                     <XCircle className="h-5 w-5 text-rose-600" />
                   )}
                   正确答案：{currentItem.correctAnswer}
+                </div>
+                <div className="mt-4">
+                  <ChoiceOptionInsightGrid
+                    testIdPrefix="vocabulary"
+                    insights={buildChoiceOptionInsights({
+                      options: currentItem.options,
+                      correctAnswer: currentItem.correctAnswer,
+                      selectedAnswer: selectedOpt,
+                      explanation: currentItem.explanation,
+                    })}
+                  />
                 </div>
                 {sentenceSupport ? (
                   <div

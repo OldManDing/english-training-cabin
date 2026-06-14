@@ -15,6 +15,7 @@ import {
   Volume2,
 } from 'lucide-react';
 import { ChoiceOption, MemoryReviewTask, ReviewCompletionEvidence, ReviewItem } from '../types';
+import { buildReviewVariantRecommendations, type CoachModuleId } from '../domain/productCoach';
 import type { ReviewGateStatus } from '../domain/review/reviewGate';
 import { isReviewItemDue, sortWrongQuestionReviewItems } from '../domain/review/reviewQueue';
 import { resolveRedoQuestionTranslation } from '../domain/review/redoTranslation';
@@ -26,6 +27,7 @@ interface ReviewSectionProps {
   persistedReviewItems?: ReviewItem[];
   reviewGateStatus?: ReviewGateStatus;
   onCompleteReviewItem?: (reviewItemId: string, evidence: ReviewCompletionEvidence) => Promise<void> | void;
+  onStartVariantPractice?: (moduleId: CoachModuleId) => void;
 }
 
 type ReviewOutcome = NonNullable<ReviewCompletionEvidence['reviewOutcome']>;
@@ -165,6 +167,7 @@ export default function ReviewSection({
   persistedReviewItems = [],
   reviewGateStatus,
   onCompleteReviewItem,
+  onStartVariantPractice,
 }: ReviewSectionProps) {
   const [selectedReviewItemId, setSelectedReviewItemId] = useState<string | null>(null);
   const [completedReviewIds, setCompletedReviewIds] = useState<string[]>([]);
@@ -200,6 +203,10 @@ export default function ReviewSection({
     [activeReview],
   );
   const redoSpeechText = useMemo(() => activeReview ? buildRedoSpeechText(activeReview) : '', [activeReview]);
+  const variantRecommendations = useMemo(
+    () => buildReviewVariantRecommendations(activeReview),
+    [activeReview],
+  );
   const simpleRecallAnswer = activeReview && activeTask ? buildSimpleRecallAnswer(activeReview, activeTask) : '';
   const redoCorrect = getRedoCorrect(activeReview, redoAnswer);
   const feedbackVisible = Boolean(activeReview && (!redoQuestion || answerRevealed));
@@ -676,6 +683,29 @@ export default function ReviewSection({
                       style={{ width: `${activeReview.masteryScore ?? 35}%` }}
                     />
                   </div>
+                </div>
+              </section>
+
+              <section data-testid="review-variant-recommendations" className="ui-panel">
+                <h4 className="mb-3 flex items-center gap-2 text-sm font-black text-[#003178]">
+                  <RefreshCw className="h-4 w-4" />
+                  同类变式推荐
+                </h4>
+                <div className="space-y-2">
+                  {variantRecommendations.map((recommendation) => (
+                    <button
+                      key={recommendation.id}
+                      type="button"
+                      onClick={() => onStartVariantPractice?.(recommendation.moduleId)}
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-[#003178] hover:bg-white"
+                    >
+                      <span className="block text-xs font-black text-slate-900">{recommendation.title}</span>
+                      <span className="mt-1 block text-[11px] font-semibold leading-5 text-slate-500">{recommendation.reason}</span>
+                      <span className="mt-2 inline-flex rounded-full bg-[#eef7fc] px-2.5 py-1 text-[10px] font-black text-[#003178]">
+                        {recommendation.actionLabel}
+                      </span>
+                    </button>
+                  ))}
                 </div>
               </section>
 

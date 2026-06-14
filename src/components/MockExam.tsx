@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { CET4_MOCK_EXAM_BANK } from '../questionBank';
 import { buildMockExamReport, MockExamReportResult } from '../domain/practice/mockExam';
+import { buildMockRepairPlan } from '../domain/productCoach';
 import { CET4_LOCAL_REAL_PAPERS, LocalRealExamPaper } from '../domain/practice/localRealPapers';
 import { DailyPlan, PracticeCompletionReport, SkillProfile } from '../types';
 import { SelectField } from './controls/FormControls';
@@ -106,6 +107,7 @@ export default function MockExam({ onComplete, skillProfiles = [], dailyPlan }: 
   const [writingAnswer, setWritingAnswer] = useState('');
   const [translationAnswer, setTranslationAnswer] = useState('');
   const [result, setResult] = useState<MockExamReportResult | null>(null);
+  const mockRepairPlan = useMemo(() => result ? buildMockRepairPlan(result.sectionScores) : [], [result]);
   const [isCompleting, setIsCompleting] = useState(false);
   const [pageMode, setPageMode] = useState<MockExamPageMode>('standard-mock');
   const [selectedPaperId, setSelectedPaperId] = useState(mockRecommendation.paper.id);
@@ -510,6 +512,36 @@ export default function MockExam({ onComplete, skillProfiles = [], dailyPlan }: 
                   )}
                 </div>
               ))}
+            </div>
+
+            <div data-testid="mock-repair-plan" className="mt-5 rounded-3xl border border-[#cfe6f2] bg-[#f8fbff] p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-xs font-black text-[#003178]">专项修复计划</div>
+                  <p className="mt-1 text-sm font-semibold leading-6 text-slate-600">
+                    模考不只给分数；最低分项会转成下一轮专项训练目标。
+                  </p>
+                </div>
+                <span className="ui-chip">{mockRepairPlan.filter((item) => item.priority === 'high').length} 个高优先级</span>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {mockRepairPlan.map((item) => (
+                  <article key={item.id} className="rounded-2xl border border-white bg-white p-3">
+                    <div className={`w-fit rounded-full px-2 py-1 text-[10px] font-black ${
+                      item.priority === 'high'
+                        ? 'bg-rose-50 text-rose-700'
+                        : item.priority === 'medium'
+                        ? 'bg-amber-50 text-amber-700'
+                        : 'bg-emerald-50 text-emerald-700'
+                    }`}>
+                      {item.priority === 'high' ? '优先修复' : item.priority === 'medium' ? '继续巩固' : '保持稳定'}
+                    </div>
+                    <h4 className="mt-3 text-sm font-black text-[#101828]">{item.title}</h4>
+                    <p className="mt-2 text-xs font-semibold leading-5 text-slate-600">{item.reason}</p>
+                    <div className="mt-3 text-[11px] font-black text-[#003178]">{item.action}</div>
+                  </article>
+                ))}
+              </div>
             </div>
           </section>
         ) : pageMode === 'standard-mock' ? (

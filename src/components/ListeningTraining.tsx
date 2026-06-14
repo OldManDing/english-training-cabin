@@ -15,9 +15,11 @@ import {
   savePracticeDraft,
 } from '../domain/practice/draftProgress';
 import { buildChoicePracticeReport } from '../domain/practice/reports';
+import { buildChoiceOptionInsights } from '../domain/productCoach';
 import { pausePracticeSpeech, playPracticeSpeech, preloadPracticeSpeech, resumePracticeSpeech, stopPracticeSpeech } from '../lib/practiceSpeech';
 import { CET4_LISTENING_PRACTICE_QUESTIONS, CET4_MOCK_EXAM } from '../questionBank';
 import { SelectField } from './controls/FormControls';
+import ChoiceOptionInsightGrid from './ChoiceOptionInsightGrid';
 
 interface ListeningTrainingProps {
   initialQuestionId?: string;
@@ -833,6 +835,16 @@ export default function ListeningTraining({
               <p className="text-xs text-[#1e293b] leading-relaxed">
                 {activeQ.explanation}
               </p>
+              <ChoiceOptionInsightGrid
+                testIdPrefix="listening"
+                insights={buildChoiceOptionInsights({
+                  options: activeQ.options,
+                  correctAnswer: activeQ.correctAnswer,
+                  selectedAnswer: activeQ.selectedAnswer,
+                  explanation: activeQ.explanation,
+                  trapType: activeQ.trapType,
+                })}
+              />
               {activeSentenceSupport ? (
                 <div
                   data-testid="listening-sentence-translation"
