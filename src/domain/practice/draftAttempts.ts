@@ -127,16 +127,10 @@ function buildVocabularyDraftQuestions(
   persistedAttempts: Attempt[],
 ) {
   const availableVocabularyItems = filterUnpracticedItems(CET4_VOCABULARY_BANK, persistedAttempts, 'vocabulary');
-  const availablePackCount = Math.max(1, Math.ceil(availableVocabularyItems.length / VOCABULARY_SESSION_SIZE));
-  const requestedPackIndex = Math.max(0, Math.floor(draft.packIndex));
-  const hasExplicitQuestionIds = Array.isArray(draft.answers) && draft.answers.some((answer) => answer?.questionId);
-  const sourceItems = !hasExplicitQuestionIds && requestedPackIndex >= availablePackCount
-    ? CET4_VOCABULARY_BANK
-    : availableVocabularyItems;
-  const packCount = Math.max(1, Math.ceil(sourceItems.length / VOCABULARY_SESSION_SIZE));
-  const packIndex = Math.min(requestedPackIndex, packCount - 1);
+  const packCount = Math.max(1, Math.ceil(availableVocabularyItems.length / VOCABULARY_SESSION_SIZE));
+  const packIndex = Math.min(Math.max(0, draft.packIndex), packCount - 1);
 
-  return sourceItems.slice(
+  return availableVocabularyItems.slice(
     packIndex * VOCABULARY_SESSION_SIZE,
     (packIndex + 1) * VOCABULARY_SESSION_SIZE,
   );

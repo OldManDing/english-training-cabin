@@ -85,18 +85,18 @@ describe('draft practice attempts', () => {
     expect(attempts.find((attempt) => attempt.moduleId === 'vocabulary')?.questionId).not.toBe(CET4_VOCABULARY_BANK[0].id);
   });
 
-  it('does not clamp a legacy vocabulary draft from questions 241-255 back to 121-135', () => {
+  it('maps a legacy vocabulary draft to questions 121-130 instead of 241-255', () => {
     const localStorage = installLocalStorage();
     const now = '2026-06-14T10:00:00.000Z';
     localStorage.setItem(practiceDraftKeys.vocabulary, JSON.stringify({
       version: 1,
       startedAt: now,
       packIndex: 6,
-      currentIdx: 14,
+      currentIdx: 9,
       selectedOpt: 'A',
       confidence: 'sure',
       isSubmitted: true,
-      answers: Array.from({ length: 15 }, () => ({
+      answers: Array.from({ length: 10 }, () => ({
         selected: 'A',
         correct: true,
         confidence: 'sure',
@@ -112,10 +112,10 @@ describe('draft practice attempts', () => {
 
     expect(attempts
       .filter((attempt) => attempt.moduleId === 'vocabulary')
-      .map((attempt) => attempt.questionId)).toEqual(CET4_VOCABULARY_BANK.slice(240, 255).map((item) => item.id));
+      .map((attempt) => attempt.questionId)).toEqual(CET4_VOCABULARY_BANK.slice(120, 130).map((item) => item.id));
     expect(attempts
       .filter((attempt) => attempt.moduleId === 'vocabulary')
-      .map((attempt) => attempt.questionId)).not.toContain(CET4_VOCABULARY_BANK[120].id);
+      .map((attempt) => attempt.questionId)).not.toContain(CET4_VOCABULARY_BANK[240].id);
   });
 
   it('keeps the explicit reading question id when a passage has been filtered', () => {

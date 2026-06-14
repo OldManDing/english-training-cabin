@@ -344,7 +344,7 @@ async function seedLegacyVocabularyDraftStatusGap(page: Page) {
     ...CET4_VOCABULARY_BANK.slice(135, 240),
     ...CET4_VOCABULARY_BANK.slice(255),
   ];
-  const draftItems = CET4_VOCABULARY_BANK.slice(240, 255);
+  const draftItems = CET4_VOCABULARY_BANK.slice(120, 130);
 
   await page.evaluate(
     async ({ persistedItems, draftAnswers }) => {
@@ -360,7 +360,7 @@ async function seedLegacyVocabularyDraftStatusGap(page: Page) {
         version: 1,
         startedAt: now,
         packIndex: 6,
-        currentIdx: 14,
+        currentIdx: 9,
         selectedOpt: draftAnswers.at(-1)?.selected ?? 'A',
         confidence: 'sure',
         isSubmitted: true,
@@ -789,7 +789,7 @@ test('answered question status numbers replay saved answer evidence across modul
   await expect(page.getByText('历史翻译反馈已回显。')).toBeVisible();
 });
 
-test('legacy vocabulary draft answers keep their original 241 to 255 status numbers', async ({ page }) => {
+test('legacy vocabulary draft answers keep 121 to 130 answered and 241 to 255 unanswered', async ({ page }) => {
   await installSpeechSynthesisMock(page);
   await registerAndEnterApp(page, 'mvp-legacy-vocabulary-draft-status');
   await resetLocalLearningData(page);
@@ -800,12 +800,13 @@ test('legacy vocabulary draft answers keep their original 241 to 255 status numb
   await page.getByTestId('practice-module-select-vocabulary').click();
   await page.getByTestId('practice-question-filter-vocabulary-answered').click();
 
-  await expect(page.getByTestId('practice-question-status-vocabulary-121')).toHaveCount(0);
-  await expect(page.getByTestId('practice-question-status-vocabulary-241')).toBeVisible();
-  await expect(page.getByTestId('practice-question-status-vocabulary-255')).toBeVisible();
+  await expect(page.getByTestId('practice-question-status-vocabulary-121')).toBeVisible();
+  await expect(page.getByTestId('practice-question-status-vocabulary-130')).toBeVisible();
+  await expect(page.getByTestId('practice-question-status-vocabulary-241')).toHaveCount(0);
+  await expect(page.getByTestId('practice-question-status-vocabulary-255')).toHaveCount(0);
 
-  await page.getByTestId('practice-question-status-vocabulary-241').click();
-  await expect(page.getByRole('heading', { name: CET4_VOCABULARY_BANK[240].word })).toBeVisible();
+  await page.getByTestId('practice-question-status-vocabulary-121').click();
+  await expect(page.getByRole('heading', { name: CET4_VOCABULARY_BANK[120].word })).toBeVisible();
   await expect(page.getByTestId('vocabulary-attempt-replayed')).toBeVisible();
   await expect(page.getByTestId('vocabulary-submit')).toHaveCount(0);
 });
