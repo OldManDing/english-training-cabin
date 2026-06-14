@@ -412,7 +412,6 @@ export default function PracticeHub({
   });
   const recommendedModuleId = orderedModules[0]?.id ?? 'vocabulary';
   const recommendedModule = orderedModules[0];
-  const recommendedTask = dailyPlan?.tasks.find((task) => moduleIdForTask(task) === recommendedModuleId);
   const selectedModule = orderedModules.find((module) => module.id === selectedModuleId) ?? orderedModules[0];
   const selectedQuestionStatuses = useMemo(() => buildPracticeQuestionStatusList({
     attempts: mergedPracticeAttempts,
@@ -497,13 +496,10 @@ export default function PracticeHub({
                 专项练习
               </h2>
               <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
-                按知识点训练营推进；题号列表负责回看和跳转，训练营负责告诉你这组题在修什么。
+                选模块，直接练；已答题可在题号列表回看。
               </p>
               <div data-testid="practice-hub-summary" className="mt-3 flex flex-wrap gap-2 text-[11px] font-black">
                 <span className="ui-chip ui-chip-accent">已记录 {recordedAttemptCount} 次作答</span>
-                <span className="ui-chip">未练优先</span>
-                <span className="ui-chip">耗尽回流</span>
-                <span className="ui-chip">知识点训练营</span>
               </div>
             </div>
             <button
@@ -522,7 +518,7 @@ export default function PracticeHub({
                 <div>
                   <div className="text-xs font-black text-[#003178]">推荐</div>
                   <p className="mt-1 text-sm font-bold leading-6 text-slate-700">
-                    优先进入「{recommendedModule.label}」{recommendedTask?.reason ? ` · ${recommendedTask.reason}` : ''}
+                    建议：{recommendedModule.label}
                   </p>
                 </div>
                 <button
@@ -639,7 +635,7 @@ export default function PracticeHub({
                   <ListChecks className="h-3.5 w-3.5" />
                   {selectedModule.label}训练营
                 </span>
-                <h3 className="mt-3 text-lg font-black text-[#101828]">先按知识点修能力，再用题号回看证据</h3>
+                <h3 className="mt-3 text-lg font-black text-[#101828]">训练营</h3>
               </div>
               <button
                 type="button"
@@ -654,12 +650,7 @@ export default function PracticeHub({
               {selectedTrainingCamps.map((camp) => (
                 <article key={camp.id} className="rounded-2xl border border-[#dde5ee] bg-[#f8fafc] p-4">
                   <div className="text-sm font-black text-[#003178]">{camp.title}</div>
-                  <p className="mt-2 text-xs font-bold leading-5 text-slate-600">{camp.focus}</p>
-                  <div className="mt-3 space-y-2 text-[11px] font-semibold leading-5 text-slate-500">
-                    <p><span className="font-black text-slate-700">目标：</span>{camp.target}</p>
-                    <p><span className="font-black text-slate-700">方法：</span>{camp.method}</p>
-                    <p><span className="font-black text-slate-700">通过：</span>{camp.successMetric}</p>
-                  </div>
+                  <p className="mt-2 line-clamp-2 text-xs font-bold leading-5 text-slate-600">{camp.focus}</p>
                 </article>
               ))}
             </div>

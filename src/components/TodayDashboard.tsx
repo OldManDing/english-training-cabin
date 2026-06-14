@@ -327,9 +327,9 @@ export default function TodayDashboard({
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <span className="ui-chip ui-chip-accent">3 分钟启动</span>
-                <h3 className="mt-3 text-lg font-black text-[#003178]">先选目标、做小诊断、生成今日计划</h3>
+                <h3 className="mt-3 text-lg font-black text-[#003178]">先做诊断</h3>
                 <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
-                  新用户不需要先理解所有模块；完成诊断后，首页会直接给出今天最该做的一项。
+                  完成后生成今日计划。
                 </p>
               </div>
               <button type="button" onClick={onStartOnboarding} className="ui-button ui-button-primary shrink-0">
@@ -348,9 +348,6 @@ export default function TodayDashboard({
                 <h3 className="mt-3 text-lg font-black text-[#003178]">
                   今日还有 {reviewGateStatus.remainingRequired} 道高优先级到期错题
                 </h3>
-                <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
-                  错题会按到期顺序提醒，但不会阻止你进入语法、专项和模考。
-                </p>
               </div>
               <button
                 type="button"
@@ -378,7 +375,7 @@ export default function TodayDashboard({
                 <h3 data-testid="today-primary-task-title" className="mt-4 text-2xl font-black leading-tight text-[#0d47a1] sm:text-3xl">
                   {coachInsight.headline}
                 </h3>
-                <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-slate-600">
+                <p className="mt-2 line-clamp-1 max-w-2xl text-sm font-semibold leading-6 text-slate-600">
                   {coachInsight.reason}
                 </p>
               </div>
@@ -395,18 +392,9 @@ export default function TodayDashboard({
               <span className="ui-chip">{strategy === 'efficient' ? '高效模式' : '巩固模式'}</span>
             </div>
 
-            <div data-testid="today-coach-insight" className="mt-5 grid gap-3 md:grid-cols-3">
-              {[
-                ['完成收益', coachInsight.expectedGain],
-                ['判断证据', coachInsight.proof],
-                ['当前风险', coachInsight.risk],
-              ].map(([title, body]) => (
-                <div key={title} className="rounded-2xl border border-[#dde5ee] bg-[#f8fafc] p-3">
-                  <div className="text-[11px] font-black text-[#003178]">{title}</div>
-                  <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">{body}</p>
-                </div>
-              ))}
-            </div>
+            <p data-testid="today-coach-insight" className="mt-4 line-clamp-2 text-xs font-semibold leading-5 text-slate-500">
+              {coachInsight.expectedGain} · {coachInsight.risk}
+            </p>
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h4 data-testid="today-quick-task-title" className="text-sm font-black text-slate-500">
@@ -485,7 +473,7 @@ export default function TodayDashboard({
                   <div className="text-slate-500">已修复</div>
                 </div>
               </div>
-              <p className="mt-2 text-xs font-bold leading-5 text-slate-600">{motivation.message}</p>
+              <p className="mt-2 line-clamp-1 text-xs font-bold leading-5 text-slate-600">{motivation.message}</p>
             </div>
           </aside>
         </section>

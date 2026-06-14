@@ -765,7 +765,7 @@ export default function OnboardingDiagnostic({
                 入门诊断：先得到今天该做什么
               </h1>
               <p className="mt-4 max-w-2xl text-sm font-semibold leading-7 text-slate-600">
-                第一次不用理解所有模块：选目标、设时间、做 {ONBOARDING_DIAGNOSTIC_EXPECTED_ITEM_COUNT} 个小任务，系统会生成第一版今日计划；这不是官方成绩。
+                设置目标，完成 {ONBOARDING_DIAGNOSTIC_EXPECTED_ITEM_COUNT} 个小任务，生成今日计划。
               </p>
               <div data-testid="onboarding-three-minute-start" className="mt-5 grid gap-3 sm:grid-cols-3">
                 {[

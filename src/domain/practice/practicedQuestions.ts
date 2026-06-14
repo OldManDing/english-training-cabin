@@ -1,4 +1,5 @@
 import { Attempt, Passage, PracticeSession, Question } from '../../types';
+import { CET4_VOCABULARY_BANK } from '../../data';
 
 type QuestionIdentity = Pick<Question, 'id' | 'moduleId'>;
 export type PracticeProgressModuleId = 'vocabulary' | 'cloze' | 'grammar' | 'reading' | 'listening' | 'writing' | 'translation' | 'mock';
@@ -121,12 +122,88 @@ function buildProgressAttemptKey(attempt: Pick<Attempt, 'moduleId' | 'questionId
   return `${attempt.moduleId}:${attempt.questionId}`;
 }
 
+const LEGACY_VOCABULARY_TARGET_IDS = CET4_VOCABULARY_BANK.slice(120, 130).map((item) => item.id);
+const LEGACY_VOCABULARY_WRONG_IDS = CET4_VOCABULARY_BANK.slice(240, 255).map((item) => item.id);
+const LEGACY_VOCABULARY_WRONG_ID_SET = new Set(LEGACY_VOCABULARY_WRONG_IDS);
+
+function latestAttempt(left: Attempt | undefined, right: Attempt): Attempt {
+  if (!left) return right;
+  return right.createdAt.localeCompare(left.createdAt) >= 0 ? right : left;
+}
+
+function buildLegacyVocabularyRepairAttempt(source: Attempt, questionId: string): Attempt {
+  return {
+    ...source,
+    id: `legacy-vocabulary-status-repair-${questionId}`,
+    questionId,
+    moduleId: 'vocabulary',
+    questionTypeId: 'cet4-core-vocabulary',
+  };
+}
+
+export function repairLegacyVocabularyStatusAttempts(attempts: Attempt[]): {
+  attempts: Attempt[];
+  changed: boolean;
+  deleteAttemptIds: string[];
+  putAttempts: Attempt[];
+} {
+  const existingVocabularyIds = new Set(
+    attempts
+      .filter((attempt) => matchesPracticeModuleAttempt(attempt, 'vocabulary'))
+      .map((attempt) => String(attempt.questionId)),
+  );
+  const missingTargetIds = LEGACY_VOCABULARY_TARGET_IDS.filter((id) => !existingVocabularyIds.has(id));
+  if (missingTargetIds.length === 0) {
+    return { attempts, changed: false, deleteAttemptIds: [], putAttempts: [] };
+  }
+
+  const wrongAttempts = attempts.filter(
+    (attempt) =>
+      matchesPracticeModuleAttempt(attempt, 'vocabulary')
+      && LEGACY_VOCABULARY_WRONG_ID_SET.has(String(attempt.questionId)),
+  );
+  const latestWrongAttemptByQuestionId = new Map<string, Attempt>();
+  wrongAttempts.forEach((attempt) => {
+    const questionId = String(attempt.questionId);
+    latestWrongAttemptByQuestionId.set(
+      questionId,
+      latestAttempt(latestWrongAttemptByQuestionId.get(questionId), attempt),
+    );
+  });
+
+  const hasLegacyWrongPrefix = LEGACY_VOCABULARY_WRONG_IDS
+    .slice(0, LEGACY_VOCABULARY_TARGET_IDS.length)
+    .every((id) => latestWrongAttemptByQuestionId.has(id));
+  if (!hasLegacyWrongPrefix) {
+    return { attempts, changed: false, deleteAttemptIds: [], putAttempts: [] };
+  }
+
+  const putAttempts = LEGACY_VOCABULARY_TARGET_IDS.flatMap((targetId, index) => {
+    if (!missingTargetIds.includes(targetId)) return [];
+    const source = latestWrongAttemptByQuestionId.get(LEGACY_VOCABULARY_WRONG_IDS[index]);
+    return source ? [buildLegacyVocabularyRepairAttempt(source, targetId)] : [];
+  });
+  const deleteAttemptIds = wrongAttempts.map((attempt) => attempt.id);
+  const deleteAttemptIdSet = new Set(deleteAttemptIds);
+
+  return {
+    attempts: [
+      ...attempts.filter((attempt) => !deleteAttemptIdSet.has(attempt.id)),
+      ...putAttempts,
+    ],
+    changed: deleteAttemptIds.length > 0 || putAttempts.length > 0,
+    deleteAttemptIds,
+    putAttempts,
+  };
+}
+
 export function mergePracticeProgressAttempts(params: {
   persistedAttempts: Attempt[];
   draftAttempts?: Attempt[];
 }): Attempt[] {
-  const merged = [...params.persistedAttempts];
-  const seen = new Set(params.persistedAttempts.map(buildProgressAttemptKey));
+  const repairedPersistedAttempts = repairLegacyVocabularyStatusAttempts(params.persistedAttempts).attempts;
+  const merged = [...repairedPersistedAttempts];
+  const seen = new Set(repairedPersistedAttempts.map(buildProgressAttemptKey));
 
   (params.draftAttempts ?? []).forEach((attempt) => {
     const key = buildProgressAttemptKey(attempt);
@@ -234,7 +311,8 @@ export function buildPracticeQuestionStatusList(params: {
     }));
   }
 
-  const moduleAttempts = params.attempts.filter((attempt) => matchesPracticeModuleAttempt(attempt, params.moduleId));
+  const progressAttempts = repairLegacyVocabularyStatusAttempts(params.attempts).attempts;
+  const moduleAttempts = progressAttempts.filter((attempt) => matchesPracticeModuleAttempt(attempt, params.moduleId));
   const questionIds = new Set(params.questions.map((question) => String(question.id)));
   const practicedIds = new Set(moduleAttempts.map((attempt) => String(attempt.questionId)));
   let legacySubjectiveCount = 0;

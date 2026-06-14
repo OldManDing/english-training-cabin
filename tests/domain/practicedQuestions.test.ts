@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CET4_VOCABULARY_BANK } from '../../src/data';
 import {
   buildPracticeModuleProgress,
   buildPracticeQuestionStatusList,
@@ -226,6 +227,27 @@ describe('practiced question filtering', () => {
       expect.objectContaining({ id: 'vocab-1', number: 1, practiced: true }),
       expect.objectContaining({ id: 'vocab-2', number: 2, practiced: false }),
     ]);
+  });
+
+  it('repairs legacy vocabulary status saved against questions 241 to 255', () => {
+    const legacyWrongAttempts = CET4_VOCABULARY_BANK
+      .slice(240, 255)
+      .map((item) => makeAttempt(item.id, 'vocabulary'));
+
+    const statuses = buildPracticeQuestionStatusList({
+      attempts: legacyWrongAttempts,
+      moduleId: 'vocabulary',
+      questions: CET4_VOCABULARY_BANK.map((item) => ({ id: item.id })),
+    });
+
+    const statusByNumber = new Map(statuses.map((status) => [status.number, status.practiced]));
+
+    for (let number = 121; number <= 130; number += 1) {
+      expect(statusByNumber.get(number)).toBe(true);
+    }
+    for (let number = 241; number <= 255; number += 1) {
+      expect(statusByNumber.get(number)).toBe(false);
+    }
   });
 
   it('keeps cloze status separate from ordinary grammar status', () => {

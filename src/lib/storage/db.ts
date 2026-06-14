@@ -1,4 +1,5 @@
 import Dexie, { Table } from 'dexie';
+import { repairLegacyVocabularyStatusAttempts } from '../../domain/practice/practicedQuestions';
 import { buildReviewCompletionRecords } from '../../domain/review/reviewCompletion';
 import { Attempt, PracticeSession, ReviewCompletionEvidence, ReviewItem, SkillProfile, StudyGoal } from '../../types';
 
@@ -126,6 +127,19 @@ export async function loadPracticeSessions(): Promise<PracticeSession[]> {
 }
 
 export async function loadAttempts(): Promise<Attempt[]> {
+  const attempts = await db.attempts.orderBy('createdAt').reverse().toArray();
+  const repair = repairLegacyVocabularyStatusAttempts(attempts);
+  if (!repair.changed) return attempts;
+
+  await db.transaction('rw', db.attempts, async () => {
+    if (repair.deleteAttemptIds.length > 0) {
+      await db.attempts.bulkDelete(repair.deleteAttemptIds);
+    }
+    if (repair.putAttempts.length > 0) {
+      await db.attempts.bulkPut(repair.putAttempts);
+    }
+  });
+
   return db.attempts.orderBy('createdAt').reverse().toArray();
 }
 

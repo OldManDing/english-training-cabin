@@ -131,7 +131,7 @@ export default function VocabularyTraining({ items, initialQuestionId, replayAtt
   const [activeSpeechTarget, setActiveSpeechTarget] = useState<SpeechTarget | null>(null);
   const [pausedSpeechTarget, setPausedSpeechTarget] = useState<SpeechTarget | null>(null);
   const [autoSpeakEnabled, setAutoSpeakEnabled] = useState(true);
-  const [speechNotice, setSpeechNotice] = useState('自动播报已开启：进入新单词后会自动朗读单词和例句。');
+  const [speechNotice, setSpeechNotice] = useState('自动播报开启');
   const [answers, setAnswers] = useState<VocabularyAnswer[]>(initialDraft.answers);
   const [startedAt] = useState(() => initialDraft.startedAt);
 
@@ -203,7 +203,7 @@ export default function VocabularyTraining({ items, initialQuestionId, replayAtt
         setIsSpeaking(false);
         setActiveSpeechTarget(null);
         setPausedSpeechTarget(null);
-        setSpeechNotice(autoSpeakEnabled ? '自动播报已开启：进入新单词后会自动朗读单词和例句。' : '自动播报已关闭，可手动播放单词或例句。');
+        setSpeechNotice(autoSpeakEnabled ? '自动播报开启' : '自动播报关闭');
       },
       onError: (message) => {
         setIsSpeaking(false);
@@ -276,7 +276,7 @@ export default function VocabularyTraining({ items, initialQuestionId, replayAtt
 
   useEffect(() => {
     if (!autoSpeakEnabled || !currentItem) return;
-    setSpeechNotice('自动播报已开启：进入新单词后会自动朗读单词和例句。');
+    setSpeechNotice('自动播报开启');
     void preloadPracticeSpeech(currentAutoSpeechText, {
       rate: AUTO_SPEECH_RATE,
       preferLocalAudio: true,
@@ -511,9 +511,9 @@ export default function VocabularyTraining({ items, initialQuestionId, replayAtt
                       setIsSpeaking(false);
                       setActiveSpeechTarget(null);
                       setPausedSpeechTarget(null);
-                      setSpeechNotice('自动播报已关闭，可手动播放单词或例句。');
+                      setSpeechNotice('自动播报关闭');
                     } else {
-                      setSpeechNotice('自动播报已开启：进入新单词后会自动朗读单词和例句。');
+                      setSpeechNotice('自动播报开启');
                     }
                     return nextEnabled;
                   });
@@ -560,7 +560,7 @@ export default function VocabularyTraining({ items, initialQuestionId, replayAtt
                 中文辅助
               </div>
               <p>单词中文义：{currentItem.meaning}</p>
-              <p className="mt-1 text-xs text-amber-800">正确答案和解析仍在提交后公布；当前只辅助理解题目，不提前标答案。</p>
+              <p className="mt-1 text-xs text-amber-800">提交后显示答案与解析。</p>
             </div>
 
             <div className="mt-6 grid gap-3">

@@ -330,7 +330,7 @@ export default function ReviewSection({
   const showMethodDetail = () => {
     onTriggerModal?.(
       '错题队列怎么做',
-      '复习队列只放需要重做的错题。打开后直接处理当前错题：先重新选择答案，选完立刻看反馈；最后按“已掌握、还模糊、仍不会”自评，系统会据此安排下次间隔。',
+      '重做原题，看反馈，再按掌握度自评。系统会安排下次复习。',
     );
   };
 
@@ -347,7 +347,7 @@ export default function ReviewSection({
           <div>
             <h2 className="text-2xl font-black tracking-tight text-[#101828] sm:text-3xl">复习队列</h2>
             <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-500 sm:text-base">
-              这里只处理到期错题：先重做原题，再用一个自评按钮完成调度。
+              重做到期错题。
             </p>
           </div>
           <button onClick={showMethodDetail} className="ui-button ui-button-secondary">
@@ -368,9 +368,6 @@ export default function ReviewSection({
                     ? '今日最低复习剂量已完成'
                     : '今天没有到期复习项'}
                 </h3>
-                <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
-                  错题复习会提示优先级，但不会阻止你进入专项训练。
-                </p>
               </div>
               <div className="grid grid-cols-3 gap-2 text-center text-xs font-black sm:min-w-80">
                 <div className="ui-metric">

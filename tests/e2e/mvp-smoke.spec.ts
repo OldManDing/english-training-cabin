@@ -410,6 +410,55 @@ async function seedLegacyVocabularyDraftStatusGap(page: Page) {
   );
 }
 
+async function seedPersistedLegacyVocabularyWrongStatus(page: Page) {
+  const wrongItems = CET4_VOCABULARY_BANK.slice(240, 255);
+
+  await page.evaluate(
+    async ({ items }) => {
+      function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
+        return new Promise((resolve, reject) => {
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+      }
+
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('english-training-cabin');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      const tx = db.transaction(['attempts'], 'readwrite');
+      const txComplete = new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      });
+      await Promise.all(items.map((item, index) => requestToPromise(tx.objectStore('attempts').put({
+        id: `persisted-legacy-vocabulary-wrong-${index}`,
+        sessionId: 'persisted-legacy-vocabulary-session',
+        questionId: item.id,
+        examId: 'cet4',
+        moduleId: 'vocabulary',
+        questionTypeId: 'cet4-core-vocabulary',
+        answer: item.correctAnswer,
+        isCorrect: true,
+        elapsedSeconds: 10,
+        confidence: 5,
+        mistakeReasons: [],
+        createdAt: '2026-06-14T09:00:00.000Z',
+      }))));
+      await txComplete;
+      db.close();
+    },
+    {
+      items: wrongItems.map((item) => ({
+        id: item.id,
+        correctAnswer: item.correctAnswer,
+      })),
+    },
+  );
+}
+
 async function installFailingSpeechSynthesisMock(page: Page) {
   await page.route('**/api/practice/tts', async (route) => {
     await route.fulfill({
@@ -811,6 +860,52 @@ test('legacy vocabulary draft answers keep 121 to 130 answered and 241 to 255 un
   await expect(page.getByTestId('vocabulary-submit')).toHaveCount(0);
 });
 
+test('persisted legacy vocabulary status repairs 121 to 130 answered and 241 to 255 unanswered', async ({ page }) => {
+  await installSpeechSynthesisMock(page);
+  await registerAndEnterApp(page, 'mvp-persisted-legacy-vocabulary-status');
+  await resetLocalLearningData(page);
+  await seedPersistedLegacyVocabularyWrongStatus(page);
+  await page.reload();
+
+  await page.locator('aside button').nth(1).click();
+  await page.getByTestId('practice-module-select-vocabulary').click();
+  await page.getByTestId('practice-question-filter-vocabulary-answered').click();
+
+  await expect(page.getByTestId('practice-question-status-vocabulary-121')).toBeVisible();
+  await expect(page.getByTestId('practice-question-status-vocabulary-130')).toBeVisible();
+  await expect(page.getByTestId('practice-question-status-vocabulary-241')).toHaveCount(0);
+  await expect(page.getByTestId('practice-question-status-vocabulary-255')).toHaveCount(0);
+
+  const repairedCounts = await page.evaluate(
+    async ({ targetIds, wrongIds }) => {
+      function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
+        return new Promise((resolve, reject) => {
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+      }
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('english-training-cabin');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      const tx = db.transaction(['attempts'], 'readonly');
+      const attempts = await requestToPromise<any[]>(tx.objectStore('attempts').getAll());
+      db.close();
+      return {
+        targetCount: attempts.filter((attempt) => targetIds.includes(attempt.questionId)).length,
+        wrongCount: attempts.filter((attempt) => wrongIds.includes(attempt.questionId)).length,
+      };
+    },
+    {
+      targetIds: CET4_VOCABULARY_BANK.slice(120, 130).map((item) => item.id),
+      wrongIds: CET4_VOCABULARY_BANK.slice(240, 255).map((item) => item.id),
+    },
+  );
+
+  expect(repairedCounts).toEqual({ targetCount: 10, wrongCount: 0 });
+});
+
 test('submitted draft answers count as today records before finishing the session', async ({ page }) => {
   await installSpeechSynthesisMock(page);
   await registerAndEnterApp(page, 'mvp-draft-answer-record');
@@ -955,7 +1050,7 @@ test('due review reminder does not block grammar practice', async ({ page }) => 
 
   await page.reload();
   await expect(page.getByTestId('review-gate-banner')).toBeVisible();
-  await expect(page.getByTestId('review-gate-banner')).toContainText('不会阻止你进入语法');
+  await expect(page.getByTestId('review-gate-banner')).toContainText('今日还有');
 
   await page.getByRole('button', { name: '专项练习' }).click();
   await expect(page.getByRole('heading', { name: /专项练习/ })).toBeVisible();
@@ -973,7 +1068,7 @@ test('listening practice starts automatic speech playback', async ({ page }) => 
   await page.getByRole('button', { name: '开始听力训练' }).click();
 
   await expect(page.getByRole('heading', { name: /听力训练 - 长对话/ })).toBeVisible();
-  await expect(page.getByTestId('listening-auto-speech-status')).toContainText('自动播报长对话');
+  await expect(page.getByTestId('listening-auto-speech-status')).toContainText('自动播报');
   await expect.poll(async () => page.evaluate(() => (window as any).__speechSynthesisCalls?.length ?? 0)).toBeGreaterThanOrEqual(1);
   const firstSpeechText = await page.evaluate(() => (window as any).__speechSynthesisCalls?.[0] ?? '');
   expect(firstSpeechText).toContain(CET4_MOCK_EXAM.listening.transcript.slice(0, 48));

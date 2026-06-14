@@ -312,9 +312,9 @@ export default function ListeningTraining({
       stopPracticeSpeech();
       setIsPlaying(false);
       setIsPlaybackPaused(false);
-      triggerToast('自动播报已关闭，可点击播放按钮手动开始。');
+      triggerToast('自动播报关闭');
     } else {
-      triggerToast('自动播报已开启，将自动开始播放长对话。');
+      triggerToast('自动播报开启');
     }
   };
 
@@ -639,7 +639,7 @@ export default function ListeningTraining({
               data-testid="listening-auto-speech-status"
               className="mt-3 rounded-2xl bg-white px-4 py-3 text-center text-xs font-bold leading-5 text-slate-500"
             >
-              {autoPlaybackEnabled ? '进入听力专项后自动播报长对话，可暂停、调速或重听。' : '自动播报已关闭，可点击播放按钮手动开始。'}
+              {autoPlaybackEnabled ? '自动播报开启' : '自动播报关闭'}
             </p>
 
           </div>
