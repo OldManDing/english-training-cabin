@@ -37,6 +37,11 @@ import {
   type PracticeProgressModuleId,
 } from '../domain/practice/practicedQuestions';
 import { buildDraftPracticeAttempts } from '../domain/practice/draftAttempts';
+import {
+  GRAMMAR_STRUCTURE_TOPIC_GUIDES,
+  getGrammarStructureTopicByFocus,
+  getGrammarStructureTopicByLabel,
+} from '../domain/practice/grammarStructureGuides';
 import PracticeMethodGuide from './PracticeMethodGuide';
 
 type PracticeModuleId = PracticeProgressModuleId;
@@ -140,12 +145,16 @@ function buildPracticeQuestionBank(): Record<PracticeModuleId, PracticeQuestionD
       questionTypeId: question.questionTypeId,
       label: question.title,
     })),
-    grammar: CET4_GRAMMAR_PRACTICE_QUESTIONS.map((question) => ({
-      id: question.id,
-      moduleId: question.moduleId,
-      questionTypeId: question.questionTypeId,
-      label: question.title,
-    })),
+    grammar: CET4_GRAMMAR_PRACTICE_QUESTIONS.map((question) => {
+      const topic = getGrammarStructureTopicByFocus(question.trapType);
+      return {
+        id: question.id,
+        moduleId: question.moduleId,
+        questionTypeId: question.questionTypeId,
+        label: `${question.title} · ${topic.shortLabel}`,
+        groupLabel: topic.label,
+      };
+    }),
     reading: CET4_READING_BANK.flatMap((passage, passageIndex) => passage.questions.map((question, questionIndex) => ({
       id: question.id,
       moduleId: question.moduleId ?? passage.moduleId ?? 'reading',
@@ -806,6 +815,39 @@ function QuestionStatusPanel({
     { id: 'answered', label: '已答', count: practicedCount },
     { id: 'unanswered', label: '未答', count: remainingCount },
   ];
+  const grammarTopicOrder = new Map(GRAMMAR_STRUCTURE_TOPIC_GUIDES.map((topic, index) => [topic.label, index]));
+  const groupedStatuses = moduleId === 'grammar'
+    ? Array.from(statuses.reduce((groups, item) => {
+      const label = item.groupLabel ?? '综合结构题';
+      const group = groups.get(label) ?? [];
+      group.push(item);
+      groups.set(label, group);
+      return groups;
+    }, new Map<string, PracticeQuestionStatusItem[]>()).entries())
+      .sort((left, right) => (grammarTopicOrder.get(left[0]) ?? 999) - (grammarTopicOrder.get(right[0]) ?? 999))
+    : [];
+  const renderStatusButton = (item: PracticeQuestionStatusItem) => (
+    <div
+      key={item.id}
+      role="listitem"
+      className="min-w-11"
+    >
+      <button
+        type="button"
+        data-testid={`practice-question-status-${moduleId}-${item.number}`}
+        title={`${item.groupLabel ? `${item.groupLabel} · ` : ''}${item.label} · ${item.practiced ? '已答' : '未答'} · 点击进入本题`}
+        aria-label={`${moduleLabel} 第 ${item.number} 题 ${item.practiced ? '已答' : '未答'}，点击进入本题`}
+        onClick={() => onSelectQuestion(item)}
+        className={`flex h-11 w-full min-w-11 items-center justify-center rounded-xl border text-xs font-black transition hover:-translate-y-0.5 hover:border-[#003178]/45 focus:outline-none focus:ring-2 focus:ring-[#003178]/25 ${
+          item.practiced
+            ? 'border-[#cfe6f2] bg-[#eef7fc] text-[#003178]'
+            : 'border-slate-200 bg-white text-slate-500'
+        }`}
+      >
+        {item.number}
+      </button>
+    </div>
+  );
 
   return (
     <section data-testid={`practice-question-status-${moduleId}`} className="ui-panel">
@@ -846,30 +888,33 @@ function QuestionStatusPanel({
         <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm font-bold text-slate-500">
           当前筛选下暂无题目。
         </div>
+      ) : groupedStatuses.length > 0 ? (
+        <div className="mt-4 space-y-4">
+          {groupedStatuses.map(([groupLabel, groupItems]) => {
+            const groupPracticedCount = groupItems.filter((item) => item.practiced).length;
+            const groupTopic = getGrammarStructureTopicByLabel(groupLabel);
+            return (
+              <section
+                key={groupLabel}
+                data-testid={`practice-question-status-group-${moduleId}-${groupTopic.id}`}
+                className="rounded-2xl border border-[#dde5ee] bg-[#f8fafc] p-3"
+              >
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <h4 className="text-sm font-black text-[#101828]">{groupLabel}</h4>
+                  <span className="text-[11px] font-black text-slate-500">
+                    已答 {groupPracticedCount} / {groupItems.length}
+                  </span>
+                </div>
+                <div role="list" className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(2.75rem,1fr))] gap-2">
+                  {groupItems.map(renderStatusButton)}
+                </div>
+              </section>
+            );
+          })}
+        </div>
       ) : (
         <div role="list" className="mt-4 grid grid-cols-[repeat(auto-fill,minmax(2.75rem,1fr))] gap-2">
-          {statuses.map((item) => (
-            <div
-              key={item.id}
-              role="listitem"
-              className="min-w-11"
-            >
-              <button
-                type="button"
-                data-testid={`practice-question-status-${moduleId}-${item.number}`}
-                title={`${item.groupLabel ? `${item.groupLabel} · ` : ''}${item.label} · ${item.practiced ? '已答' : '未答'} · 点击进入本题`}
-                aria-label={`${moduleLabel} 第 ${item.number} 题 ${item.practiced ? '已答' : '未答'}，点击进入本题`}
-                onClick={() => onSelectQuestion(item)}
-                className={`flex h-11 w-full min-w-11 items-center justify-center rounded-xl border text-xs font-black transition hover:-translate-y-0.5 hover:border-[#003178]/45 focus:outline-none focus:ring-2 focus:ring-[#003178]/25 ${
-                  item.practiced
-                    ? 'border-[#cfe6f2] bg-[#eef7fc] text-[#003178]'
-                    : 'border-slate-200 bg-white text-slate-500'
-                }`}
-              >
-                {item.number}
-              </button>
-            </div>
-          ))}
+          {statuses.map(renderStatusButton)}
         </div>
       )}
 

@@ -1,4 +1,5 @@
 import type { PracticeProgressModuleId } from './practicedQuestions';
+import { GRAMMAR_STRUCTURE_TOPIC_GUIDES, type GrammarStructureTopicGuide } from './grammarStructureGuides';
 
 export type PracticeMethodGuideModuleId = PracticeProgressModuleId | 'speaking';
 
@@ -9,6 +10,7 @@ export interface PracticeMethodGuide {
   steps: readonly [string, string, string, string];
   focus: readonly [string, string, string];
   payoff: string;
+  topicGuides?: readonly GrammarStructureTopicGuide[];
 }
 
 export const PRACTICE_METHOD_GUIDES: Record<PracticeMethodGuideModuleId, PracticeMethodGuide> = {
@@ -41,15 +43,16 @@ export const PRACTICE_METHOD_GUIDES: Record<PracticeMethodGuideModuleId, Practic
   grammar: {
     moduleId: 'grammar',
     title: '语法结构解题方法',
-    intro: '先找句子骨架，再判断考点类型。',
+    intro: '先把题目归到具体考点，再按该类题的固定步骤解。',
     steps: [
-      '先找主语、谓语和补充成分，确认句子主干。',
-      '判断考点属于时态、语态、非谓语、从句还是连接词。',
-      '先排除明显不合句法的选项，再比较细节差异。',
-      '用规则回验一遍，确保答案能在句子里成立。',
+      '先找主语、谓语和空格位置，确认空格是在谓语、非谓语、连接词还是修饰成分上。',
+      '再看显性线索：时间状语判时态，主谓关系判语态，to/doing/done 判非谓语。',
+      '把选项按考点类型分组排除，不把时态题、语态题、搭配题混在一起凭语感猜。',
+      '提交前用该类题的验算点回读整句，确认结构、逻辑和动词形式同时成立。',
     ],
-    focus: ['句子主干', '考点分类', '规则验证'],
-    payoff: '先定结构，再看选项，语法题的失误会少很多。',
+    focus: ['时态', '语态', '非谓语'],
+    payoff: '语法题先分类再套步骤，才能知道自己到底错在时态、语态还是结构。',
+    topicGuides: GRAMMAR_STRUCTURE_TOPIC_GUIDES.filter((topic) => topic.id !== 'other'),
   },
   reading: {
     moduleId: 'reading',

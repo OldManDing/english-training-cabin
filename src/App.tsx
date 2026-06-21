@@ -159,7 +159,7 @@ function buildChoiceQuestionPassage(params: {
       options: question.options,
       correctAnswer: question.correctAnswer,
       explanation: question.explanation,
-      type: question.title,
+      type: question.trapType ?? question.title,
       tags: [question.trapType ?? question.questionTypeId],
       difficulty: 3,
       sourceType: 'original',

@@ -10,6 +10,7 @@ interface PracticeMethodGuideProps {
   moduleId: PracticeMethodGuideModuleId;
   compact?: boolean;
   className?: string;
+  activeTopicId?: string;
 }
 
 function StepCard({ index, text, compact }: { key?: React.Key; index: number; text: string; compact?: boolean }) {
@@ -25,8 +26,14 @@ function StepCard({ index, text, compact }: { key?: React.Key; index: number; te
   );
 }
 
-export default function PracticeMethodGuide({ moduleId, compact = false, className = '' }: PracticeMethodGuideProps) {
+export default function PracticeMethodGuide({
+  moduleId,
+  compact = false,
+  className = '',
+  activeTopicId,
+}: PracticeMethodGuideProps) {
   const guide: PracticeMethodGuideData = getPracticeMethodGuide(moduleId);
+  const topicGuides = guide.topicGuides ?? [];
 
   return (
     <section
@@ -63,6 +70,58 @@ export default function PracticeMethodGuide({ moduleId, compact = false, classNa
           <StepCard key={step} index={index} text={step} compact={compact} />
         ))}
       </div>
+
+      {topicGuides.length > 0 ? (
+        <div data-testid={`practice-method-guide-topics-${moduleId}`} className="mt-4">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h4 className="text-sm font-black text-[#101828]">按考点分组练</h4>
+              <p className="mt-1 text-xs font-bold leading-5 text-slate-500">
+                先判断题目属于哪一类，再套对应步骤。
+              </p>
+            </div>
+          </div>
+          <div className={`mt-3 grid gap-3 ${compact ? 'lg:grid-cols-2' : 'md:grid-cols-2 xl:grid-cols-4'}`}>
+            {topicGuides.map((topic) => {
+              const active = topic.id === activeTopicId;
+              return (
+                <article
+                  key={topic.id}
+                  data-testid={`practice-method-guide-topic-${moduleId}-${topic.id}`}
+                  className={`rounded-2xl border bg-white p-3 transition ${
+                    active ? 'border-[#003178] ring-1 ring-[#dcecff]' : 'border-[#dde5ee]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`text-xs font-black ${active ? 'text-[#003178]' : 'text-[#101828]'}`}>
+                      {topic.label}
+                    </span>
+                    {active ? (
+                      <span className="rounded-full bg-[#eef7fc] px-2 py-0.5 text-[10px] font-black text-[#003178]">
+                        当前考点
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-2 text-[11px] font-bold leading-5 text-slate-500">{topic.cue}</p>
+                  <ol className="mt-2 space-y-1.5">
+                    {topic.methodSteps.map((step, index) => (
+                      <li key={step} className="flex gap-2 text-[11px] font-semibold leading-5 text-slate-600">
+                        <span className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-black text-[#003178]">
+                          {index + 1}
+                        </span>
+                        <span>{step}</span>
+                      </li>
+                    ))}
+                  </ol>
+                  <p className="mt-2 rounded-xl bg-[#f8fafc] px-3 py-2 text-[11px] font-black leading-5 text-slate-600">
+                    验算：{topic.checkpoint}
+                  </p>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-[#dde5ee] bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs font-bold leading-5 text-slate-600">

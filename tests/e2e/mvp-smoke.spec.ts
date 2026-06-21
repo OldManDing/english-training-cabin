@@ -796,8 +796,14 @@ test('practice question status numbers open the selected module question', async
   await page.getByTestId('listening-back-to-practice').click();
 
   await page.getByTestId('practice-module-select-grammar').click();
+  await expect(page.getByTestId('practice-method-guide-topic-grammar-tense')).toContainText('时态题');
+  await expect(page.getByTestId('practice-method-guide-topic-grammar-voice')).toContainText('语态题');
+  await expect(page.getByTestId('practice-question-status-group-grammar-tense')).toContainText('时态题');
+  await expect(page.getByTestId('practice-question-status-group-grammar-voice')).toContainText('语态题');
   await page.getByTestId('practice-question-status-grammar-2').click();
   await expect(page.getByText(CET4_GRAMMAR_PRACTICE_QUESTIONS[1].prompt)).toBeVisible();
+  await expect(page.getByText('核心考向：时态|现在完成时')).toBeVisible();
+  await expect(page.getByTestId('practice-method-guide-topic-grammar-tense')).toContainText('当前考点');
   await page.getByTestId('reading-back-to-practice').click();
 
   await page.getByTestId('practice-module-select-writing').click();

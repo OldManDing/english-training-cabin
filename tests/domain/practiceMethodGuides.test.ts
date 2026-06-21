@@ -28,4 +28,15 @@ describe('practice method guides', () => {
       expect(guide.payoff).toMatch(/\S/);
     }
   });
+
+  it('keeps grammar structure methods grouped by concrete question type', () => {
+    const grammarGuide = PRACTICE_METHOD_GUIDES.grammar;
+    const topicLabels = grammarGuide.topicGuides?.map((topic) => topic.label) ?? [];
+
+    expect(topicLabels).toContain('时态题');
+    expect(topicLabels).toContain('语态题');
+    expect(topicLabels).toContain('非谓语题');
+    expect(topicLabels).toContain('从句与连接词题');
+    expect(grammarGuide.topicGuides?.every((topic) => topic.methodSteps.length === 3)).toBe(true);
+  });
 });

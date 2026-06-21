@@ -16,6 +16,7 @@ import {
 import { buildChoicePracticeReport } from '../domain/practice/reports';
 import { buildChoiceOptionInsights } from '../domain/productCoach';
 import { getQuestionSentenceSupport } from '../domain/practice/sentenceTranslations';
+import { getGrammarStructureTopicByFocus } from '../domain/practice/grammarStructureGuides';
 import { pausePracticeSpeech, playPracticeSpeech, resumePracticeSpeech, stopPracticeSpeech } from '../lib/practiceSpeech';
 import ChoiceOptionInsightGrid from './ChoiceOptionInsightGrid';
 import PracticeMethodGuide from './PracticeMethodGuide';
@@ -142,6 +143,9 @@ export default function ReadingTraining({ passage, initialQuestionId, replayAtte
     : practiceModuleId === 'grammar'
       ? 'grammar'
       : 'reading';
+  const activeMethodTopicId = practiceModuleId === 'grammar' && practiceQuestionTypeId === 'grammar-structure'
+    ? getGrammarStructureTopicByFocus(currentQuestion.tags?.[0] ?? currentQuestion.type).id
+    : undefined;
 
   const persistDraft = (nextState: {
     currentIdx?: number;
@@ -502,7 +506,12 @@ export default function ReadingTraining({ passage, initialQuestionId, replayAtte
         </div>
       </div>
 
-      <PracticeMethodGuide moduleId={methodGuideModuleId} compact className="mx-4 mt-4 mb-4 sm:mx-6 lg:mx-8" />
+      <PracticeMethodGuide
+        moduleId={methodGuideModuleId}
+        compact
+        activeTopicId={activeMethodTopicId}
+        className="mx-4 mt-4 mb-4 sm:mx-6 lg:mx-8"
+      />
 
       {/* Split Screens Panel */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
