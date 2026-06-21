@@ -659,6 +659,17 @@ function StudyApp() {
     });
   };
 
+  const handleRecordVocabularyAnswer = async (report: PracticeCompletionReport) => {
+    try {
+      await persistCompletionReport(report);
+    } catch (error) {
+      console.error('Failed to persist vocabulary answer:', error);
+      trackTelemetry('client_error', { area: 'vocabulary_answer_persist' });
+      handleTriggerModal('词汇作答保存失败', '本题作答没有成功写入记录，请稍后重试。');
+      throw error;
+    }
+  };
+
   const handleCompleteMockExam = (score: number, report: PracticeCompletionReport) => {
     setActiveTab('progress');
     trackTelemetry('practice_completed', {
@@ -889,6 +900,7 @@ function StudyApp() {
             items={practiceJumpTarget?.moduleId === 'vocabulary' ? CET4_VOCABULARY_BANK : unpracticedVocabularyItems}
             onBack={handleBackFromPractice}
             onComplete={handleCompleteVocabularyPractice}
+            onAnswerRecorded={handleRecordVocabularyAnswer}
           />
         </Suspense>
       ) : isPracticing ? (

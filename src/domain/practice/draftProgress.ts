@@ -29,6 +29,7 @@ export interface ReadingPracticeDraft {
 
 export interface VocabularyPracticeDraft {
   version: 1;
+  sessionId?: string;
   startedAt: string;
   packIndex: number;
   currentIdx: number;

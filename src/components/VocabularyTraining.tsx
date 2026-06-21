@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, CheckCircle2, ChevronRight, Headphones, PauseCircle, Volume2, XCircle } from 'lucide-react';
-import { VocabularyPracticeItem, VOCABULARY_SESSION_SIZE } from '../data';
+import { CET4_VOCABULARY_BANK, VocabularyPracticeItem, VOCABULARY_SESSION_SIZE } from '../data';
 import { Attempt, ChoiceOption, PracticeCompletionReport } from '../types';
 import { buildChoiceReplayAnswer } from '../domain/practice/attemptReplay';
 import {
@@ -26,13 +26,18 @@ interface VocabularyTrainingProps {
   replayAttempt?: Attempt;
   onBack: () => void;
   onComplete: (score: number, report: PracticeCompletionReport) => void;
+  onAnswerRecorded?: (report: PracticeCompletionReport) => Promise<void> | void;
 }
 
 type Choice = ChoiceOption;
 type Confidence = ChoiceConfidence;
 type VocabularyAnswer = ChoicePracticeDraftAnswer;
 type SpeechTarget = 'word' | 'example' | 'auto';
+type AnswerRecordStatus = 'idle' | 'saving' | 'saved' | 'failed';
 const AUTO_SPEECH_RATE = 0.84;
+
+const createVocabularySessionId = () =>
+  `session-vocabulary-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 const findVocabularyQuestionLocation = (items: VocabularyPracticeItem[], questionId?: string) => {
   if (!questionId) return { packIndex: 0, currentIdx: 0 };
@@ -48,6 +53,7 @@ const findVocabularyQuestionLocation = (items: VocabularyPracticeItem[], questio
 const createEmptyVocabularyDraftState = (items: VocabularyPracticeItem[] = [], initialQuestionId?: string) => ({
   restored: false,
   replayed: false,
+  sessionId: createVocabularySessionId(),
   startedAt: new Date().toISOString(),
   ...findVocabularyQuestionLocation(items, initialQuestionId),
   selectedOpt: null as Choice | null,
@@ -75,6 +81,7 @@ const createVocabularyReplayState = (items: VocabularyPracticeItem[], initialQue
   return {
     restored: false,
     replayed: true,
+    sessionId: createVocabularySessionId(),
     startedAt: new Date().toISOString(),
     ...location,
     selectedOpt: replayAnswer.selected,
@@ -108,6 +115,7 @@ const loadVocabularyDraftState = (items: VocabularyPracticeItem[], initialQuesti
   return {
     restored: true,
     replayed: false,
+    sessionId: draft.sessionId ?? fallback.sessionId,
     startedAt: draft.startedAt ?? fallback.startedAt,
     packIndex,
     currentIdx,
@@ -118,26 +126,38 @@ const loadVocabularyDraftState = (items: VocabularyPracticeItem[], initialQuesti
   };
 };
 
-export default function VocabularyTraining({ items, initialQuestionId, replayAttempt, onBack, onComplete }: VocabularyTrainingProps) {
+export default function VocabularyTraining({
+  items,
+  initialQuestionId,
+  replayAttempt,
+  onBack,
+  onComplete,
+  onAnswerRecorded,
+}: VocabularyTrainingProps) {
   const [initialDraft] = useState(() => loadVocabularyDraftState(items, initialQuestionId, replayAttempt));
+  const practiceItemsRef = useRef(items);
+  const practiceItems = practiceItemsRef.current;
   const isFirstQuestionSync = useRef(true);
   const submittedRevealRef = useRef<HTMLDivElement | null>(null);
   const shouldScrollToSubmittedSupportRef = useRef(false);
+  const recordWriteRef = useRef<Promise<void>>(Promise.resolve());
   const [packIndex, setPackIndex] = useState(initialDraft.packIndex);
   const [currentIdx, setCurrentIdx] = useState(initialDraft.currentIdx);
   const [selectedOpt, setSelectedOpt] = useState<Choice | null>(initialDraft.selectedOpt);
   const [confidence, setConfidence] = useState<Confidence | null>(initialDraft.confidence);
   const [isSubmitted, setIsSubmitted] = useState(initialDraft.isSubmitted);
+  const [recordStatus, setRecordStatus] = useState<AnswerRecordStatus>('idle');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [activeSpeechTarget, setActiveSpeechTarget] = useState<SpeechTarget | null>(null);
   const [pausedSpeechTarget, setPausedSpeechTarget] = useState<SpeechTarget | null>(null);
   const [autoSpeakEnabled, setAutoSpeakEnabled] = useState(true);
   const [speechNotice, setSpeechNotice] = useState('自动播报开启');
   const [answers, setAnswers] = useState<VocabularyAnswer[]>(initialDraft.answers);
-  const [startedAt] = useState(() => initialDraft.startedAt);
+  const [startedAt, setStartedAt] = useState(() => initialDraft.startedAt);
+  const [sessionId, setSessionId] = useState(() => initialDraft.sessionId);
 
-  const packCount = Math.max(1, Math.ceil(items.length / VOCABULARY_SESSION_SIZE));
-  const sessionItems = items.slice(
+  const packCount = Math.max(1, Math.ceil(practiceItems.length / VOCABULARY_SESSION_SIZE));
+  const sessionItems = practiceItems.slice(
     packIndex * VOCABULARY_SESSION_SIZE,
     (packIndex + 1) * VOCABULARY_SESSION_SIZE,
   );
@@ -157,10 +177,12 @@ export default function VocabularyTraining({ items, initialQuestionId, replayAtt
     confidence?: Confidence | null;
     isSubmitted?: boolean;
     answers?: VocabularyAnswer[];
+    sessionId?: string;
     startedAt?: string;
   }) => {
     savePracticeDraft<VocabularyPracticeDraft>(draftKey, {
       version: 1,
+      sessionId: nextState.sessionId ?? sessionId,
       startedAt: nextState.startedAt ?? startedAt,
       packIndex: nextState.packIndex ?? packIndex,
       currentIdx: nextState.currentIdx ?? currentIdx,
@@ -173,12 +195,17 @@ export default function VocabularyTraining({ items, initialQuestionId, replayAtt
   };
 
   const switchPack = (nextPackIndex: number) => {
+    const nextStartedAt = new Date().toISOString();
+    const nextSessionId = createVocabularySessionId();
     setPackIndex(nextPackIndex);
     setCurrentIdx(0);
     setAnswers([]);
     setSelectedOpt(null);
     setConfidence(null);
     setIsSubmitted(false);
+    setRecordStatus('idle');
+    setStartedAt(nextStartedAt);
+    setSessionId(nextSessionId);
     persistDraft({
       packIndex: nextPackIndex,
       currentIdx: 0,
@@ -186,7 +213,8 @@ export default function VocabularyTraining({ items, initialQuestionId, replayAtt
       confidence: null,
       isSubmitted: false,
       answers: [],
-      startedAt: new Date().toISOString(),
+      sessionId: nextSessionId,
+      startedAt: nextStartedAt,
     });
   };
 
@@ -219,6 +247,94 @@ export default function VocabularyTraining({ items, initialQuestionId, replayAtt
         );
       },
     });
+  };
+
+  const buildVocabularyQuestion = (item: VocabularyPracticeItem) => ({
+    id: item.id,
+    question: `${item.word}${item.phonetic ? ` ${item.phonetic}` : ``}: ${item.example}`,
+    options: item.options,
+    optionTranslations: getVocabularyQuestionSupport(item).optionTranslations.reduce<Partial<Record<Choice, string>>>((result, translation) => {
+      result[translation.key] = translation.chineseMeaning;
+      return result;
+    }, {}),
+    correctAnswer: item.correctAnswer,
+    type: '词义辨析与听音识别',
+    trapType: '关键语块漏听',
+    moduleId: 'vocabulary',
+    questionTypeId: 'cet4-core-vocabulary',
+    correctSentence: `${item.collocation}. ${item.example}`,
+    correctSentenceTranslation: getVocabularySentenceSupport(item).chineseMeaning,
+    questionTranslation: getVocabularyQuestionSupport(item).prompt.chineseMeaning,
+    explanation: item.explanation,
+  });
+
+  const buildVocabularyReport = (
+    targetAnswers: VocabularyAnswer[],
+    options: {
+      sessionStatus: 'active' | 'completed';
+      includeEvidence: boolean;
+      answeredOnly: boolean;
+    },
+  ) => {
+    const answeredPairs = options.answeredOnly
+      ? targetAnswers.flatMap((answer, index) => {
+        if (!answer) return [];
+        const item = answer.questionId
+          ? CET4_VOCABULARY_BANK.find((entry) => entry.id === answer.questionId)
+          : sessionItems[index];
+        return item ? [{ item, answer }] : [];
+      })
+      : [];
+    const selectedItems = options.answeredOnly
+      ? answeredPairs.map((pair) => pair.item)
+      : sessionItems;
+    const selectedAnswers = options.answeredOnly
+      ? answeredPairs.map((pair) => pair.answer)
+      : targetAnswers;
+
+    return buildChoicePracticeReport({
+      examId: 'cet4',
+      sessionId,
+      sessionStatus: options.sessionStatus,
+      moduleId: 'vocabulary',
+      questionTypeId: 'cet4-core-vocabulary',
+      modeId: 'vocabulary-audio-choice',
+      skillArea: 'vocabulary',
+      plannedMinutes: Math.max(12, Math.ceil(sessionItems.length * 0.75)),
+      startedAt,
+      questions: selectedItems.map(buildVocabularyQuestion),
+      answers: selectedAnswers.map((answer) => ({
+        selected: answer?.selected,
+        correct: Boolean(answer?.correct),
+        confidence: answer?.confidence,
+      })),
+      attemptIdForQuestion: (question) => `attempt-${sessionId}-${question.id}`,
+      includeReviewItems: options.includeEvidence,
+      includeSkillProfiles: options.includeEvidence,
+    });
+  };
+
+  const queueVocabularyAnswerRecord = (nextAnswers: VocabularyAnswer[]) => {
+    if (!onAnswerRecorded || nextAnswers.every((answer) => !answer)) return;
+    const report = buildVocabularyReport(nextAnswers, {
+      sessionStatus: 'active',
+      includeEvidence: false,
+      answeredOnly: true,
+    });
+
+    setRecordStatus('saving');
+    const write = recordWriteRef.current
+      .catch(() => undefined)
+      .then(() => Promise.resolve(onAnswerRecorded(report)))
+      .then(() => {
+        setRecordStatus('saved');
+      })
+      .catch((error) => {
+        console.error('Failed to persist vocabulary answer:', error);
+        setRecordStatus('failed');
+      });
+
+    recordWriteRef.current = write.catch(() => undefined);
   };
 
   const toggleSpeech = async (
@@ -268,12 +384,18 @@ export default function VocabularyTraining({ items, initialQuestionId, replayAtt
       setSelectedOpt(savedAnswer?.selected ?? null);
       setConfidence(savedAnswer?.confidence ?? null);
       setIsSubmitted(Boolean(savedAnswer));
+      setRecordStatus(savedAnswer && onAnswerRecorded ? 'saved' : 'idle');
     }
     stopPracticeSpeech();
     setIsSpeaking(false);
     setActiveSpeechTarget(null);
     setPausedSpeechTarget(null);
   }, [currentIdx, packIndex]);
+
+  useEffect(() => {
+    if (!initialDraft.restored || initialDraft.replayed || answers.every((answer) => !answer)) return;
+    queueVocabularyAnswerRecord(answers);
+  }, []);
 
   useEffect(() => {
     if (!autoSpeakEnabled || !currentItem) return;
@@ -344,45 +466,21 @@ export default function VocabularyTraining({ items, initialQuestionId, replayAtt
       isSubmitted: true,
       answers: nextAnswers,
     });
+    queueVocabularyAnswerRecord(nextAnswers);
   };
 
   const finish = (finalAnswers: typeof answers) => {
     const correctCount = finalAnswers.filter((answer) => answer?.correct).length;
     const score = Math.round((correctCount / Math.max(1, sessionItems.length)) * 100);
-    const report = buildChoicePracticeReport({
-      examId: 'cet4',
-      moduleId: 'vocabulary',
-      questionTypeId: 'cet4-core-vocabulary',
-      modeId: 'vocabulary-audio-choice',
-      skillArea: 'vocabulary',
-      plannedMinutes: Math.max(12, Math.ceil(sessionItems.length * 0.75)),
-      startedAt,
-      questions: sessionItems.map((item) => ({
-        id: item.id,
-        question: `${item.word}${item.phonetic ? ` ${item.phonetic}` : ``}: ${item.example}`,
-        options: item.options,
-        optionTranslations: getVocabularyQuestionSupport(item).optionTranslations.reduce<Partial<Record<Choice, string>>>((result, translation) => {
-          result[translation.key] = translation.chineseMeaning;
-          return result;
-        }, {}),
-        correctAnswer: item.correctAnswer,
-        type: '词义辨析与听音识别',
-        trapType: '关键语块漏听',
-        moduleId: 'vocabulary',
-        questionTypeId: 'cet4-core-vocabulary',
-        correctSentence: `${item.collocation}. ${item.example}`,
-        correctSentenceTranslation: getVocabularySentenceSupport(item).chineseMeaning,
-        questionTranslation: getVocabularyQuestionSupport(item).prompt.chineseMeaning,
-        explanation: item.explanation,
-      })),
-      answers: finalAnswers.map((answer) => ({
-        selected: answer?.selected,
-        correct: Boolean(answer?.correct),
-        confidence: answer?.confidence,
-      })),
+    const report = buildVocabularyReport(finalAnswers, {
+      sessionStatus: 'completed',
+      includeEvidence: true,
+      answeredOnly: false,
     });
     clearPracticeDraft(draftKey);
-    onComplete(score, report);
+    void recordWriteRef.current.finally(() => {
+      onComplete(score, report);
+    });
   };
 
   const handleNext = () => {
@@ -394,6 +492,7 @@ export default function VocabularyTraining({ items, initialQuestionId, replayAtt
       setSelectedOpt(savedAnswer?.selected ?? null);
       setConfidence(savedAnswer?.confidence ?? null);
       setIsSubmitted(Boolean(savedAnswer));
+      setRecordStatus(savedAnswer && onAnswerRecorded ? 'saved' : 'idle');
       persistDraft({
         currentIdx: nextIdx,
         selectedOpt: savedAnswer?.selected ?? null,
@@ -420,7 +519,7 @@ export default function VocabularyTraining({ items, initialQuestionId, replayAtt
               返回专项练习
             </button>
             <div className="text-sm font-black text-slate-500">
-              CET-4 核心词汇听音练习 · 本组 {currentIdx + 1}/{sessionItems.length} · 词库 {items.length}
+              CET-4 核心词汇听音练习 · 本组 {currentIdx + 1}/{sessionItems.length} · 词库 {practiceItems.length}
             </div>
             {initialDraft.replayed ? (
               <span
@@ -655,6 +754,22 @@ export default function VocabularyTraining({ items, initialQuestionId, replayAtt
                   )}
                   正确答案：{currentItem.correctAnswer}
                 </div>
+                {recordStatus !== 'idle' ? (
+                  <div
+                    data-testid="vocabulary-record-status"
+                    className={`mt-3 rounded-xl border px-3 py-2 text-xs font-black ${
+                      recordStatus === 'failed'
+                        ? 'border-rose-200 bg-rose-50 text-rose-700'
+                        : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                    }`}
+                  >
+                    {recordStatus === 'saving'
+                      ? '正在写入作答记录'
+                      : recordStatus === 'failed'
+                        ? '作答记录写入失败，请稍后重试'
+                        : '本题已写入作答记录'}
+                  </div>
+                ) : null}
                 <div className="mt-4">
                   <ChoiceOptionInsightGrid
                     testIdPrefix="vocabulary"

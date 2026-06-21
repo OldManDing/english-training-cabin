@@ -925,6 +925,7 @@ test('submitted draft answers count as today records before finishing the sessio
     await page.getByTestId('vocabulary-confidence-sure').click();
     await page.getByTestId('vocabulary-submit').click();
     await expect(page.getByTestId('vocabulary-post-answer-support')).toBeVisible();
+    await expect(page.getByTestId('vocabulary-record-status')).toContainText('已写入作答记录');
     if (index < 2) {
       await page.getByTestId('vocabulary-next').click();
       await expect(page.getByTestId('vocabulary-post-answer-support')).toHaveCount(0);
@@ -945,13 +946,15 @@ test('submitted draft answers count as today records before finishing the sessio
       request.onerror = () => reject(request.error);
     });
     const tx = db.transaction(['practiceSessions', 'attempts'], 'readonly');
-    const sessions = await requestToPromise(tx.objectStore('practiceSessions').count());
-    const attempts = await requestToPromise(tx.objectStore('attempts').count());
+    const sessions = await requestToPromise(tx.objectStore('practiceSessions').getAll());
+    const attempts = await requestToPromise(tx.objectStore('attempts').getAll());
     db.close();
     const draft = JSON.parse(localStorage.getItem('english-training-cabin:practice-draft:vocabulary') ?? '{}');
     return {
-      sessions,
-      attempts,
+      sessions: sessions.length,
+      attempts: attempts.length,
+      sessionStatuses: sessions.map((session: { status: string }) => session.status),
+      attemptQuestionIds: attempts.map((attempt: { questionId: string }) => attempt.questionId),
       draftAnswerCount: Array.isArray(draft.answers) ? draft.answers.length : 0,
       draftQuestionIds: Array.isArray(draft.answers)
         ? draft.answers.map((answer: { questionId?: string } | undefined) => answer?.questionId)
@@ -960,8 +963,10 @@ test('submitted draft answers count as today records before finishing the sessio
   });
 
   expect(localCounts).toEqual({
-    sessions: 0,
-    attempts: 0,
+    sessions: 1,
+    attempts: 3,
+    sessionStatuses: ['active'],
+    attemptQuestionIds: CET4_VOCABULARY_BANK.slice(0, 3).map((item) => item.id),
     draftAnswerCount: 3,
     draftQuestionIds: CET4_VOCABULARY_BANK.slice(0, 3).map((item) => item.id),
   });

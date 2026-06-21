@@ -35,6 +35,9 @@ export interface ChoicePracticeAnswer {
 
 interface BuildChoicePracticeReportInput {
   examId?: string;
+  sessionId?: string;
+  sessionStatus?: PracticeSession['status'];
+  finishedAt?: string;
   moduleId: string;
   questionTypeId: string;
   modeId: string;
@@ -43,6 +46,9 @@ interface BuildChoicePracticeReportInput {
   startedAt: string;
   questions: ChoicePracticeQuestion[];
   answers: ChoicePracticeAnswer[];
+  attemptIdForQuestion?: (question: ChoicePracticeQuestion, index: number) => string;
+  includeReviewItems?: boolean;
+  includeSkillProfiles?: boolean;
 }
 
 export interface SpeakingPracticeAnalysis {
@@ -274,8 +280,9 @@ function buildReviewItem(params: {
 
 export function buildChoicePracticeReport(input: BuildChoicePracticeReportInput): PracticeCompletionReport {
   const examId = input.examId ?? 'cet4';
-  const sessionId = makeId(`session-${input.moduleId}`);
-  const now = new Date().toISOString();
+  const sessionId = input.sessionId ?? makeId(`session-${input.moduleId}`);
+  const sessionStatus = input.sessionStatus ?? 'completed';
+  const now = input.finishedAt ?? new Date().toISOString();
   const totalSeconds = Math.max(1, Math.round((Date.now() - new Date(input.startedAt).getTime()) / 1000));
   const elapsedPerQuestion = Math.max(1, Math.round(totalSeconds / Math.max(1, input.questions.length)));
 
@@ -285,10 +292,10 @@ export function buildChoicePracticeReport(input: BuildChoicePracticeReportInput)
     moduleId: input.moduleId,
     modeId: input.modeId,
     startedAt: input.startedAt,
-    finishedAt: now,
+    finishedAt: sessionStatus === 'completed' || input.finishedAt ? now : undefined,
     plannedMinutes: input.plannedMinutes,
     questionIds: input.questions.map((question) => String(question.id)),
-    status: 'completed',
+    status: sessionStatus,
   };
 
   const attempts: Attempt[] = input.questions.map((question, index) => {
@@ -301,7 +308,7 @@ export function buildChoicePracticeReport(input: BuildChoicePracticeReportInput)
     });
 
     return {
-      id: makeId('attempt'),
+      id: input.attemptIdForQuestion?.(question, index) ?? makeId('attempt'),
       sessionId,
       questionId: String(question.id),
       examId,
@@ -316,32 +323,36 @@ export function buildChoicePracticeReport(input: BuildChoicePracticeReportInput)
     };
   });
 
-  const reviewItems = attempts
-    .map((attempt, index) =>
-      buildReviewItem({
-        attempt,
-        question: input.questions[index],
-        reasons: attempt.mistakeReasons,
-        skillArea: input.skillArea,
-      }),
-    )
-    .filter((item): item is ReviewItem => Boolean(item));
+  const reviewItems = input.includeReviewItems === false
+    ? []
+    : attempts
+      .map((attempt, index) =>
+        buildReviewItem({
+          attempt,
+          question: input.questions[index],
+          reasons: attempt.mistakeReasons,
+          skillArea: input.skillArea,
+        }),
+      )
+      .filter((item): item is ReviewItem => Boolean(item));
 
   const correctCount = attempts.filter((attempt) => attempt.isCorrect).length;
   const score = Math.round((correctCount / Math.max(1, attempts.length)) * 100);
-  const skillProfiles: SkillProfile[] = [
-    {
-      id: `${examId}-${input.moduleId}-${input.questionTypeId}`,
-      skillArea: input.skillArea,
-      subSkillId: input.questionTypeId,
-      score,
-      confidence: Math.round(
-        attempts.reduce((sum, attempt) => sum + (attempt.confidence ?? 3), 0) / Math.max(1, attempts.length),
-      ),
-      evidenceCount: attempts.length,
-      lastUpdatedAt: now,
-    },
-  ];
+  const skillProfiles: SkillProfile[] = input.includeSkillProfiles === false
+    ? []
+    : [
+      {
+        id: `${examId}-${input.moduleId}-${input.questionTypeId}`,
+        skillArea: input.skillArea,
+        subSkillId: input.questionTypeId,
+        score,
+        confidence: Math.round(
+          attempts.reduce((sum, attempt) => sum + (attempt.confidence ?? 3), 0) / Math.max(1, attempts.length),
+        ),
+        evidenceCount: attempts.length,
+        lastUpdatedAt: now,
+      },
+    ];
 
   return {
     session,
