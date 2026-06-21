@@ -140,33 +140,50 @@ describe('practice sentence and vocabulary Chinese support', () => {
     expect(support.chunks.every((chunk) => chunk.sourceText && chunk.chineseMeaning)).toBe(true);
   });
 
-  it('translates generated quoted collocations as sentence use with aligned chunks', () => {
+  it('uses core collocations inside natural example sentences with aligned chunks', () => {
     const afford = CET4_VOCABULARY_BANK.find((item) => item.word === 'afford');
     expect(afford).toBeTruthy();
 
     const support = getVocabularySentenceSupport(afford!);
 
     expect(support.sourceText).toBe(
-      'Learners can compare answer choices by checking where "afford the cost" appears in the sentence.',
+      'With a scholarship, more learners can afford the cost of an online course.',
     );
     expect(support.chineseMeaning).toBe(
-      '学习者可以通过检查“负担得起费用”在句子中出现的位置来比较答案选项。',
+      '有了奖学金支持，更多学习者能够负担得起在线课程的费用。',
     );
-    expect(support.chineseMeaning).not.toContain('afford the cost');
+    expect(support.sourceText).not.toContain('"afford the cost"');
     expect(support.chunks).toEqual([
       {
-        sourceText: 'Learners can compare answer choices',
-        chineseMeaning: '学习者可以比较答案选项',
+        sourceText: 'With a scholarship',
+        chineseMeaning: '有了奖学金支持',
       },
       {
-        sourceText: 'by checking where "afford the cost"',
-        chineseMeaning: '方法是检查“负担得起费用”',
+        sourceText: 'more learners can afford the cost',
+        chineseMeaning: '更多学习者能够负担得起费用',
       },
       {
-        sourceText: 'appears in the sentence',
-        chineseMeaning: '在句子中出现的位置',
+        sourceText: 'of an online course',
+        chineseMeaning: '在线课程的',
       },
     ]);
+  });
+
+  it('keeps current vocabulary examples from quoting collocations as meta text', () => {
+    const metaExamplePatterns = [
+      /"[^"]+"/u,
+      /where .+ appears in the sentence/u,
+      /^The expression /u,
+      /ask students to explain/u,
+      /asks students to use .+ in a natural example/u,
+      /when the Chinese sentence implies/u,
+    ];
+
+    const invalidExamples = CET4_VOCABULARY_BANK
+      .map((item) => ({ word: item.word, example: item.example }))
+      .filter(({ example }) => metaExamplePatterns.some((pattern) => pattern.test(example)));
+
+    expect(invalidExamples).toEqual([]);
   });
 
   it('shows the real Chinese meaning for the decline example sentence', () => {

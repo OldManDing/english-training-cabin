@@ -1560,20 +1560,87 @@ function buildCuratedVocabularyExample(
   collocation: string,
   index: number,
 ): string {
-  const curatedExamples = [
-    `When reviewing a passage, students should notice how "${collocation}" changes the key idea.`,
-    `In writing practice, "${collocation}" can help connect evidence with a clear opinion.`,
-    `A listening note may include "${collocation}" when speakers discuss study or public services.`,
-    `The expression "${collocation}" gives learners a concrete way to talk about a CET-4 topic.`,
-    `Teachers often ask students to explain "${collocation}" with evidence from the text.`,
-    `Learners can compare answer choices by checking where "${collocation}" appears in the sentence.`,
-    `A short review task asks students to use "${collocation}" in a natural example.`,
-    `In translation practice, "${collocation}" is useful when the Chinese sentence implies the same idea.`,
+  const phrase = collocation.trim();
+  const lowerPhrase = phrase.toLowerCase();
+  const capitalize = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
+  const withArticle = (value: string) => (/^(a|an|the|this|that|these|those)\b/i.test(value) ? value : `the ${value}`);
+  const subjectPhrase = (value: string) => (/^(a|an|the|this|that|these|those)\b/i.test(value) ? capitalize(value) : `The ${value}`);
+  const firstToken = lowerPhrase.split(/\s+/)[0];
+  const verbLikeStarters = new Set([
+    'achieve',
+    'adjust',
+    'advance',
+    'advocate',
+    'affect',
+    'afford',
+    'announce',
+    'assess',
+    'assign',
+    'assume',
+    'avoid',
+    'concentrate',
+    'draw',
+    'implement',
+    'maintain',
+    'make',
+    'remove',
+    'retrieve',
+    'support',
+    'transfer',
+  ]);
+  const isVerbLike = partOfSpeech.includes('verb')
+    || firstToken === word.toLowerCase()
+    || verbLikeStarters.has(firstToken);
+
+  if (lowerPhrase === 'afford the cost') {
+    return 'With a scholarship, more learners can afford the cost of an online course.';
+  }
+  if (lowerPhrase.startsWith('although ')) {
+    return `${capitalize(phrase)}, learners can still make progress through focused practice.`;
+  }
+  if (lowerPhrase.startsWith('unless ')) {
+    return `The study group will continue ${phrase} tomorrow.`;
+  }
+  if (lowerPhrase.startsWith('despite ')) {
+    return `${capitalize(phrase)}, adult learners can finish a short review task.`;
+  }
+  if (lowerPhrase.startsWith('besides ')) {
+    return `${capitalize(phrase)}, feedback also helps learners correct mistakes.`;
+  }
+  if (lowerPhrase.startsWith('furthermore')) {
+    return `${capitalize(phrase)}, so learners can keep their study plan.`;
+  }
+  if (/^(under|from|in|on|with|without|because of|according to|instead of|rather than)\b/i.test(phrase)) {
+    return `${capitalize(phrase)}, learners can choose a better answer.`;
+  }
+
+  if (isVerbLike) {
+    const verbExamples = [
+      `Careful planning helps students ${phrase} during daily study.`,
+      `A focused exercise helps learners ${phrase} before the exam.`,
+      `Teacher feedback helps students ${phrase} more accurately.`,
+      `A realistic task lets learners ${phrase} instead of guessing.`,
+      `Regular review helps students ${phrase} with confidence.`,
+      `A clear example shows how learners can ${phrase} in context.`,
+      `Timed practice helps students ${phrase} under pressure.`,
+      `Group discussion helps learners ${phrase} and explain their choice.`,
+    ];
+    return verbExamples[index % verbExamples.length];
+  }
+
+  const objectPhrase = withArticle(phrase);
+  const nounExamples = [
+    `${subjectPhrase(phrase)} helps learners understand the topic more clearly.`,
+    `The passage describes ${objectPhrase} in a familiar campus situation.`,
+    `${subjectPhrase(phrase)} can become the key clue in a listening question.`,
+    `Students discuss ${objectPhrase} when they prepare for a writing task.`,
+    `${subjectPhrase(phrase)} makes the speaker's attitude easier to understand.`,
+    `A class report connects ${objectPhrase} with evidence from daily life.`,
+    `${subjectPhrase(phrase)} gives learners a concrete detail for comparison.`,
+    `The dialogue mentions ${objectPhrase} while explaining a practical problem.`,
   ];
 
-  void word;
-  void partOfSpeech;
-  return curatedExamples[index % curatedExamples.length];
+  return nounExamples[index % nounExamples.length];
 }
 
 const CET4_CURATED_CORE_EXTENSION_ROWS: VocabularyExtensionRow[] =

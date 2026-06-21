@@ -45,6 +45,7 @@ import {
   mergePracticeProgressAttempts,
 } from './domain/practice/practicedQuestions';
 import { buildDraftPracticeAttempts } from './domain/practice/draftAttempts';
+import { loadPracticeDraft, practiceDraftKeys, VocabularyPracticeDraft } from './domain/practice/draftProgress';
 
 const ReadingTraining = lazy(() => import('./components/ReadingTraining'));
 const PracticeHub = lazy(() => import('./components/PracticeHub'));
@@ -103,6 +104,11 @@ function estimateCetScore(skillProfiles: SkillProfile[]): number | undefined {
   }, 0) / normalizedWeight;
 
   return Math.round(Math.max(300, Math.min(710, 300 + abilityScore * 4.1)));
+}
+
+function hasRestorableVocabularyDraft() {
+  const draft = loadPracticeDraft<VocabularyPracticeDraft>(practiceDraftKeys.vocabulary);
+  return draft?.version === 1;
 }
 
 function resetViewportScroll() {
@@ -250,6 +256,9 @@ function StudyApp() {
     () => filterUnpracticedItems(CET4_VOCABULARY_BANK, persistedAttempts, 'vocabulary'),
     [persistedAttempts],
   );
+  const vocabularyPracticeItems = practiceJumpTarget?.moduleId === 'vocabulary' || hasRestorableVocabularyDraft()
+    ? CET4_VOCABULARY_BANK
+    : unpracticedVocabularyItems;
   const unpracticedReadingPassages = useMemo(
     () => buildUnpracticedReadingPassages(CET4_READING_BANK, persistedAttempts),
     [persistedAttempts],
@@ -897,7 +906,7 @@ function StudyApp() {
           <VocabularyTraining
             initialQuestionId={practiceJumpTarget?.moduleId === 'vocabulary' ? practiceJumpTarget.questionId : undefined}
             replayAttempt={practiceJumpTarget?.moduleId === 'vocabulary' ? practiceJumpAttempt : undefined}
-            items={practiceJumpTarget?.moduleId === 'vocabulary' ? CET4_VOCABULARY_BANK : unpracticedVocabularyItems}
+            items={vocabularyPracticeItems}
             onBack={handleBackFromPractice}
             onComplete={handleCompleteVocabularyPractice}
             onAnswerRecorded={handleRecordVocabularyAnswer}

@@ -1054,6 +1054,137 @@ function buildVocabularyFallback(item: VocabularySentenceInput): Pick<PracticeSe
   if (matched) return matched[1](sourceText.match(matched[0])!);
 
   const curatedExamplePatterns: Array<[RegExp, (match: RegExpMatchArray) => Pick<PracticeSentenceSupport, 'chineseMeaning' | 'chunks'>]> = [
+    [/^With a scholarship, more learners can afford the cost of an online course\.$/u,
+      () => {
+        const chineseMeaning = '有了奖学金支持，更多学习者能够负担得起在线课程的费用。';
+        return {
+          chineseMeaning,
+          chunks: [
+            {
+              sourceText: 'With a scholarship',
+              chineseMeaning: '有了奖学金支持',
+            },
+            {
+              sourceText: 'more learners can afford the cost',
+              chineseMeaning: '更多学习者能够负担得起费用',
+            },
+            {
+              sourceText: 'of an online course',
+              chineseMeaning: '在线课程的',
+            },
+          ],
+        };
+      }],
+    [/^Careful planning helps students (.+) during daily study\.$/u,
+      () => {
+        const chineseMeaning = `细致规划能帮助学生在日常学习中更好地${collocationUse}。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^A focused exercise helps learners (.+) before the exam\.$/u,
+      () => {
+        const chineseMeaning = `有针对性的练习能帮助学习者在考试前更好地${collocationUse}。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^Teacher feedback helps students (.+) more accurately\.$/u,
+      () => {
+        const chineseMeaning = `教师反馈能帮助学生更准确地${collocationUse}。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^A realistic task lets learners (.+) instead of guessing\.$/u,
+      () => {
+        const chineseMeaning = `真实任务能让学习者实际${collocationUse}，而不是靠猜。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^Regular review helps students (.+) with confidence\.$/u,
+      () => {
+        const chineseMeaning = `规律复习能帮助学生更有把握地${collocationUse}。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^A clear example shows how learners can (.+) in context\.$/u,
+      () => {
+        const chineseMeaning = `清楚的例子展示了学习者如何在语境中${collocationUse}。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^Timed practice helps students (.+) under pressure\.$/u,
+      () => {
+        const chineseMeaning = `限时练习能帮助学生在压力下${collocationUse}。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^Group discussion helps learners (.+) and explain their choice\.$/u,
+      () => {
+        const chineseMeaning = `小组讨论能帮助学习者${collocationUse}，并解释自己的选择。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) helps learners understand the topic more clearly\.$/u,
+      () => {
+        const chineseMeaning = `这个与${meaning}相关的内容能帮助学习者更清楚地理解话题。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^The passage describes (.+) in a familiar campus situation\.$/u,
+      () => {
+        const chineseMeaning = `文章在熟悉的校园情境中描述了与${meaning}相关的内容。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) can become the key clue in a listening question\.$/u,
+      () => {
+        const chineseMeaning = `与${meaning}相关的信息可能成为听力题中的关键线索。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^Students discuss (.+) when they prepare for a writing task\.$/u,
+      () => {
+        const chineseMeaning = `学生准备写作任务时会讨论与${meaning}相关的内容。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) makes the speaker's attitude easier to understand\.$/u,
+      () => {
+        const chineseMeaning = `与${meaning}相关的信息让说话人的态度更容易理解。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^A class report connects (.+) with evidence from daily life\.$/u,
+      () => {
+        const chineseMeaning = `课堂报告把与${meaning}相关的内容和日常生活证据联系起来。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) gives learners a concrete detail for comparison\.$/u,
+      () => {
+        const chineseMeaning = `与${meaning}相关的信息给学习者提供了可比较的具体细节。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^The dialogue mentions (.+) while explaining a practical problem\.$/u,
+      () => {
+        const chineseMeaning = `对话在解释实际问题时提到了与${meaning}相关的内容。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+), learners can still make progress through focused practice\.$/u,
+      () => {
+        const chineseMeaning = `即使存在这种情况，学习者仍能通过集中练习取得进步。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^The study group will continue (.+) tomorrow\.$/u,
+      () => {
+        const chineseMeaning = `只要条件允许，学习小组明天会继续进行。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+), adult learners can finish a short review task\.$/u,
+      () => {
+        const chineseMeaning = `尽管有这种限制，成人学习者仍能完成一项简短复习任务。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+), feedback also helps learners correct mistakes\.$/u,
+      () => {
+        const chineseMeaning = `除了前面的内容，反馈也能帮助学习者纠正错误。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+), so learners can keep their study plan\.$/u,
+      () => {
+        const chineseMeaning = `而且这样能节省时间，所以学习者可以坚持学习计划。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+), learners can choose a better answer\.$/u,
+      () => {
+        const chineseMeaning = `在这个条件或角度下，学习者可以选择更合适的答案。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
     [/^When reviewing a passage, students should notice how "(.+)" changes the key idea\.$/u,
       (match) => {
         const chineseMeaning = `复习文章时，学生应注意“${COLLOCATION_USAGE_TRANSLATIONS[match[1]] ?? match[1]}”如何改变关键信息。`;

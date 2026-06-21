@@ -974,6 +974,12 @@ test('submitted draft answers count as today records before finishing the sessio
   await page.getByTestId('vocabulary-back-to-practice').click();
   await expect(page.getByTestId('practice-question-status-vocabulary')).toContainText('已答 3 /');
 
+  await page.getByTestId('practice-module-action-vocabulary').click();
+  await expect(page.getByTestId('vocabulary-draft-restored')).toContainText('第 1 组 / 第 3 个');
+  await expect(page.getByRole('heading', { name: CET4_VOCABULARY_BANK[2].word })).toBeVisible();
+  await expect(page.getByTestId('vocabulary-post-answer-support')).toBeVisible();
+  await page.getByTestId('vocabulary-back-to-practice').click();
+
   await page.locator('aside button').first().click();
   await expect(page.getByTestId('today-answered-question-count')).toHaveText('3');
   await expect(page.getByTestId('motivation-weekly-attempts')).toHaveText('3');
@@ -1590,12 +1596,14 @@ test('generated vocabulary example shows sentence-use chunk translations after s
   await page.getByRole('button', { name: '提交词汇答案' }).click();
 
   await expect(page.getByTestId('vocabulary-sentence-translation')).toContainText(
-    '学习者可以通过检查“负担得起费用”在句子中出现的位置来比较答案选项。',
+    '有了奖学金支持，更多学习者能够负担得起在线课程的费用。',
   );
-  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('Learners can compare answer choices');
-  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('学习者可以比较答案选项');
-  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('方法是检查“负担得起费用”');
-  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('在句子中出现的位置');
+  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('With a scholarship');
+  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('有了奖学金支持');
+  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('more learners can afford the cost');
+  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('更多学习者能够负担得起费用');
+  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('of an online course');
+  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('在线课程的');
 });
 
 test('vocabulary practice keeps a visible message when browser speech synthesis fails', async ({ page }) => {
