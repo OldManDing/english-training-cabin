@@ -136,6 +136,37 @@ describe('practice sentence and vocabulary Chinese support', () => {
 
     expect(support.sourceText).toBe(item.example);
     expect(support.chineseMeaning).toBeTruthy();
+    expect(support.chunks.length).toBeGreaterThanOrEqual(1);
+    expect(support.chunks.every((chunk) => chunk.sourceText && chunk.chineseMeaning)).toBe(true);
+  });
+
+  it('translates generated quoted collocations as sentence use with aligned chunks', () => {
+    const afford = CET4_VOCABULARY_BANK.find((item) => item.word === 'afford');
+    expect(afford).toBeTruthy();
+
+    const support = getVocabularySentenceSupport(afford!);
+
+    expect(support.sourceText).toBe(
+      'Learners can compare answer choices by checking where "afford the cost" appears in the sentence.',
+    );
+    expect(support.chineseMeaning).toBe(
+      '学习者可以通过检查“负担得起费用”在句子中出现的位置来比较答案选项。',
+    );
+    expect(support.chineseMeaning).not.toContain('afford the cost');
+    expect(support.chunks).toEqual([
+      {
+        sourceText: 'Learners can compare answer choices',
+        chineseMeaning: '学习者可以比较答案选项',
+      },
+      {
+        sourceText: 'by checking where "afford the cost"',
+        chineseMeaning: '方法是检查“负担得起费用”',
+      },
+      {
+        sourceText: 'appears in the sentence',
+        chineseMeaning: '在句子中出现的位置',
+      },
+    ]);
   });
 
   it('shows the real Chinese meaning for the decline example sentence', () => {

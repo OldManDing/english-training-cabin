@@ -18,9 +18,13 @@ type QuestionSentenceInput = {
   explanation?: string;
 };
 
-export type PracticeSentenceSupport = {
+export type PracticeSentenceChunk = {
   sourceText: string;
   chineseMeaning: string;
+};
+
+export type PracticeSentenceSupport = PracticeSentenceChunk & {
+  chunks: PracticeSentenceChunk[];
 };
 
 export type VocabularyQuestionSupport = {
@@ -936,12 +940,20 @@ const CURATED_OPTION_TRANSLATIONS: Record<string, string> = {
   'a place or time with no semantic clue': '没有语义线索的地点或时间',
 };
 
+const COLLOCATION_USAGE_TRANSLATIONS: Record<string, string> = {
+  'afford the cost': '负担得起费用',
+};
+
 function normalizeText(value?: string) {
   return value?.replace(/\s+/g, ' ').trim() ?? '';
 }
 
 function stripTrailingPunctuation(value: string) {
   return value.replace(/[。.!?]+$/u, '');
+}
+
+function buildSingleSentenceChunk(sourceText: string, chineseMeaning: string): PracticeSentenceChunk[] {
+  return [{ sourceText, chineseMeaning }];
 }
 
 function extractQuotedEnglishSentence(value?: string) {
@@ -954,67 +966,157 @@ function extractQuotedEnglishSentence(value?: string) {
     .find((match) => /[A-Za-z]/.test(match));
 }
 
-function buildVocabularyFallback(item: VocabularySentenceInput) {
+function translateCollocationUse(item: VocabularySentenceInput): string {
+  const collocation = normalizeText(item.collocation);
+  return COLLOCATION_USAGE_TRANSLATIONS[collocation]
+    ?? stripTrailingPunctuation(normalizeText(item.meaning));
+}
+
+function buildVocabularyFallback(item: VocabularySentenceInput): Pick<PracticeSentenceSupport, 'chineseMeaning' | 'chunks'> {
   const sourceText = normalizeText(item.example);
   const meaning = stripTrailingPunctuation(normalizeText(item.meaning));
+  const collocationUse = translateCollocationUse(item);
 
-  const productivePatterns: Array<[RegExp, (match: RegExpMatchArray) => string]> = [
+  const productivePatterns: Array<[RegExp, (match: RegExpMatchArray) => Pick<PracticeSentenceSupport, 'chineseMeaning' | 'chunks'>]> = [
     [/^A clear (.+) strategy helps learners choose the next task instead of reviewing blindly\.$/u,
-      () => `清晰的“${meaning}”策略能帮助学习者选择下一项任务，而不是盲目复习。`],
+      () => {
+        const chineseMeaning = `清晰的“${meaning}”策略能帮助学习者选择下一项任务，而不是盲目复习。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
     [/^The platform records (.+) evidence after each exercise so progress can be verified\.$/u,
-      () => `平台会在每次练习后记录“${meaning}”相关证据，以便核验进步。`],
+      () => {
+        const chineseMeaning = `平台会在每次练习后记录“${meaning}”相关证据，以便核验进步。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
     [/^Students remember (.+) context better when they meet the expression in a sentence\.$/u,
-      () => `当学生在句子中遇到这个表达时，他们能更好地记住“${meaning}”相关语境。`],
+      () => {
+        const chineseMeaning = `当学生在句子中遇到这个表达时，他们能更好地记住“${meaning}”相关语境。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
     [/^Improving (.+) awareness can make students notice details that were ignored before\.$/u,
-      () => `提高“${meaning}”意识能让学生注意到以前忽略的细节。`],
+      () => {
+        const chineseMeaning = `提高“${meaning}”意识能让学生注意到以前忽略的细节。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
     [/^(.+) practice should include recall, feedback, and a short follow-up review\.$/u,
-      () => `“${meaning}”练习应包括回忆、反馈和简短的后续复习。`],
+      () => {
+        const chineseMeaning = `“${meaning}”练习应包括回忆、反馈和简短的后续复习。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
     [/^A common (.+) challenge is knowing the expression but failing to use it under time pressure\.$/u,
-      () => `常见的“${meaning}”挑战是知道这个表达，却无法在时间压力下用出来。`],
+      () => {
+        const chineseMeaning = `常见的“${meaning}”挑战是知道这个表达，却无法在时间压力下用出来。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
     [/^The (.+) signal helps readers find the key sentence before comparing options\.$/u,
-      () => `“${meaning}”信号能帮助读者在比较选项前找到关键句。`],
+      () => {
+        const chineseMeaning = `“${meaning}”信号能帮助读者在比较选项前找到关键句。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
     [/^A (.+) comparison can show why one option is closer to the passage than another\.$/u,
-      () => `“${meaning}”比较能说明为什么某个选项比另一个更贴近文章。`],
+      () => {
+        const chineseMeaning = `“${meaning}”比较能说明为什么某个选项比另一个更贴近文章。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
     [/^(.+) application matters because exam questions test use in context, not isolated memory\.$/u,
-      () => `“${meaning}”应用很重要，因为考试题考查的是语境中的使用，而不是孤立记忆。`],
+      () => {
+        const chineseMeaning = `“${meaning}”应用很重要，因为考试题考查的是语境中的使用，而不是孤立记忆。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
     [/^A (.+) method should include examples, retrieval, and a short review task\.$/u,
-      () => `“${meaning}”方法应包括例子、提取练习和简短复习任务。`],
+      () => {
+        const chineseMeaning = `“${meaning}”方法应包括例子、提取练习和简短复习任务。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
     [/^(.+) review should return after one day, several days, and a later mixed exercise\.$/u,
-      () => `“${meaning}”复习应在一天后、几天后以及后续混合练习中再次出现。`],
+      () => {
+        const chineseMeaning = `“${meaning}”复习应在一天后、几天后以及后续混合练习中再次出现。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
     [/^A strong (.+) response uses the expression accurately and explains the reason\.$/u,
-      () => `有力的“${meaning}”回应会准确使用该表达，并说明原因。`],
+      () => {
+        const chineseMeaning = `有力的“${meaning}”回应会准确使用该表达，并说明原因。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
     [/^(.+) accuracy improves when students compare the source sentence with their answer\.$/u,
-      () => `当学生把原句和自己的答案进行比较时，“${meaning}”准确性会提高。`],
+      () => {
+        const chineseMeaning = `当学生把原句和自己的答案进行比较时，“${meaning}”准确性会提高。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
     [/^(.+) output turns recognition into writing, speaking, or translation ability\.$/u,
-      () => `“${meaning}”输出能把识别能力转化为写作、口语或翻译能力。`],
+      () => {
+        const chineseMeaning = `“${meaning}”输出能把识别能力转化为写作、口语或翻译能力。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
   ];
 
   const matched = productivePatterns.find(([pattern]) => pattern.test(sourceText));
   if (matched) return matched[1](sourceText.match(matched[0])!);
 
-  const curatedExamplePatterns: Array<[RegExp, (match: RegExpMatchArray) => string]> = [
+  const curatedExamplePatterns: Array<[RegExp, (match: RegExpMatchArray) => Pick<PracticeSentenceSupport, 'chineseMeaning' | 'chunks'>]> = [
     [/^When reviewing a passage, students should notice how "(.+)" changes the key idea\.$/u,
-      (match) => `复习文章时，学生应注意“${match[1]}”如何改变关键信息。`],
+      (match) => {
+        const chineseMeaning = `复习文章时，学生应注意“${COLLOCATION_USAGE_TRANSLATIONS[match[1]] ?? match[1]}”如何改变关键信息。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
     [/^In writing practice, "(.+)" can help connect evidence with a clear opinion\.$/u,
-      (match) => `在写作练习中，“${match[1]}”可以帮助把证据和清楚观点连接起来。`],
+      (match) => {
+        const chineseMeaning = `在写作练习中，“${COLLOCATION_USAGE_TRANSLATIONS[match[1]] ?? match[1]}”可以帮助把证据和清楚观点连接起来。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
     [/^A listening note may include "(.+)" when speakers discuss study or public services\.$/u,
-      (match) => `说话人讨论学习或公共服务时，听力笔记中可能会记录“${match[1]}”。`],
+      (match) => {
+        const chineseMeaning = `说话人讨论学习或公共服务时，听力笔记中可能会记录“${COLLOCATION_USAGE_TRANSLATIONS[match[1]] ?? match[1]}”。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
     [/^The expression "(.+)" gives learners a concrete way to talk about a CET-4 topic\.$/u,
-      (match) => `“${match[1]}”这个表达给学习者提供了讨论四级话题的具体方式。`],
+      (match) => {
+        const chineseMeaning = `“${COLLOCATION_USAGE_TRANSLATIONS[match[1]] ?? match[1]}”这个表达给学习者提供了讨论四级话题的具体方式。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
     [/^Teachers often ask students to explain "(.+)" with evidence from the text\.$/u,
-      (match) => `老师常要求学生用文本证据解释“${match[1]}”。`],
+      (match) => {
+        const chineseMeaning = `老师常要求学生用文本证据解释“${COLLOCATION_USAGE_TRANSLATIONS[match[1]] ?? match[1]}”。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
     [/^Learners can compare answer choices by checking where "(.+)" appears in the sentence\.$/u,
-      (match) => `学习者可以通过查看“${match[1]}”在句中出现的位置来比较选项。`],
+      () => {
+        const chineseMeaning = `学习者可以通过检查“${collocationUse}”在句子中出现的位置来比较答案选项。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            {
+              sourceText: 'Learners can compare answer choices',
+              chineseMeaning: '学习者可以比较答案选项',
+            },
+            {
+              sourceText: `by checking where "${item.collocation}"`,
+              chineseMeaning: `方法是检查“${collocationUse}”`,
+            },
+            {
+              sourceText: 'appears in the sentence',
+              chineseMeaning: '在句子中出现的位置',
+            },
+          ],
+        };
+      }],
     [/^A short review task asks students to use "(.+)" in a natural example\.$/u,
-      (match) => `简短复习任务会要求学生在自然例句中使用“${match[1]}”。`],
+      (match) => {
+        const chineseMeaning = `简短复习任务会要求学生在自然例句中使用“${COLLOCATION_USAGE_TRANSLATIONS[match[1]] ?? match[1]}”。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
     [/^In translation practice, "(.+)" is useful when the Chinese sentence implies the same idea\.$/u,
-      (match) => `在翻译练习中，当中文句子含有相同意思时，“${match[1]}”很有用。`],
+      (match) => {
+        const chineseMeaning = `在翻译练习中，当中文句子含有相同意思时，“${COLLOCATION_USAGE_TRANSLATIONS[match[1]] ?? match[1]}”很有用。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
   ];
 
   const curatedMatched = curatedExamplePatterns.find(([pattern]) => pattern.test(sourceText));
   if (curatedMatched) return curatedMatched[1](sourceText.match(curatedMatched[0])!);
 
-  return `该例句的中文译文暂缺，请以英文原句理解句意。`;
+  const chineseMeaning = `该例句的中文译文暂缺，请以英文原句理解句意。`;
+  return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
 }
 
 function translateGeneratedCorrectOption(optionText: string, meaning: string) {
@@ -1072,9 +1174,13 @@ function translateVocabularyOption(item: VocabularyQuestionInput, key: Vocabular
 
 export function getVocabularySentenceSupport(item: VocabularySentenceInput): PracticeSentenceSupport {
   const sourceText = normalizeText(item.example);
+  const known = KNOWN_SENTENCE_TRANSLATIONS[sourceText];
+  const fallback = known ? null : buildVocabularyFallback(item);
+  const chineseMeaning = known ?? fallback?.chineseMeaning ?? '';
   return {
     sourceText,
-    chineseMeaning: KNOWN_SENTENCE_TRANSLATIONS[sourceText] ?? buildVocabularyFallback(item),
+    chineseMeaning,
+    chunks: fallback?.chunks ?? buildSingleSentenceChunk(sourceText, chineseMeaning),
   };
 }
 
@@ -1083,6 +1189,10 @@ export function getVocabularyQuestionSupport(item: VocabularyQuestionInput): Voc
     prompt: {
       sourceText: 'Choose the most accurate English definition after listening to the word and example sentence.',
       chineseMeaning: `听单词和例句后，选择最准确的英文释义。目标词/语块：“${item.word}”；中文义：${item.meaning}。`,
+      chunks: buildSingleSentenceChunk(
+        'Choose the most accurate English definition after listening to the word and example sentence.',
+        `听单词和例句后，选择最准确的英文释义。目标词/语块：“${item.word}”；中文义：${item.meaning}。`,
+      ),
     },
     optionTranslations: (['A', 'B', 'C', 'D'] as VocabularyChoice[]).map((key) => ({
       key,
@@ -1103,10 +1213,12 @@ export function getQuestionSentenceSupport(input: QuestionSentenceInput): Practi
 
   const known = KNOWN_SENTENCE_TRANSLATIONS[sourceText];
   const explanation = stripTrailingPunctuation(normalizeText(input.explanation));
+  const chineseMeaning = known ?? (explanation
+    ? `这句话是本题的定位线索：${explanation}。`
+    : '这句话是本题的定位原句，请结合正确答案理解它的中文含义。');
   return {
     sourceText,
-    chineseMeaning: known ?? (explanation
-      ? `这句话是本题的定位线索：${explanation}。`
-      : '这句话是本题的定位原句，请结合正确答案理解它的中文含义。'),
+    chineseMeaning,
+    chunks: buildSingleSentenceChunk(sourceText, chineseMeaning),
   };
 }

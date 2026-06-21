@@ -676,6 +676,19 @@ export default function VocabularyTraining({ items, initialQuestionId, replayAtt
                     </div>
                     <p className="mt-2 font-bold text-slate-900">英文原句：{sentenceSupport.sourceText}</p>
                     <p className="mt-1 font-semibold text-slate-600">中文句意：{sentenceSupport.chineseMeaning}</p>
+                    {sentenceSupport.chunks.length > 1 ? (
+                      <div data-testid="vocabulary-sentence-chunks" className="mt-3 space-y-2">
+                        <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                          断句译文
+                        </div>
+                        {sentenceSupport.chunks.map((chunk) => (
+                          <div key={chunk.sourceText} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+                            <p className="font-bold text-slate-800">{chunk.sourceText}</p>
+                            <p className="mt-1 text-xs font-semibold text-slate-600">{chunk.chineseMeaning}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
                 <div className="mt-4 rounded-2xl border border-sky-100 bg-white/80 p-4">

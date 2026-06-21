@@ -1549,6 +1549,50 @@ test('curated vocabulary choices stay English before submission', async ({ page 
   expect(choiceTexts.join('\n')).not.toMatch(/[\u4e00-\u9fff]/u);
 });
 
+test('generated vocabulary example shows sentence-use chunk translations after submission', async ({ page }) => {
+  await installSpeechSynthesisMock(page);
+  await registerAndEnterApp(page, 'mvp-vocabulary-sentence-chunks');
+  await resetLocalLearningData(page);
+  await page.reload();
+
+  const targetIndex = CET4_VOCABULARY_BANK.findIndex((item) => item.word === 'afford');
+  expect(targetIndex).toBeGreaterThanOrEqual(0);
+  const targetItem = CET4_VOCABULARY_BANK[targetIndex];
+  const packIndex = Math.floor(targetIndex / VOCABULARY_SESSION_SIZE);
+  const currentIdx = targetIndex % VOCABULARY_SESSION_SIZE;
+
+  await page.evaluate(({ packIndex, currentIdx }) => {
+    const now = new Date().toISOString();
+    localStorage.setItem('english-training-cabin:practice-draft:vocabulary', JSON.stringify({
+      version: 1,
+      startedAt: now,
+      packIndex,
+      currentIdx,
+      selectedOpt: null,
+      confidence: null,
+      isSubmitted: false,
+      answers: [],
+      updatedAt: now,
+    }));
+  }, { packIndex, currentIdx });
+
+  await page.getByRole('button', { name: '专项练习' }).click();
+  await page.getByTestId('practice-module-action-vocabulary').click();
+
+  await expect(page.getByRole('heading', { name: targetItem.word })).toBeVisible();
+  await page.getByRole('button', { name: new RegExp(`^${targetItem.correctAnswer}\\. `) }).click();
+  await page.getByRole('button', { name: '有把握' }).click();
+  await page.getByRole('button', { name: '提交词汇答案' }).click();
+
+  await expect(page.getByTestId('vocabulary-sentence-translation')).toContainText(
+    '学习者可以通过检查“负担得起费用”在句子中出现的位置来比较答案选项。',
+  );
+  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('Learners can compare answer choices');
+  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('学习者可以比较答案选项');
+  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('方法是检查“负担得起费用”');
+  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('在句子中出现的位置');
+});
+
 test('vocabulary practice keeps a visible message when browser speech synthesis fails', async ({ page }) => {
   await installFailingSpeechSynthesisMock(page);
   await registerAndEnterApp(page, 'mvp-vocabulary-speech-failure');
