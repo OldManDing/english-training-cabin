@@ -1554,6 +1554,297 @@ function resolveCuratedVocabularyMeaning(
   return meaning.includes('?') ? (CURATED_CORE_MEANINGS[word] ?? `核心词义：${definition}`) : meaning;
 }
 
+const CURATED_PHONETIC_OVERRIDES: Record<string, string> = {
+  achieve: '/əˈtʃiːv/',
+  adjust: '/əˈdʒʌst/',
+  advance: '/ədˈvæns/',
+  advocate: '/ˈædvəkeɪt/',
+  affect: '/əˈfekt/',
+  afford: '/əˈfɔːrd/',
+  announce: '/əˈnaʊns/',
+  annual: '/ˈænjuəl/',
+  argument: '/ˈɑːrɡjumənt/',
+  assess: '/əˈses/',
+  assign: '/əˈsaɪn/',
+  assume: '/əˈsuːm/',
+  atmosphere: '/ˈætməsfɪr/',
+  available: '/əˈveɪləbl/',
+  avoid: '/əˈvɔɪd/',
+  behavior: '/bɪˈheɪvjər/',
+  circumstance: '/ˈsɜːrkəmstæns/',
+  citizen: '/ˈsɪtɪzən/',
+  community: '/kəˈmjuːnəti/',
+  concept: '/ˈkɑːnsept/',
+  contact: '/ˈkɑːntækt/',
+  contain: '/kənˈteɪn/',
+  contribute: '/kənˈtrɪbjuːt/',
+  create: '/kriˈeɪt/',
+  debate: '/dɪˈbeɪt/',
+  develop: '/dɪˈveləp/',
+  device: '/dɪˈvaɪs/',
+  effect: '/ɪˈfekt/',
+  effort: '/ˈefərt/',
+  environment: '/ɪnˈvaɪrənmənt/',
+  exchange: '/ɪksˈtʃeɪndʒ/',
+  expand: '/ɪkˈspænd/',
+  expense: '/ɪkˈspens/',
+  experience: '/ɪkˈspɪriəns/',
+  expose: '/ɪkˈspoʊz/',
+  feature: '/ˈfiːtʃər/',
+  foundation: '/faʊnˈdeɪʃn/',
+  function: '/ˈfʌŋkʃn/',
+  global: '/ˈɡloʊbl/',
+  graduate: '/ˈɡrædʒuət/',
+  habit: '/ˈhæbɪt/',
+  hesitate: '/ˈhezɪteɪt/',
+  ignore: '/ɪɡˈnɔːr/',
+  illustrate: '/ˈɪləstreɪt/',
+  immediate: '/ɪˈmiːdiət/',
+  improve: '/ɪmˈpruːv/',
+  indicate: '/ˈɪndɪkeɪt/',
+  individual: '/ˌɪndɪˈvɪdʒuəl/',
+  industry: '/ˈɪndəstri/',
+  inform: '/ɪnˈfɔːrm/',
+  inspire: '/ɪnˈspaɪər/',
+  involve: '/ɪnˈvɑːlv/',
+  issue: '/ˈɪʃuː/',
+  launch: '/lɔːntʃ/',
+  local: '/ˈloʊkl/',
+  major: '/ˈmeɪdʒər/',
+  monitor: '/ˈmɑːnɪtər/',
+  necessary: '/ˈnesəseri/',
+  obtain: '/əbˈteɪn/',
+  organize: '/ˈɔːrɡənaɪz/',
+  outcome: '/ˈaʊtkʌm/',
+  perform: '/pərˈfɔːrm/',
+  period: '/ˈpɪriəd/',
+  previous: '/ˈpriːviəs/',
+  principle: '/ˈprɪnsəpl/',
+  process: '/ˈprɑːses/',
+  promote: '/prəˈmoʊt/',
+  proposal: '/prəˈpoʊzl/',
+  public: '/ˈpʌblɪk/',
+  quality: '/ˈkwɑːləti/',
+  range: '/reɪndʒ/',
+  recent: '/ˈriːsnt/',
+  recognize: '/ˈrekəɡnaɪz/',
+  recommend: '/ˌrekəˈmend/',
+  reduce: '/rɪˈduːs/',
+  reflect: '/rɪˈflekt/',
+  relation: '/rɪˈleɪʃn/',
+  represent: '/ˌreprɪˈzent/',
+  require: '/rɪˈkwaɪər/',
+  research: '/rɪˈsɜːrtʃ/',
+  resident: '/ˈrezɪdənt/',
+  resolve: '/rɪˈzɑːlv/',
+  restrict: '/rɪˈstrɪkt/',
+  reveal: '/rɪˈviːl/',
+  revise: '/rɪˈvaɪz/',
+  secure: '/sɪˈkjʊr/',
+  select: '/sɪˈlekt/',
+  senior: '/ˈsiːniər/',
+  sequence: '/ˈsiːkwəns/',
+  service: '/ˈsɜːrvɪs/',
+  significant: '/sɪɡˈnɪfɪkənt/',
+  similar: '/ˈsɪmələr/',
+  situation: '/ˌsɪtʃuˈeɪʃn/',
+  source: '/sɔːrs/',
+  specific: '/spəˈsɪfɪk/',
+  strategy: '/ˈstrætədʒi/',
+  stress: '/stres/',
+  survey: '/ˈsɜːrveɪ/',
+  target: '/ˈtɑːrɡɪt/',
+  theory: '/ˈθɪri/',
+  therefore: '/ˈðerfɔːr/',
+  transform: '/trænsˈfɔːrm/',
+  typical: '/ˈtɪpɪkl/',
+  update: '/ˌʌpˈdeɪt/',
+  urban: '/ˈɜːrbən/',
+  vehicle: '/ˈviːəkl/',
+  version: '/ˈvɜːrʒn/',
+  voluntary: '/ˈvɑːlənteri/',
+  welfare: '/ˈwelfer/',
+  yield: '/jiːld/',
+};
+
+const CURATED_EXTENSION_PHONETICS = new Map<string, string>(
+  [...CET4_SYLLABUS_EXTENSION_ROWS, ...DEGREE_ENGLISH_SYLLABUS_EXTENSION_ROWS]
+    .map(([word, phonetic]) => [word.toLowerCase(), phonetic] as const),
+);
+
+const FALLBACK_PHONETIC_RULES: Array<[RegExp, string]> = [
+  [/tion/g, 'ʃən'],
+  [/sion/g, 'ʒən'],
+  [/ture/g, 'tʃər'],
+  [/sure/g, 'ʒər'],
+  [/ph/g, 'f'],
+  [/qu/g, 'kw'],
+  [/ght/g, 't'],
+  [/igh/g, 'aɪ'],
+  [/ee/g, 'iː'],
+  [/oo/g, 'uː'],
+  [/ou/g, 'aʊ'],
+  [/ow/g, 'oʊ'],
+  [/ai/g, 'eɪ'],
+  [/ay/g, 'eɪ'],
+  [/ea/g, 'iː'],
+  [/ie/g, 'iː'],
+  [/er$/g, 'ər'],
+  [/or$/g, 'ər'],
+  [/al$/g, 'əl'],
+  [/able$/g, 'əbəl'],
+  [/ible$/g, 'əbəl'],
+  [/ment$/g, 'mənt'],
+  [/ness$/g, 'nəs'],
+  [/ity$/g, 'əti'],
+  [/ive$/g, 'ɪv'],
+  [/ous$/g, 'əs'],
+];
+
+function buildReadablePhoneticFallback(word: string): string {
+  const cleaned = word.toLowerCase().replace(/[^a-z]+/g, ' ').trim();
+  if (!cleaned) return '/word/';
+
+  const parts = cleaned.split(/\s+/).map((part) => {
+    let next = part;
+    for (const [pattern, replacement] of FALLBACK_PHONETIC_RULES) {
+      next = next.replace(pattern, replacement);
+    }
+    return next;
+  });
+
+  return '/' + parts.join(' ') + '/';
+}
+
+function resolveCuratedVocabularyPhonetic(word: string): string {
+  const key = word.toLowerCase();
+  return CURATED_EXTENSION_PHONETICS.get(key)
+    ?? CURATED_PHONETIC_OVERRIDES[key]
+    ?? buildReadablePhoneticFallback(key);
+}
+
+type CuratedDistractorKind = 'noun' | 'verb' | 'adjective' | 'adverb';
+
+const CURATED_DISTRACTOR_POOLS: Record<CuratedDistractorKind, readonly string[]> = {
+  noun: [
+    'a short break after a class',
+    'a person who checks tickets',
+    'a building used only for sports',
+    'a number written on a receipt',
+    'a tool for cooking food',
+    'a private message with no evidence',
+    'a road sign near a station',
+    'a picture used for decoration',
+    'a meal served before a meeting',
+    'a sound made by a machine',
+    'a color used in a chart',
+    'a holiday plan with no details',
+    'a chair placed near a door',
+    'a weather report for tomorrow',
+    'a price printed on a label',
+    'a story about an old town',
+  ],
+  verb: [
+    'to close a door quietly',
+    'to copy a sentence without thinking',
+    'to paint a wall quickly',
+    'to wait with no purpose',
+    'to carry a bag across a room',
+    'to cancel a meal order',
+    'to turn a light off',
+    'to arrange chairs in a line',
+    'to count numbers aloud',
+    'to clean a desk after class',
+    'to draw a circle on paper',
+    'to open a window slowly',
+    'to send a package by mail',
+    'to repair a broken chair',
+    'to lock a bicycle outside',
+    'to watch a film at home',
+  ],
+  adjective: [
+    'clearly made of metal',
+    'full of loud music',
+    'covered with bright colors',
+    'connected only with cooking',
+    'located under the table',
+    'used once and then thrown away',
+    'too small to hold books',
+    'written without punctuation',
+    'shaped like a circle',
+    'shown only on weekends',
+    'heavier than a school bag',
+    'made for winter sports',
+    'empty after the meeting',
+    'drawn in black ink',
+    'hidden behind a curtain',
+    'broken by accident',
+  ],
+  adverb: [
+    'in a very noisy way',
+    'only during the morning',
+    'without checking the answer',
+    'in the opposite direction',
+    'after the class has ended',
+    'for no clear reason',
+    'with no connection to the topic',
+    'only by looking at the title',
+    'before the teacher arrives',
+    'without using any evidence',
+    'in a completely random order',
+    'only when the room is empty',
+  ],
+};
+
+function selectCuratedDistractorKind(partOfSpeech: string): CuratedDistractorKind {
+  const normalized = partOfSpeech.toLowerCase();
+  if (normalized.includes('verb')) return 'verb';
+  if (normalized.includes('adjective') || normalized.includes('adj')) return 'adjective';
+  if (normalized.includes('adverb') || normalized.includes('adv')) return 'adverb';
+  return 'noun';
+}
+
+function hashCuratedVocabulary(value: string): number {
+  let hash = VOCABULARY_DISTRIBUTION_SEED;
+  for (const char of value) {
+    hash = (hash * 33 + char.charCodeAt(0)) >>> 0;
+  }
+  return hash;
+}
+
+function buildCuratedVocabularyDistractors(
+  word: string,
+  partOfSpeech: string,
+  definition: string,
+  index: number,
+): [string, string, string] {
+  const primaryKind = selectCuratedDistractorKind(partOfSpeech);
+  const orderedKinds = [
+    primaryKind,
+    'noun',
+    'verb',
+    'adjective',
+    'adverb',
+  ].filter((kind, kindIndex, allKinds) => allKinds.indexOf(kind) === kindIndex) as CuratedDistractorKind[];
+  const pool = orderedKinds.flatMap((kind) => CURATED_DISTRACTOR_POOLS[kind]);
+  const selected: string[] = [];
+  const seed = hashCuratedVocabulary(word + '-' + partOfSpeech + '-' + index);
+  const stride = 7 + (index % 5);
+
+  for (let offset = 0; selected.length < 3 && offset < pool.length * 3; offset += 1) {
+    const candidate = pool[(seed + offset * stride) % pool.length];
+    if (candidate !== definition && !selected.includes(candidate)) {
+      selected.push(candidate);
+    }
+  }
+
+  while (selected.length < 3) {
+    selected.push(CURATED_DISTRACTOR_POOLS.noun[selected.length]);
+  }
+
+  return [selected[0], selected[1], selected[2]];
+}
+
 function buildCuratedVocabularyExample(
   word: string,
   partOfSpeech: string,
@@ -1648,19 +1939,28 @@ const CET4_CURATED_CORE_EXTENSION_ROWS: VocabularyExtensionRow[] =
     ...CURATED_CORE_VOCABULARY_SEEDS,
     ...CET4_HIGH_FREQUENCY_CORE_SEEDS,
     ...CET4_FOUNDATIONAL_CORE_EXPANSION_SEEDS,
-  ].map(([word, partOfSpeech, meaning, definition, collocation], index) => ([
-    word,
-    '',
-    partOfSpeech,
-    resolveCuratedVocabularyMeaning(word, meaning, definition),
-    definition,
-    'a detail that is unrelated to the sentence',
-    'a result with the opposite meaning',
-    'a place or time with no semantic clue',
-    collocation,
-    buildCuratedVocabularyExample(word, partOfSpeech, collocation, index),
-    word + ' is a core CET-4 word. Focus on using "' + collocation + '" in context.',
-  ]));
+  ].map(([word, partOfSpeech, meaning, definition, collocation], index): VocabularyExtensionRow => {
+    const [distractorB, distractorC, distractorD] = buildCuratedVocabularyDistractors(
+      word,
+      partOfSpeech,
+      definition,
+      index,
+    );
+
+    return [
+      word,
+      resolveCuratedVocabularyPhonetic(word),
+      partOfSpeech,
+      resolveCuratedVocabularyMeaning(word, meaning, definition),
+      definition,
+      distractorB,
+      distractorC,
+      distractorD,
+      collocation,
+      buildCuratedVocabularyExample(word, partOfSpeech, collocation, index),
+      word + ' is a core CET-4 word. Focus on using "' + collocation + '" in context.',
+    ];
+  });
 
 export const CET4_OUTPUT_PHRASE_BANK: VocabularyPracticeItem[] =
   CET4_PRODUCTIVE_PHRASE_ROWS.map(buildVocabularyItem);

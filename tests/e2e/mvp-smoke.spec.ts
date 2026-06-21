@@ -1550,6 +1550,7 @@ test('curated vocabulary choices stay English before submission', async ({ page 
   await page.getByTestId('practice-module-action-vocabulary').click();
 
   await expect(page.getByRole('heading', { name: targetItem.word })).toBeVisible();
+  await expect(page.getByText(targetItem.phonetic, { exact: true })).toBeVisible();
   await expect(page.getByTestId('vocabulary-question-translation')).toHaveCount(0);
   await expect(page.getByTestId(`vocabulary-option-translation-${targetItem.correctAnswer}`)).toHaveCount(0);
 
@@ -1595,6 +1596,10 @@ test('generated vocabulary example shows sentence-use chunk translations after s
   await page.getByRole('button', { name: '有把握' }).click();
   await page.getByRole('button', { name: '提交词汇答案' }).click();
 
+  await expect(page.getByTestId('vocabulary-correct-answer')).toContainText(
+    `${targetItem.correctAnswer}. ${targetItem.options[targetItem.correctAnswer]}`,
+  );
+  await expect(page.getByTestId('vocabulary-option-correct-badge-' + targetItem.correctAnswer)).toBeVisible();
   await expect(page.getByTestId('vocabulary-sentence-translation')).toContainText(
     '有了奖学金支持，更多学习者能够负担得起在线课程的费用。',
   );

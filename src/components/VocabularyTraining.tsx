@@ -690,8 +690,21 @@ export default function VocabularyTraining({
                       : 'border-slate-200 bg-white text-slate-600 hover:border-[#003178] hover:text-[#003178]'
                     }`}
                   >
-                    <span className="block">
-                      {optionKey}. {currentItem.options[optionKey]}
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span>{optionKey}. {currentItem.options[optionKey]}</span>
+                      {revealCorrect ? (
+                        <span
+                          data-testid={'vocabulary-option-correct-badge-' + optionKey}
+                          className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-black text-white"
+                        >
+                          正确答案
+                        </span>
+                      ) : null}
+                      {revealWrong ? (
+                        <span className="rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-black text-white">
+                          你的选择
+                        </span>
+                      ) : null}
                     </span>
                     {optionTranslation ? (
                       <span
@@ -752,7 +765,7 @@ export default function VocabularyTraining({
                   ) : (
                     <XCircle className="h-5 w-5 text-rose-600" />
                   )}
-                  正确答案：{currentItem.correctAnswer}
+                  正确答案：{currentItem.correctAnswer}. {currentItem.options[currentItem.correctAnswer]}
                 </div>
                 {recordStatus !== 'idle' ? (
                   <div

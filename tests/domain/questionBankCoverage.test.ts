@@ -73,6 +73,26 @@ describe('CET-4 syllabus-aligned question bank coverage', () => {
     expect(coverageByType['paragraph-translation']).toBe(CET4_TRANSLATION_PROMPT_BANK.length);
   });
 
+  it('keeps CET-4 vocabulary listening items pronounceable and option distractors varied', () => {
+    const missingPhonetics = CET4_VOCABULARY_BANK
+      .filter((item) => !item.phonetic.trim() || item.phonetic === '/phrase/')
+      .map((item) => item.word);
+    const duplicateOptionItems = CET4_VOCABULARY_BANK
+      .filter((item) => new Set(Object.values(item.options)).size !== 4)
+      .map((item) => ({ word: item.word, options: item.options }));
+    const repeatedDistractorGroups = Object.entries(countBy(CET4_VOCABULARY_BANK, (item) =>
+      (Object.keys(item.options) as Array<keyof typeof item.options>)
+        .filter((key) => key !== item.correctAnswer)
+        .map((key) => item.options[key])
+        .sort()
+        .join('|'),
+    )).filter(([, count]) => count > 24);
+
+    expect(missingPhonetics).toEqual([]);
+    expect(duplicateOptionItems).toEqual([]);
+    expect(repeatedDistractorGroups).toEqual([]);
+  });
+
   it('keeps CET-4 vocabulary correct answers distributed across A-D', () => {
     const answerCounts = countBy(CET4_VOCABULARY_BANK, (item) => item.correctAnswer);
     const firstSessionCounts = countBy(CET4_VOCABULARY_BANK.slice(0, 40), (item) => item.correctAnswer);

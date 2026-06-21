@@ -110,6 +110,18 @@ describe('practice sentence and vocabulary Chinese support', () => {
     );
   });
 
+  it('translates generated vocabulary distractors as direct Chinese meanings', () => {
+    const generated = CET4_VOCABULARY_BANK.find((item) => item.word === 'afford');
+    expect(generated).toBeTruthy();
+
+    const support = getVocabularyQuestionSupport(generated!);
+    const distractorTranslations = support.optionTranslations.filter((option) => !option.isCorrect);
+
+    expect(distractorTranslations.length).toBe(3);
+    expect(distractorTranslations.every((option) => /[\u4e00-\u9fff]/u.test(option.chineseMeaning))).toBe(true);
+    expect(distractorTranslations.some((option) => /干扰项|释义：|noun|verb|adjective/u.test(option.chineseMeaning))).toBe(false);
+  });
+
   it('keeps every current vocabulary option translation direct and non-meta', () => {
     const forbiddenOptionPatterns = [
       /表示一个名词概念/u,
