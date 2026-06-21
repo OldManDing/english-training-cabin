@@ -37,6 +37,7 @@ import {
   type PracticeProgressModuleId,
 } from '../domain/practice/practicedQuestions';
 import { buildDraftPracticeAttempts } from '../domain/practice/draftAttempts';
+import PracticeMethodGuide from './PracticeMethodGuide';
 
 type PracticeModuleId = PracticeProgressModuleId;
 type PracticeStatusFilter = 'all' | 'answered' | 'unanswered';
@@ -496,7 +497,7 @@ export default function PracticeHub({
                 专项练习
               </h2>
               <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
-                选模块，直接练；已答题可在题号列表回看。
+                先看解题方法，再进专项练习；已答题可在题号列表回看。
               </p>
               <div data-testid="practice-hub-summary" className="mt-3 flex flex-wrap gap-2 text-[11px] font-black">
                 <span className="ui-chip ui-chip-accent">已记录 {recordedAttemptCount} 次作答</span>
@@ -625,6 +626,10 @@ export default function PracticeHub({
             );
           })}
         </section>
+        )}
+
+        {isCet4 && (
+          <PracticeMethodGuide moduleId={selectedModule.id} />
         )}
 
         {isCet4 && selectedTrainingCamps.length > 0 && (

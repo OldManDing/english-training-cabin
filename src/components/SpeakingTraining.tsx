@@ -24,6 +24,7 @@ import { buildSpeakingPracticeReport } from '../domain/practice/reports';
 import { trackTelemetry } from '../lib/telemetry';
 import { apiRequest } from '../lib/api';
 import { pausePracticeSpeech, playPracticeSpeech, resumePracticeSpeech, stopPracticeSpeech } from '../lib/practiceSpeech';
+import PracticeMethodGuide from './PracticeMethodGuide';
 
 interface SpeakingTrainingProps {
   onUpdateProgress: (scoreChange: { from: number; to: number }) => void;
@@ -546,6 +547,8 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
             );
           })}
         </div>
+
+        <PracticeMethodGuide moduleId="speaking" compact className="mb-5 sm:mb-7" />
       </div>
 
       {/* CORE WORKSTATIONS MAP */}

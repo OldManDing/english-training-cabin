@@ -18,6 +18,7 @@ import { buildChoiceOptionInsights } from '../domain/productCoach';
 import { getVocabularyQuestionSupport, getVocabularySentenceSupport } from '../domain/practice/sentenceTranslations';
 import { pausePracticeSpeech, playPracticeSpeech, preloadPracticeSpeech, resumePracticeSpeech, stopPracticeSpeech } from '../lib/practiceSpeech';
 import ChoiceOptionInsightGrid from './ChoiceOptionInsightGrid';
+import PracticeMethodGuide from './PracticeMethodGuide';
 
 interface VocabularyTrainingProps {
   items: VocabularyPracticeItem[];
@@ -462,6 +463,8 @@ export default function VocabularyTraining({ items, initialQuestionId, replayAtt
             <div className="h-full rounded-full bg-[#003178] transition-all" style={{ width: `${progress}%` }} />
           </div>
         </header>
+
+        <PracticeMethodGuide moduleId="vocabulary" compact />
 
         <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
           <aside className="ui-panel">

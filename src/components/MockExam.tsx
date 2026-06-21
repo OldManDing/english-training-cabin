@@ -29,6 +29,7 @@ import RealPaperPracticePanel, {
   ResourceBadge,
   type LocalRealPaperLoadStatus,
 } from './mockExam/RealPaperPracticePanel';
+import PracticeMethodGuide from './PracticeMethodGuide';
 
 type MockExamPageMode = 'standard-mock' | 'real-paper';
 
@@ -363,6 +364,10 @@ export default function MockExam({ onComplete, skillProfiles = [], dailyPlan }: 
             </div>
           </div>
         </header>
+
+        {!result && pageMode === 'standard-mock' && (
+          <PracticeMethodGuide moduleId="mock" compact />
+        )}
 
         {!result && (
           <section className="grid gap-3 md:grid-cols-2" aria-label="阶段模考入口">

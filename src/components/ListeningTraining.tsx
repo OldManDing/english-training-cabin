@@ -20,6 +20,7 @@ import { pausePracticeSpeech, playPracticeSpeech, preloadPracticeSpeech, resumeP
 import { CET4_LISTENING_PRACTICE_QUESTIONS, CET4_MOCK_EXAM } from '../questionBank';
 import { SelectField } from './controls/FormControls';
 import ChoiceOptionInsightGrid from './ChoiceOptionInsightGrid';
+import PracticeMethodGuide from './PracticeMethodGuide';
 
 interface ListeningTrainingProps {
   initialQuestionId?: string;
@@ -521,6 +522,8 @@ export default function ListeningTraining({
           </button>
         </div>
       </header>
+
+      <PracticeMethodGuide moduleId="listening" compact className="mx-4 mt-4 mb-4 sm:mx-6 lg:mx-8" />
 
       {/* Main Container */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">

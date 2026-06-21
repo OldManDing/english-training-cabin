@@ -1427,9 +1427,12 @@ test('vocabulary practice plays audio controls, scores answers, and persists rev
   await page.getByRole('button', { name: '专项练习' }).click();
   await expect(page.getByRole('heading', { name: /专项练习/ })).toBeVisible();
   await expect(page.getByText(`核心词汇 ${CET4_VOCABULARY_BANK.length} 个`).first()).toBeVisible();
+  await expect(page.getByTestId('practice-method-guide-vocabulary')).toContainText('词汇听音解题方法');
+  await expect(page.getByTestId('practice-method-guide-vocabulary')).toContainText('先确认单词的词性和核心词义');
   await page.getByRole('button', { name: '开始单词练习' }).click();
 
   await expect(page.getByRole('heading', { name: CET4_VOCABULARY_BANK[0].word })).toBeVisible();
+  await expect(page.getByTestId('practice-method-guide-vocabulary')).toContainText('词汇听音解题方法');
   await expect(page.getByTestId('vocabulary-auto-speech-status')).toContainText('自动播报');
   await expect.poll(async () => page.evaluate(() => (window as any).__speechSynthesisCalls?.length ?? 0)).toBeGreaterThanOrEqual(1);
   const firstSpeechText = await page.evaluate(() => (window as any).__speechSynthesisCalls?.[0] ?? '');

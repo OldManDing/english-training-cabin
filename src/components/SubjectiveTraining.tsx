@@ -14,6 +14,7 @@ import {
 import { trackTelemetry } from '../lib/telemetry';
 import { apiRequest } from '../lib/api';
 import { CET4_TRANSLATION_PROMPT_BANK, CET4_WRITING_PROMPT_BANK } from '../questionBank';
+import PracticeMethodGuide from './PracticeMethodGuide';
 
 type SubjectiveMode = 'writing' | 'translation';
 
@@ -272,6 +273,8 @@ export default function SubjectiveTraining({ mode, initialPromptId, replayAttemp
           {task.plannedMinutes} 分钟 · 题库 {taskIndex + 1}/{promptBank.length}
         </span>
       </header>
+
+      <PracticeMethodGuide moduleId={mode} compact className="mx-4 mt-4 mb-4 sm:mx-6 lg:mx-8" />
 
       <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 p-4 sm:p-6 lg:p-8 overflow-y-auto">
         <section className="ui-panel flex flex-col gap-5">

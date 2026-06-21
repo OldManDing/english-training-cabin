@@ -47,7 +47,7 @@ describe('CET-4 syllabus-aligned question bank coverage', () => {
       CET4_QUESTION_BANK_COVERAGE.map((item) => [item.questionTypeId, item.builtInCount]),
     );
 
-    expect(CET4_VOCABULARY_BANK.length).toBeGreaterThanOrEqual(260);
+    expect(CET4_VOCABULARY_BANK.length).toBeGreaterThanOrEqual(1_000);
     expect(CET4_OUTPUT_PHRASE_BANK.length).toBeGreaterThanOrEqual(1_000);
     expect(CET4_LISTENING_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(150);
     expect(CET4_WORD_BANK_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(500);

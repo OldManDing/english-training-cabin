@@ -18,6 +18,7 @@ import { buildChoiceOptionInsights } from '../domain/productCoach';
 import { getQuestionSentenceSupport } from '../domain/practice/sentenceTranslations';
 import { pausePracticeSpeech, playPracticeSpeech, resumePracticeSpeech, stopPracticeSpeech } from '../lib/practiceSpeech';
 import ChoiceOptionInsightGrid from './ChoiceOptionInsightGrid';
+import PracticeMethodGuide from './PracticeMethodGuide';
 
 interface ReadingTrainingProps {
   passage: Passage;
@@ -136,6 +137,11 @@ export default function ReadingTraining({ passage, initialQuestionId, replayAtte
     : practiceQuestionTypeId === 'long-matching'
     ? '长篇匹配训练舱'
     : '仔细阅读训练舱';
+  const methodGuideModuleId = practiceQuestionTypeId === 'cloze-choice'
+    ? 'cloze'
+    : practiceModuleId === 'grammar'
+      ? 'grammar'
+      : 'reading';
 
   const persistDraft = (nextState: {
     currentIdx?: number;
@@ -495,6 +501,8 @@ export default function ReadingTraining({ passage, initialQuestionId, replayAtte
           ))}
         </div>
       </div>
+
+      <PracticeMethodGuide moduleId={methodGuideModuleId} compact className="mx-4 mt-4 mb-4 sm:mx-6 lg:mx-8" />
 
       {/* Split Screens Panel */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
