@@ -1016,6 +1016,16 @@ const CET4_SCALE_TOPIC_CONFIGS: Cet4ScaleTopicConfig[] = [
   },
 ];
 
+const MAIN_PRACTICE_SCALE_TOPICS = CET4_SCALE_TOPIC_CONFIGS.filter(
+  (topic, index) => index < 6 || topic.slug === 'environmental-awareness',
+);
+const SUBJECTIVE_SCALE_TOPICS = CET4_SCALE_TOPIC_CONFIGS.slice(0, 10);
+
+function lowerFirstEnglishFragment(value: string): string {
+  if (!value) return value;
+  return value.charAt(0).toLowerCase() + value.slice(1);
+}
+
 function makeExtendedReadingPassage(config: ExtendedReadingConfig): Passage {
   const content = `${config.topic} has become a familiar subject in college life and public discussion. Supporters point out that ${config.benefit}. This advantage is especially important when students need to connect classroom knowledge with real situations rather than remember facts mechanically.
 
@@ -1261,7 +1271,7 @@ const EXTENDED_READING_PASSAGES: Passage[] = [
     keyword: 'resource',
     themeTag: '阅读策略',
   },
-  ...CET4_SCALE_TOPIC_CONFIGS.flatMap((topic, topicIndex) => ([
+  ...MAIN_PRACTICE_SCALE_TOPICS.flatMap((topic, topicIndex) => ([
     {
       id: `cet-scale-${topic.slug}-concept`,
       title: `${topic.title}: Value and Limits`,
@@ -2368,7 +2378,7 @@ const EXTENDED_LISTENING_ITEMS: Array<{
     explanation: 'recommend 后面两个动作是答题重点。',
     trapType: '关键词漏听',
   },
-  ...CET4_SCALE_TOPIC_CONFIGS.flatMap((topic, topicIndex) => {
+  ...MAIN_PRACTICE_SCALE_TOPICS.flatMap((topic, topicIndex) => {
     const answerCycle: Choice[] = ['A', 'B', 'C', 'D'];
     const newsAnswer = answerCycle[topicIndex % answerCycle.length];
     const conversationAnswerA = answerCycle[(topicIndex + 1) % answerCycle.length];
@@ -2456,7 +2466,7 @@ const EXTENDED_LISTENING_ITEMS: Array<{
       },
     ];
   }),
-  ...CET4_SCALE_TOPIC_CONFIGS.flatMap((topic, topicIndex) => {
+  ...MAIN_PRACTICE_SCALE_TOPICS.flatMap((topic, topicIndex) => {
     const answerCycle: Choice[] = ['A', 'B', 'C', 'D'];
     return LISTENING_EXPANSION_SCENARIOS.map((scenario, scenarioIndex) => ({
       id: `scale-${scenario.questionTypeId}-${topic.slug}-${scenario.slug}`,
@@ -3151,7 +3161,7 @@ const GRAMMAR_STRUCTURE_FRAMES: readonly GrammarStructureFrame[] = [
   {
     slug: 'because-of',
     focus: '介词短语|原因表达',
-    prompt: (context) => `The ${context.event} was postponed ___ ${context.reason}.`,
+    prompt: (context) => `${capitalizeFirst(context.event)} was postponed ___ ${context.reason}.`,
     options: { A: 'because', B: 'because of', C: 'although', D: 'so that' },
     answer: 'B',
     explanation: 'because of 后接名词或名词短语，because 后接完整从句。',
@@ -3701,7 +3711,7 @@ const WRITING_EXPANSION_FRAMES = [
     prompt: (topic: Cet4ScaleTopicConfig) => `the advantages and possible limits of ${topic.topic.toLowerCase()}`,
     instruction: 'You should discuss one benefit, one possible problem, and your own suggestion.',
     sample: (topic: Cet4ScaleTopicConfig) =>
-      `${topic.topic} has clear advantages because ${topic.benefit}. However, we should also notice that ${topic.concern}. In my view, a practical way forward is to ${topic.action}. Only when benefits and limits are both considered can this topic create lasting value.`,
+      `The topic of ${topic.topic.toLowerCase()} has clear advantages because ${lowerFirstEnglishFragment(topic.benefit)}. However, we should also notice that ${lowerFirstEnglishFragment(topic.concern)}. In my view, a practical way forward is to ${topic.action}. Only when benefits and limits are both considered can this topic create lasting value.`,
   },
   {
     slug: 'personal-action',
@@ -4003,7 +4013,7 @@ export const CET4_WRITING_PROMPT_BANK: Cet4SubjectivePrompt[] = [
     sampleAnswer:
       'AI feedback can help students notice mistakes and receive specific suggestions. However, learners should not copy suggested answers without thinking. A better way is to compare the feedback with their own work, revise actively, and use evidence from practice to improve.',
   },
-  ...CET4_SCALE_TOPIC_CONFIGS.flatMap((topic) => ([
+  ...SUBJECTIVE_SCALE_TOPICS.flatMap((topic) => ([
     {
       id: `writing-scale-${topic.slug}-opinion`,
       moduleId: 'writing' as const,
@@ -4015,7 +4025,7 @@ export const CET4_WRITING_PROMPT_BANK: Cet4SubjectivePrompt[] = [
       keywords: topic.keywords,
       syllabusFocus: [topic.themeTag, '观点表达', '原因论证'],
       sampleAnswer:
-        `${topic.topic} is valuable because ${topic.benefit}. However, this value cannot be achieved automatically. ${topic.concern}. In my view, students and communities should ${topic.action}. In this way, the topic can create practical and measurable improvement.`,
+        `The topic of ${topic.topic.toLowerCase()} is valuable because ${lowerFirstEnglishFragment(topic.benefit)}. However, this value cannot be achieved automatically. ${lowerFirstEnglishFragment(topic.concern)}. In my view, students and communities should ${topic.action}. In this way, the topic can create practical and measurable improvement.`,
     },
     {
       id: `writing-scale-${topic.slug}-problem-solution`,
@@ -4028,7 +4038,7 @@ export const CET4_WRITING_PROMPT_BANK: Cet4SubjectivePrompt[] = [
       keywords: topic.keywords,
       syllabusFocus: [topic.themeTag, '问题解决', '建议表达'],
       sampleAnswer:
-        `One problem related to ${topic.topic.toLowerCase()} is that ${topic.concern}. This problem matters because it may weaken the real value of a useful idea. A practical solution is to ${topic.action}. If the result is checked regularly, the solution will be more reliable.`,
+        `One problem related to ${topic.topic.toLowerCase()} is that ${lowerFirstEnglishFragment(topic.concern)}. This problem matters because it may weaken the real value of a useful idea. A practical solution is to ${topic.action}. If the result is checked regularly, the solution will be more reliable.`,
     },
     {
       id: `writing-scale-${topic.slug}-example`,
@@ -4041,9 +4051,9 @@ export const CET4_WRITING_PROMPT_BANK: Cet4SubjectivePrompt[] = [
       keywords: topic.keywords,
       syllabusFocus: [topic.themeTag, '举例说明', '影响表达'],
       sampleAnswer:
-        `${topic.topic} can influence students and local communities in a practical way. For example, when people ${topic.action}, they can see whether the activity really helps. The main benefit is that ${topic.benefit}. This example shows that careful planning is more useful than a temporary slogan.`,
+        `The topic of ${topic.topic.toLowerCase()} can influence students and local communities in a practical way. For example, when people ${topic.action}, they can see whether the activity really helps. The main benefit is that ${lowerFirstEnglishFragment(topic.benefit)}. This example shows that careful planning is more useful than a temporary slogan.`,
     },
-    ...WRITING_EXPANSION_FRAMES.map((frame) => ({
+    ...WRITING_EXPANSION_FRAMES.slice(0, 2).map((frame) => ({
       id: `writing-scale-${topic.slug}-${frame.slug}`,
       moduleId: 'writing' as const,
       questionTypeId: 'short-essay' as const,
@@ -4342,44 +4352,44 @@ export const CET4_TRANSLATION_PROMPT_BANK: Cet4SubjectivePrompt[] = [
     sampleAnswer:
       'With the improvement of environmental awareness, more and more people are changing their daily lifestyles. They reduce the use of disposable products, save water and electricity, and actively participate in community environmental activities. These small actions help build a more sustainable society.',
   },
-  ...CET4_SCALE_TOPIC_CONFIGS.flatMap((topic) => ([
+  ...SUBJECTIVE_SCALE_TOPICS.flatMap((topic) => ([
     {
       id: `translation-scale-${topic.slug}-development`,
       moduleId: 'translation' as const,
       questionTypeId: 'paragraph-translation' as const,
       title: `${topic.cnTitle}与社会发展`,
-      prompt: `请将下面这段中文翻译成英文：近年来，${topic.cnTitle}受到越来越多人的关注。它的价值在于能够${topic.benefit}。不过，如果缺少合理的规划和持续的反馈，相关措施可能难以取得稳定效果。`,
+      prompt: `请将下面这段中文翻译成英文：近年来，${topic.cnTitle}受到越来越多人的关注。它可以改善学习、生活或公共服务中的实际问题。不过，如果缺少合理的规划和持续的反馈，相关措施可能难以取得稳定效果。`,
       plannedMinutes: 30,
       keywords: topic.keywords,
       syllabusFocus: [topic.themeTag, '社会发展', '语篇连贯'],
       sampleAnswer:
-        `In recent years, ${topic.topic.toLowerCase()} has attracted increasing attention. Its value lies in the fact that ${topic.benefit}. However, without reasonable planning and continuous feedback, related measures may fail to achieve stable results.`,
+        `Interest in ${topic.topic.toLowerCase()} has grown in recent years. Its value lies in practical support for learning, daily life, or public service. However, without reasonable planning and continuous feedback, related measures may fail to achieve stable results.`,
     },
     {
       id: `translation-scale-${topic.slug}-action`,
       moduleId: 'translation' as const,
       questionTypeId: 'paragraph-translation' as const,
       title: `${topic.cnTitle}的实践`,
-      prompt: `请将下面这段中文翻译成英文：为了更好地推进${topic.cnTitle}，人们需要采取更加实际的措施。例如，可以${topic.action}。这种做法不仅有助于解决现实问题，也能让公众更清楚地看到变化。`,
+      prompt: `请将下面这段中文翻译成英文：为了更好地推进${topic.cnTitle}，人们需要采取更加实际的措施。例如，可以明确目标、收集反馈并逐步改进相关服务。这种做法不仅有助于解决现实问题，也能让公众更清楚地看到变化。`,
       plannedMinutes: 30,
       keywords: topic.keywords,
       syllabusFocus: [topic.themeTag, '措施表达', '结果表达'],
       sampleAnswer:
-        `To promote ${topic.topic.toLowerCase()} more effectively, people need to take more practical measures. For example, they can ${topic.action}. This approach not only helps solve real problems, but also allows the public to see changes more clearly.`,
+        `To improve the practice of ${topic.topic.toLowerCase()}, people need to take more practical measures. For example, they can set clear goals, collect feedback, and improve related services step by step. This approach not only helps solve real problems, but also allows the public to see changes more clearly.`,
     },
     {
       id: `translation-scale-${topic.slug}-balance`,
       moduleId: 'translation' as const,
       questionTypeId: 'paragraph-translation' as const,
       title: `${topic.cnTitle}的平衡发展`,
-      prompt: `请将下面这段中文翻译成英文：${topic.cnTitle}的发展不能只追求速度，还应重视公平和长期影响。人们应当关注这样一个问题：${topic.concern}。只有在发展过程中不断评估结果，才能真正提升公共利益。`,
+      prompt: `请将下面这段中文翻译成英文：${topic.cnTitle}的发展不能只追求速度，还应重视公平和长期影响。人们应当关注不同群体的真实需求，避免只看短期效果。只有在发展过程中不断评估结果，才能真正提升公共利益。`,
       plannedMinutes: 30,
       keywords: topic.keywords,
       syllabusFocus: [topic.themeTag, '利弊平衡', '公共利益'],
       sampleAnswer:
-        `The development of ${topic.topic.toLowerCase()} should not focus only on speed, but should also value fairness and long-term influence. People should pay attention to this issue: ${topic.concern}. Only by evaluating results continuously during development can public benefit truly be improved.`,
+        `The development of ${topic.topic.toLowerCase()} should not focus only on speed, but should also value fairness and long-term influence. People should pay attention to the real needs of different groups and avoid judging only short-term effects. Only by evaluating results continuously during development can public benefit truly be improved.`,
     },
-    ...TRANSLATION_EXPANSION_FRAMES.map((frame) => ({
+    ...TRANSLATION_EXPANSION_FRAMES.slice(0, 2).map((frame) => ({
       id: `translation-scale-${topic.slug}-${frame.slug}`,
       moduleId: 'translation' as const,
       questionTypeId: 'paragraph-translation' as const,
@@ -4419,6 +4429,49 @@ export const CET4_MOCK_EXAM: Cet4MockExamPaper = {
   },
 };
 
+function buildCET4MockListeningTranscript(questions: Cet4MockChoiceQuestion[]): string {
+  const byType = (questionTypeId: Cet4MockChoiceQuestion['questionTypeId']) => questions
+    .filter((question) => question.questionTypeId === questionTypeId)
+    .map((question) => question.correctSentence)
+    .join(' ');
+
+  return [
+    `News reports: ${byType('short-news')}`,
+    `Long conversations: ${byType('long-conversation')}`,
+    `Passages: ${byType('listening-passage')}`,
+  ].join('\n\n');
+}
+
+function buildCET4MockReadingSection(paperIndex: number): Cet4MockExamPaper['reading'] {
+  const supplementalPassages = takeCyclic(CET4_READING_BANK, (paperIndex + 1) * 3, 3);
+  const carefulQuestions = supplementalPassages
+    .flatMap((passage, passageIndex) => passage.questions.map((question, questionIndex) => makeMockChoiceQuestion({
+      id: `mock-${paperIndex}-careful-${passage.id}-${question.id}`,
+      moduleId: 'reading',
+      questionTypeId: 'careful-reading',
+      title: `仔细阅读变体 ${paperIndex + 1}-${passageIndex + 1}-${questionIndex + 1}`,
+      prompt: question.question,
+      correctAnswer: question.correctAnswer,
+      correctOption: question.options[question.correctAnswer],
+      correctSentence: question.correctSentence ?? passage.content.split(/[.!?。！？]/)[0] ?? passage.title,
+      explanation: question.explanation,
+      trapType: question.type,
+    })))
+    .slice(0, 10);
+
+  return {
+    passage: [
+      CET4_STANDARD_READING_PASSAGE,
+      ...supplementalPassages.map((passage) => `${passage.title}\n${passage.content}`),
+    ].join('\n\n'),
+    questions: [
+      ...CET4_STANDARD_READING_QUESTIONS.filter((question) => question.questionTypeId === 'word-bank'),
+      ...CET4_STANDARD_READING_QUESTIONS.filter((question) => question.questionTypeId === 'long-matching'),
+      ...carefulQuestions,
+    ],
+  };
+}
+
 function buildCET4MockExamVariant(paperIndex: number): Cet4MockExamPaper {
   const paperNo = String(paperIndex + 1).padStart(3, '0');
   const writingPrompt = CET4_WRITING_PROMPT_BANK[paperIndex % CET4_WRITING_PROMPT_BANK.length];
@@ -4444,13 +4497,10 @@ function buildCET4MockExamVariant(paperIndex: number): Cet4MockExamPaper {
       sampleAnswer: writingPrompt.sampleAnswer,
     },
     listening: {
-      transcript: listeningQuestions.map((question) => question.correctSentence).join(' '),
+      transcript: buildCET4MockListeningTranscript(listeningQuestions),
       questions: listeningQuestions,
     },
-    reading: {
-      passage: CET4_STANDARD_READING_PASSAGE,
-      questions: CET4_STANDARD_READING_QUESTIONS,
-    },
+    reading: buildCET4MockReadingSection(paperIndex),
     translation: {
       prompt: translationPrompt.prompt,
       keywords: translationPrompt.keywords,

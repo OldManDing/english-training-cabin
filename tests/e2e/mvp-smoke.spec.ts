@@ -574,7 +574,7 @@ test('MVP critical reading flow persists local learning evidence', async ({ page
 
   const readingQuestionTotal = CET4_READING_BANK.reduce((sum, passage) => sum + passage.questions.length, 0);
   await page.getByRole('button', { name: '今日训练' }).click();
-  await page.getByRole('button', { name: /5\s*已答/ }).click();
+  await page.getByRole('button', { name: /5\s*(?:今日)?已答/ }).click();
   await expect(page.getByRole('heading', { name: '专项练习' })).toBeVisible();
   await expect(page.getByText(`已练 5/${readingQuestionTotal}`)).toBeVisible();
   await expect(page.getByText(`${CET4_READING_BANK.length} 组材料 / ${readingQuestionTotal} 题`)).toBeVisible();
@@ -1499,13 +1499,13 @@ test('vocabulary practice plays audio controls, scores answers, and persists rev
   await expect(page.getByRole('heading', { name: CET4_VOCABULARY_BANK[VOCABULARY_SESSION_SIZE].word })).toBeVisible();
 });
 
-test('generated vocabulary phrase choices stay English before submission', async ({ page }) => {
+test('curated vocabulary choices stay English before submission', async ({ page }) => {
   await installSpeechSynthesisMock(page);
   await registerAndEnterApp(page, 'mvp-vocabulary-generated-choices');
   await resetLocalLearningData(page);
   await page.reload();
 
-  const targetIndex = CET4_VOCABULARY_BANK.findIndex((item) => item.word === 'accurate strategy');
+  const targetIndex = CET4_VOCABULARY_BANK.findIndex((item) => item.word === 'achieve');
   expect(targetIndex).toBeGreaterThanOrEqual(0);
   const targetItem = CET4_VOCABULARY_BANK[targetIndex];
   const packIndex = Math.floor(targetIndex / VOCABULARY_SESSION_SIZE);

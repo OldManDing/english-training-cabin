@@ -358,7 +358,7 @@ export default function VocabularyTraining({ items, initialQuestionId, replayAtt
       startedAt,
       questions: sessionItems.map((item) => ({
         id: item.id,
-        question: `${item.word} ${item.phonetic}: ${item.example}`,
+        question: `${item.word}${item.phonetic ? ` ${item.phonetic}` : ``}: ${item.example}`,
         options: item.options,
         optionTranslations: getVocabularyQuestionSupport(item).optionTranslations.reduce<Partial<Record<Choice, string>>>((result, translation) => {
           result[translation.key] = translation.chineseMeaning;
@@ -471,7 +471,7 @@ export default function VocabularyTraining({ items, initialQuestionId, replayAtt
             </div>
             <h1 className="text-4xl font-black tracking-tight text-[#071e27] sm:text-5xl">{currentItem.word}</h1>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-sm font-bold text-slate-500">
-              <span>{currentItem.phonetic}</span>
+              {currentItem.phonetic ? <span>{currentItem.phonetic}</span> : null}
               <span className="rounded-full bg-slate-100 px-2 py-1 text-xs">{currentItem.partOfSpeech}</span>
               <span className="rounded-full bg-amber-50 px-2 py-1 text-xs text-amber-700">{currentItem.meaning}</span>
             </div>

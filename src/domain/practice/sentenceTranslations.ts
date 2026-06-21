@@ -930,6 +930,12 @@ const CORE_DEFINITION_OPTION_TRANSLATIONS: Record<string, string> = {
   'an option designed to look possible but be wrong': '看似可能但实际错误的选项',
 };
 
+const CURATED_OPTION_TRANSLATIONS: Record<string, string> = {
+  'a detail that is unrelated to the sentence': '与句子无关的细节',
+  'a result with the opposite meaning': '意思相反的结果',
+  'a place or time with no semantic clue': '没有语义线索的地点或时间',
+};
+
 function normalizeText(value?: string) {
   return value?.replace(/\s+/g, ' ').trim() ?? '';
 }
@@ -986,6 +992,28 @@ function buildVocabularyFallback(item: VocabularySentenceInput) {
   const matched = productivePatterns.find(([pattern]) => pattern.test(sourceText));
   if (matched) return matched[1](sourceText.match(matched[0])!);
 
+  const curatedExamplePatterns: Array<[RegExp, (match: RegExpMatchArray) => string]> = [
+    [/^When reviewing a passage, students should notice how "(.+)" changes the key idea\.$/u,
+      (match) => `复习文章时，学生应注意“${match[1]}”如何改变关键信息。`],
+    [/^In writing practice, "(.+)" can help connect evidence with a clear opinion\.$/u,
+      (match) => `在写作练习中，“${match[1]}”可以帮助把证据和清楚观点连接起来。`],
+    [/^A listening note may include "(.+)" when speakers discuss study or public services\.$/u,
+      (match) => `说话人讨论学习或公共服务时，听力笔记中可能会记录“${match[1]}”。`],
+    [/^The expression "(.+)" gives learners a concrete way to talk about a CET-4 topic\.$/u,
+      (match) => `“${match[1]}”这个表达给学习者提供了讨论四级话题的具体方式。`],
+    [/^Teachers often ask students to explain "(.+)" with evidence from the text\.$/u,
+      (match) => `老师常要求学生用文本证据解释“${match[1]}”。`],
+    [/^Learners can compare answer choices by checking where "(.+)" appears in the sentence\.$/u,
+      (match) => `学习者可以通过查看“${match[1]}”在句中出现的位置来比较选项。`],
+    [/^A short review task asks students to use "(.+)" in a natural example\.$/u,
+      (match) => `简短复习任务会要求学生在自然例句中使用“${match[1]}”。`],
+    [/^In translation practice, "(.+)" is useful when the Chinese sentence implies the same idea\.$/u,
+      (match) => `在翻译练习中，当中文句子含有相同意思时，“${match[1]}”很有用。`],
+  ];
+
+  const curatedMatched = curatedExamplePatterns.find(([pattern]) => pattern.test(sourceText));
+  if (curatedMatched) return curatedMatched[1](sourceText.match(curatedMatched[0])!);
+
   return `该例句的中文译文暂缺，请以英文原句理解句意。`;
 }
 
@@ -1017,18 +1045,20 @@ function translateGeneratedCorrectOption(optionText: string, meaning: string) {
 
 function translateToPhrase(optionText: string) {
   if (optionText.startsWith('to ')) {
-    return `表示一个动作：${optionText.slice(3)}`;
+    return `动作释义：${optionText.slice(3)}`;
   }
   if (/^(a|an|the) /u.test(optionText)) {
-    return `表示一个名词概念：${optionText}`;
+    return `名词释义：${optionText}`;
   }
-  return `大意为：${optionText}`;
+  return `释义：${optionText}`;
 }
 
 function translateVocabularyOption(item: VocabularyQuestionInput, key: VocabularyChoice) {
   const optionText = normalizeText(item.options[key]);
   const meaning = stripTrailingPunctuation(normalizeText(item.meaning));
-  const directOptionTranslation = CORE_DEFINITION_OPTION_TRANSLATIONS[optionText] ?? KNOWN_OPTION_TRANSLATIONS[optionText];
+  const directOptionTranslation = CORE_DEFINITION_OPTION_TRANSLATIONS[optionText]
+    ?? KNOWN_OPTION_TRANSLATIONS[optionText]
+    ?? CURATED_OPTION_TRANSLATIONS[optionText];
   if (key === item.correctAnswer) {
     return directOptionTranslation
       ?? translateGeneratedCorrectOption(optionText, meaning)
@@ -1037,7 +1067,7 @@ function translateVocabularyOption(item: VocabularyQuestionInput, key: Vocabular
 
   return directOptionTranslation
     ?? translateGeneratedCorrectOption(optionText, meaning)
-    ?? `${translateToPhrase(optionText)}。这是与“${item.word}”（${meaning}）不匹配的干扰释义。`;
+    ?? `${translateToPhrase(optionText)}。干扰项，需与“${item.word}”（${meaning}）区分。`;
 }
 
 export function getVocabularySentenceSupport(item: VocabularySentenceInput): PracticeSentenceSupport {

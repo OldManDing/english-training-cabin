@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CET4_VOCABULARY_BANK } from '../../src/data';
+import { CET4_OUTPUT_PHRASE_BANK, CET4_VOCABULARY_BANK } from '../../src/data';
 import {
   CET4_LISTENING_PRACTICE_QUESTIONS,
   CET4_CLOZE_PRACTICE_QUESTIONS,
@@ -47,17 +47,18 @@ describe('CET-4 syllabus-aligned question bank coverage', () => {
       CET4_QUESTION_BANK_COVERAGE.map((item) => [item.questionTypeId, item.builtInCount]),
     );
 
-    expect(CET4_VOCABULARY_BANK.length).toBeGreaterThanOrEqual(1_500);
-    expect(CET4_LISTENING_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(1_000);
-    expect(CET4_WORD_BANK_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(1_500);
-    expect(CET4_LONG_MATCHING_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(1_000);
+    expect(CET4_VOCABULARY_BANK.length).toBeGreaterThanOrEqual(260);
+    expect(CET4_OUTPUT_PHRASE_BANK.length).toBeGreaterThanOrEqual(1_000);
+    expect(CET4_LISTENING_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(150);
+    expect(CET4_WORD_BANK_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(500);
+    expect(CET4_LONG_MATCHING_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(250);
     expect(CET4_GRAMMAR_PRACTICE_QUESTIONS).toHaveLength(500);
-    expect(CET4_CLOZE_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(1_500);
-    expect(CET4_READING_BANK.length).toBeGreaterThanOrEqual(300);
-    expect(CET4_READING_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(4_000);
-    expect(carefulReadingQuestionCount).toBeGreaterThanOrEqual(1_200);
-    expect(CET4_WRITING_PROMPT_BANK.length).toBeGreaterThanOrEqual(350);
-    expect(CET4_TRANSLATION_PROMPT_BANK.length).toBeGreaterThanOrEqual(300);
+    expect(CET4_CLOZE_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(750);
+    expect(CET4_READING_BANK.length).toBeGreaterThanOrEqual(60);
+    expect(CET4_READING_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(1_000);
+    expect(carefulReadingQuestionCount).toBeGreaterThanOrEqual(250);
+    expect(CET4_WRITING_PROMPT_BANK.length).toBeGreaterThanOrEqual(90);
+    expect(CET4_TRANSLATION_PROMPT_BANK.length).toBeGreaterThanOrEqual(60);
     expect(CET4_MOCK_EXAM_BANK.length).toBeGreaterThanOrEqual(10);
     expect(coverageByType['cet4-core-vocabulary']).toBe(CET4_VOCABULARY_BANK.length);
     expect(coverageByType['word-bank']).toBe(
@@ -77,15 +78,36 @@ describe('CET-4 syllabus-aligned question bank coverage', () => {
     const firstSessionCounts = countBy(CET4_VOCABULARY_BANK.slice(0, 40), (item) => item.correctAnswer);
     const firstSessionAnswerCounts = ['A', 'B', 'C', 'D'].map((choice) => firstSessionCounts[choice] ?? 0);
 
-    expect(answerCounts).toMatchObject({
-      A: CET4_VOCABULARY_BANK.length / 4,
-      B: CET4_VOCABULARY_BANK.length / 4,
-      C: CET4_VOCABULARY_BANK.length / 4,
-      D: CET4_VOCABULARY_BANK.length / 4,
-    });
+    const allAnswerCounts = ['A', 'B', 'C', 'D'].map((choice) => answerCounts[choice] ?? 0);
+
+    expect(allAnswerCounts.every((count) => count > 0)).toBe(true);
+    expect(Math.max(...allAnswerCounts) - Math.min(...allAnswerCounts)).toBeLessThanOrEqual(1);
     expect(firstSessionAnswerCounts.every((count) => count > 0)).toBe(true);
     expect(Math.max(...firstSessionAnswerCounts)).toBeLessThanOrEqual(16);
     expect(Math.min(...firstSessionAnswerCounts)).toBeGreaterThanOrEqual(4);
+  });
+
+  it('keeps generated expansion material out of main objective practice banks', () => {
+    const phraseSourceIds = CET4_OUTPUT_PHRASE_BANK.map((item) => item.id.replace(/^vocab-/, ''));
+    const usesPhraseSource = (
+      id: string,
+      prefix: string,
+      frameSuffixes: readonly string[],
+    ) => phraseSourceIds.some((phraseId) =>
+      frameSuffixes.some((suffix) => id === `${prefix}${phraseId}-${suffix}`),
+    );
+    const translationPrompts = CET4_TRANSLATION_PROMPT_BANK.map((item) => item.prompt);
+    const mockReadingPassageCount = new Set(CET4_MOCK_EXAM_BANK.map((paper) => paper.reading.passage)).size;
+
+    expect(CET4_VOCABULARY_BANK.some((item) => item.phonetic === '/phrase/' || item.partOfSpeech === 'phrase')).toBe(false);
+    expect(CET4_WORD_BANK_PRACTICE_QUESTIONS.some((question) =>
+      usesPhraseSource(question.id, 'practice-word-bank-', ['meaning-clue', 'collocation-clue']),
+    )).toBe(false);
+    expect(CET4_CLOZE_PRACTICE_QUESTIONS.some((question) =>
+      usesPhraseSource(question.id, 'practice-cloze-', ['context-meaning', 'collocation', 'sentence-logic']),
+    )).toBe(false);
+    expect(translationPrompts.some((prompt) => /(?:they provide|Some students|connect borrowing|campus library services has)/.test(prompt))).toBe(false);
+    expect(mockReadingPassageCount).toBeGreaterThan(1);
   });
 
   it('keeps CET-4 grammar-structure answers distributed across A-D', () => {

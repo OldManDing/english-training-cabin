@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CET4_VOCABULARY_BANK } from '../../src/data';
+import { CET4_OUTPUT_PHRASE_BANK, CET4_VOCABULARY_BANK } from '../../src/data';
 import { getVocabularyQuestionSupport, getVocabularySentenceSupport } from '../../src/domain/practice/sentenceTranslations';
 
 describe('practice sentence and vocabulary Chinese support', () => {
@@ -35,7 +35,7 @@ describe('practice sentence and vocabulary Chinese support', () => {
   });
 
   it('translates generated phrase vocabulary options without depending on a fixed answer letter', () => {
-    const generated = CET4_VOCABULARY_BANK.find((item) => item.word === 'accurate strategy');
+    const generated = CET4_OUTPUT_PHRASE_BANK.find((item) => item.word === 'accurate strategy');
     expect(generated).toBeTruthy();
 
     const support = getVocabularyQuestionSupport(generated!);
@@ -57,32 +57,27 @@ describe('practice sentence and vocabulary Chinese support', () => {
 
     const support = getVocabularyQuestionSupport(method!);
 
-    expect(support.optionTranslations).toEqual([
-      {
-        key: 'A',
-        sourceText: 'a way of doing something',
+    expect(support.optionTranslations).toHaveLength(4);
+    expect(support.optionTranslations.find((option) => option.sourceText === 'a way of doing something'))
+      .toMatchObject({
         chineseMeaning: '做某事的方法或方式',
         isCorrect: true,
-      },
-      {
-        key: 'B',
-        sourceText: 'a person in a class',
+      });
+    expect(support.optionTranslations.find((option) => option.sourceText === 'a person in a class'))
+      .toMatchObject({
         chineseMeaning: '班级里的一个人',
         isCorrect: false,
-      },
-      {
-        key: 'C',
-        sourceText: 'a result of a survey',
+      });
+    expect(support.optionTranslations.find((option) => option.sourceText === 'a result of a survey'))
+      .toMatchObject({
         chineseMeaning: '调查结果',
         isCorrect: false,
-      },
-      {
-        key: 'D',
-        sourceText: 'a building near campus',
+      });
+    expect(support.optionTranslations.find((option) => option.sourceText === 'a building near campus'))
+      .toMatchObject({
         chineseMeaning: '校园附近的建筑',
         isCorrect: false,
-      },
-    ]);
+      });
   });
 
   it('translates core definition answer options instead of falling back to word glosses', () => {
