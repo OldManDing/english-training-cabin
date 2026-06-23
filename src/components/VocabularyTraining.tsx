@@ -14,10 +14,8 @@ import {
   savePracticeDraft,
 } from '../domain/practice/draftProgress';
 import { buildChoicePracticeReport } from '../domain/practice/reports';
-import { buildChoiceOptionInsights } from '../domain/productCoach';
 import { getVocabularyQuestionSupport, getVocabularySentenceSupport } from '../domain/practice/sentenceTranslations';
 import { pausePracticeSpeech, playPracticeSpeech, preloadPracticeSpeech, resumePracticeSpeech, stopPracticeSpeech } from '../lib/practiceSpeech';
-import ChoiceOptionInsightGrid from './ChoiceOptionInsightGrid';
 import PracticeMethodGuide from './PracticeMethodGuide';
 
 interface VocabularyTrainingProps {
@@ -662,7 +660,7 @@ export default function VocabularyTraining({
                 中文辅助
               </div>
               <p>单词中文义：{currentItem.meaning}</p>
-              <p className="mt-1 text-xs text-amber-800">提交后显示答案与解析。</p>
+              <p className="mt-1 text-xs text-amber-800">提交后显示正确答案、选项中文和例句翻译。</p>
             </div>
 
             <div className="mt-6 grid gap-3">
@@ -783,17 +781,6 @@ export default function VocabularyTraining({
                         : '本题已写入作答记录'}
                   </div>
                 ) : null}
-                <div className="mt-4">
-                  <ChoiceOptionInsightGrid
-                    testIdPrefix="vocabulary"
-                    insights={buildChoiceOptionInsights({
-                      options: currentItem.options,
-                      correctAnswer: currentItem.correctAnswer,
-                      selectedAnswer: selectedOpt,
-                      explanation: currentItem.explanation,
-                    })}
-                  />
-                </div>
                 {sentenceSupport ? (
                   <div
                     data-testid="vocabulary-sentence-translation"
@@ -819,12 +806,6 @@ export default function VocabularyTraining({
                     ) : null}
                   </div>
                 ) : null}
-                <div className="mt-4 rounded-2xl border border-sky-100 bg-white/80 p-4">
-                  <div className="text-xs font-black uppercase tracking-widest text-sky-700">
-                    解析
-                  </div>
-                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">{currentItem.explanation}</p>
-                </div>
               </div>
             ) : null}
 

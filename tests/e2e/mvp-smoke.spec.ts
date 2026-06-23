@@ -534,7 +534,7 @@ test('MVP critical reading flow persists local learning evidence', async ({ page
     await page.getByRole('button', { name: '提交此题并查看错因诊断' }).click();
     await expect(page.getByTestId('reading-post-answer-support')).toBeVisible();
     await expect(page.getByTestId('reading-question-translation')).toBeVisible();
-    await expect(page.getByTestId('reading-question-translation')).not.toContainText('正确答案和定位解析提交后公布');
+    await expect(page.getByTestId('reading-question-translation')).not.toContainText('正确答案和定位译文提交后显示');
     await expect(page.getByTestId('reading-option-translation-A')).toBeVisible();
     await expect(page.getByTestId('reading-sentence-translation')).toBeVisible();
     await page.getByRole('button', { name: index === 4 ? /完成训练/ : /进入第/ }).click();
@@ -750,7 +750,7 @@ test('unfinished vocabulary and listening practice resume from saved drafts', as
   await page.getByRole('button', { name: '提交答案' }).click();
   await expect(page.getByTestId('listening-post-answer-support')).toBeVisible();
   await expect(page.getByTestId('listening-question-translation')).toBeVisible();
-  await expect(page.getByTestId('listening-question-translation')).not.toContainText('正确答案和错因解析提交后公布');
+  await expect(page.getByTestId('listening-question-translation')).not.toContainText('正确答案和听力原句译文提交后显示');
   await expect(page.getByTestId('listening-option-translation-A')).toBeVisible();
   await expect(page.getByTestId('listening-sentence-translation')).toBeVisible();
   await page.getByRole('button', { name: '下一题' }).click();
@@ -1479,6 +1479,8 @@ test('vocabulary practice plays audio controls, scores answers, and persists rev
     await expect(answerButton).toContainText('中文：');
     await expect(page.getByTestId('vocabulary-sentence-translation')).toContainText(item.example);
     await expect(page.getByTestId('vocabulary-sentence-translation')).not.toContainText('中文译文暂缺');
+    await expect(page.getByTestId('vocabulary-option-insights')).toHaveCount(0);
+    await expect(page.getByTestId('vocabulary-post-answer-support')).not.toContainText('四选项排除解析');
     await expect(page.getByTestId('vocabulary-sentence-translation')).not.toContainText('请以英文原句');
     await page.getByRole('button', { name: item === vocabularySessionItems.at(-1) ? '完成词汇练习' : '进入下一个单词' }).click();
   }

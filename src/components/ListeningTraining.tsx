@@ -15,11 +15,9 @@ import {
   savePracticeDraft,
 } from '../domain/practice/draftProgress';
 import { buildChoicePracticeReport } from '../domain/practice/reports';
-import { buildChoiceOptionInsights } from '../domain/productCoach';
 import { pausePracticeSpeech, playPracticeSpeech, preloadPracticeSpeech, resumePracticeSpeech, stopPracticeSpeech } from '../lib/practiceSpeech';
 import { CET4_LISTENING_PRACTICE_QUESTIONS, CET4_MOCK_EXAM } from '../questionBank';
 import { SelectField } from './controls/FormControls';
-import ChoiceOptionInsightGrid from './ChoiceOptionInsightGrid';
 import PracticeMethodGuide from './PracticeMethodGuide';
 
 interface ListeningTrainingProps {
@@ -820,7 +818,7 @@ export default function ListeningTraining({
             )}
           </div>
 
-          {/* AI Audio Diagnostics & Analyze feedback after submission */}
+          {/* Compact post-answer support after submission */}
           {activeQ.isSubmitted && (
             <div
               data-testid="listening-post-answer-support"
@@ -831,23 +829,10 @@ export default function ListeningTraining({
                   <Sparkles className="h-4 w-4" />
                 </div>
                 <h4 className="text-xs font-extrabold text-[#0369a1] uppercase tracking-wider">
-                  听力错因分析与解题建议
+                  答后句子翻译
                 </h4>
               </div>
 
-              <p className="text-xs text-[#1e293b] leading-relaxed">
-                {activeQ.explanation}
-              </p>
-              <ChoiceOptionInsightGrid
-                testIdPrefix="listening"
-                insights={buildChoiceOptionInsights({
-                  options: activeQ.options,
-                  correctAnswer: activeQ.correctAnswer,
-                  selectedAnswer: activeQ.selectedAnswer,
-                  explanation: activeQ.explanation,
-                  trapType: activeQ.trapType,
-                })}
-              />
               {activeSentenceSupport ? (
                 <div
                   data-testid="listening-sentence-translation"

@@ -1001,8 +1001,32 @@ const CURATED_OPTION_TRANSLATIONS: Record<string, string> = {
 };
 
 const COLLOCATION_USAGE_TRANSLATIONS: Record<string, string> = {
+  'adjust a plan': '调整计划',
   'afford the cost': '负担得起费用',
+  'annual report': '年度报告',
+  'available resources': '可用资源',
+  'convenient service': '便捷服务',
+  'digital technology': '数字技术',
+  'imitate pronunciation': '模仿发音',
+  'main point': '主要观点',
+  'major change': '重大变化',
+  'majority opinion': '多数意见',
+  'necessary step': '必要步骤',
+  'ordinary people': '普通人',
+  'resolve a conflict': '解决冲突',
+  'similar meaning': '相似含义',
+  'support an argument': '支持论点',
+  'voluntary work': '志愿工作',
 };
+
+function cleanArticle(value: string) {
+  return value.replace(/^(?:a|an|the|this|that|these|those)\s+/iu, '').trim();
+}
+
+function translateCapturedCollocation(match: RegExpMatchArray, fallback: string) {
+  const key = cleanArticle(normalizeText(match[1])).toLowerCase();
+  return COLLOCATION_USAGE_TRANSLATIONS[key] ?? fallback;
+}
 
 function normalizeText(value?: string) {
   return value?.replace(/\s+/g, ' ').trim() ?? '';
@@ -1027,7 +1051,7 @@ function extractQuotedEnglishSentence(value?: string) {
 }
 
 function translateCollocationUse(item: VocabularySentenceInput): string {
-  const collocation = normalizeText(item.collocation);
+  const collocation = normalizeText(item.collocation).toLowerCase();
   return COLLOCATION_USAGE_TRANSLATIONS[collocation]
     ?? stripTrailingPunctuation(normalizeText(item.meaning));
 }
@@ -1177,42 +1201,46 @@ function buildVocabularyFallback(item: VocabularySentenceInput): Pick<PracticeSe
       }],
     [/^(.+) helps learners understand the topic more clearly\.$/u,
       () => {
-        const chineseMeaning = `这个与${meaning}相关的内容能帮助学习者更清楚地理解话题。`;
+        const chineseMeaning = `${collocationUse}能帮助学习者更清楚地理解话题。`;
         return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
       }],
     [/^The passage describes (.+) in a familiar campus situation\.$/u,
-      () => {
-        const chineseMeaning = `文章在熟悉的校园情境中描述了与${meaning}相关的内容。`;
+      (match) => {
+        const use = translateCapturedCollocation(match, collocationUse);
+        const chineseMeaning = `文章在熟悉的校园情境中描述了${use}。`;
         return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
       }],
     [/^(.+) can become the key clue in a listening question\.$/u,
       () => {
-        const chineseMeaning = `与${meaning}相关的信息可能成为听力题中的关键线索。`;
+        const chineseMeaning = `${collocationUse}可能成为听力题中的关键线索。`;
         return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
       }],
     [/^Students discuss (.+) when they prepare for a writing task\.$/u,
-      () => {
-        const chineseMeaning = `学生准备写作任务时会讨论与${meaning}相关的内容。`;
+      (match) => {
+        const use = translateCapturedCollocation(match, collocationUse);
+        const chineseMeaning = `学生准备写作任务时会讨论${use}。`;
         return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
       }],
     [/^(.+) makes the speaker's attitude easier to understand\.$/u,
       () => {
-        const chineseMeaning = `与${meaning}相关的信息让说话人的态度更容易理解。`;
+        const chineseMeaning = `${collocationUse}让说话人的态度更容易理解。`;
         return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
       }],
     [/^A class report connects (.+) with evidence from daily life\.$/u,
-      () => {
-        const chineseMeaning = `课堂报告把与${meaning}相关的内容和日常生活证据联系起来。`;
+      (match) => {
+        const use = translateCapturedCollocation(match, collocationUse);
+        const chineseMeaning = `课堂报告把${use}和日常生活证据联系起来。`;
         return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
       }],
     [/^(.+) gives learners a concrete detail for comparison\.$/u,
       () => {
-        const chineseMeaning = `与${meaning}相关的信息给学习者提供了可比较的具体细节。`;
+        const chineseMeaning = `${collocationUse}给学习者提供了可比较的具体细节。`;
         return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
       }],
     [/^The dialogue mentions (.+) while explaining a practical problem\.$/u,
-      () => {
-        const chineseMeaning = `对话在解释实际问题时提到了与${meaning}相关的内容。`;
+      (match) => {
+        const use = translateCapturedCollocation(match, collocationUse);
+        const chineseMeaning = `对话在解释实际问题时提到了${use}。`;
         return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
       }],
     [/^(.+), learners can still make progress through focused practice\.$/u,

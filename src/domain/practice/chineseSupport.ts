@@ -446,7 +446,7 @@ function optionSupport(options: Record<Choice, string>): Partial<Record<Choice, 
 
 export function getReadingChineseSupport(passageId: string, question: Question): QuestionChineseSupport | undefined {
   if (question.chineseSupport) return question.chineseSupport;
-  const fallbackQuestion = `本题考向：${question.type}${question.tags?.length ? `；关键词：${question.tags.join('、')}` : ''}。正确答案和定位解析提交后公布。`;
+  const fallbackQuestion = `本题考向：${question.type}${question.tags?.length ? `；关键词：${question.tags.join('、')}` : ''}。正确答案和定位译文提交后显示。`;
   if (passageId !== 'cet-ai-edu') {
     return {
       question: translateReadingQuestion(question.question) ?? fallbackQuestion,
@@ -464,7 +464,7 @@ export function getListeningChineseSupport(question: {
   options: Record<Choice, string>;
 }): QuestionChineseSupport | undefined {
   const support: QuestionChineseSupport = {
-    question: translatePrompt(question.prompt) ?? '根据听力材料选择最佳答案；正确答案和错因解析提交后公布。',
+    question: translatePrompt(question.prompt) ?? '根据听力材料选择最佳答案；正确答案和听力原句译文提交后显示。',
     options: optionSupport(question.options),
   };
 

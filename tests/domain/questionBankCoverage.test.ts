@@ -87,10 +87,41 @@ describe('CET-4 syllabus-aligned question bank coverage', () => {
         .sort()
         .join('|'),
     )).filter(([, count]) => count > 24);
+    const exactWordPhoneticPlaceholders = CET4_VOCABULARY_BANK
+      .filter((item) => {
+        const normalizedWord = item.word.toLowerCase().replace(/[^a-z]+/g, ' ').trim();
+        return item.phonetic.trim().toLowerCase() === `/${normalizedWord}/`;
+      })
+      .map((item) => ({ word: item.word, phonetic: item.phonetic }));
+    const malformedGeneratedExamples = CET4_VOCABULARY_BANK
+      .filter((item) => [
+        /helps learners annual report/i,
+        /helps learners available resources/i,
+        /can convenient service/i,
+        /can major change/i,
+        /helps learners necessary step/i,
+        /can similar meaning/i,
+        /can voluntary work/i,
+        /helps learners majority opinion/i,
+        /helps learners ordinary people/i,
+        /helps learners main point/i,
+        /The digital technology/i,
+        /the ordinary people/i,
+        /an ordinary people/i,
+        /a voluntary work/i,
+      ].some((pattern) => pattern.test(item.example)))
+      .map((item) => ({
+        word: item.word,
+        partOfSpeech: item.partOfSpeech,
+        collocation: item.collocation,
+        example: item.example,
+      }));
 
     expect(missingPhonetics).toEqual([]);
     expect(duplicateOptionItems).toEqual([]);
     expect(repeatedDistractorGroups).toEqual([]);
+    expect(exactWordPhoneticPlaceholders).toEqual([]);
+    expect(malformedGeneratedExamples).toEqual([]);
   });
 
   it('keeps CET-4 vocabulary correct answers distributed across A-D', () => {

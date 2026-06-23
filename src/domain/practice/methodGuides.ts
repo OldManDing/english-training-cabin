@@ -25,7 +25,7 @@ export const PRACTICE_METHOD_GUIDES: Record<PracticeMethodGuideModuleId, Practic
       '提交后对照正确答案、例句和错因，把生词放回复习链路。',
     ],
     focus: ['词性', '搭配', '例句'],
-    payoff: '先按这四步做，再看答案区的解析，记忆会更稳。',
+    payoff: '先按这四步做，再核对答案和例句译文，记忆会更稳。',
   },
   cloze: {
     moduleId: 'cloze',

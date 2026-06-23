@@ -69,7 +69,7 @@ describe('practice question Chinese support', () => {
           question: question.question,
           support: getReadingChineseSupport(passage.id, question)?.question ?? '',
         }))
-        .filter(({ support }) => support.includes('正确答案和定位解析提交后公布')),
+        .filter(({ support }) => support.includes('正确答案和定位译文提交后显示')),
     );
 
     expect(fallbackQuestions).toEqual([]);
@@ -83,7 +83,7 @@ describe('practice question Chinese support', () => {
           prompt: question.prompt,
           options: question.options,
         })?.question ?? '',
-    })).filter(({ support }) => support.includes('正确答案和错因解析提交后公布'));
+    })).filter(({ support }) => support.includes('正确答案和听力原句译文提交后显示'));
 
     expect(fallbackQuestions).toEqual([]);
   });

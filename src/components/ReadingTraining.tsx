@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, CheckCircle2, XCircle, ChevronRight, HelpCircle, Volume2, Headphones, Sparkles } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, XCircle, ChevronRight, HelpCircle, Headphones, Sparkles } from 'lucide-react';
 import { Attempt, ChoiceOption, Passage, PracticeCompletionReport, Question, SkillArea } from '../types';
 import { getReadingChineseSupport } from '../domain/practice/chineseSupport';
 import { buildChoiceReplayAnswer } from '../domain/practice/attemptReplay';
@@ -14,11 +14,8 @@ import {
   savePracticeDraft,
 } from '../domain/practice/draftProgress';
 import { buildChoicePracticeReport } from '../domain/practice/reports';
-import { buildChoiceOptionInsights } from '../domain/productCoach';
 import { getQuestionSentenceSupport } from '../domain/practice/sentenceTranslations';
 import { getGrammarStructureTopicByFocus } from '../domain/practice/grammarStructureGuides';
-import { pausePracticeSpeech, playPracticeSpeech, resumePracticeSpeech, stopPracticeSpeech } from '../lib/practiceSpeech';
-import ChoiceOptionInsightGrid from './ChoiceOptionInsightGrid';
 import PracticeMethodGuide from './PracticeMethodGuide';
 
 interface ReadingTrainingProps {
@@ -114,8 +111,6 @@ export default function ReadingTraining({ passage, initialQuestionId, replayAtte
   const [confidence, setConfidence] = useState<ChoiceConfidence | null>(initialDraft.confidence);
   const [isSubmitted, setIsSubmitted] = useState(initialDraft.isSubmitted);
   const [userAnswers, setUserAnswers] = useState<ReadingAnswer[]>(initialDraft.answers);
-  const [isPlayingText, setIsPlayingText] = useState(false);
-  const [isTextPaused, setIsTextPaused] = useState(false);
   const [startedAt] = useState(() => initialDraft.startedAt);
 
   const currentQuestion: Question = passage.questions[currentIdx];
@@ -177,58 +172,7 @@ export default function ReadingTraining({ passage, initialQuestionId, replayAtte
       setConfidence(savedAnswer?.confidence ?? null);
       setIsSubmitted(Boolean(savedAnswer));
     }
-    if (isPlayingText) {
-      stopPracticeSpeech();
-      setIsPlayingText(false);
-      setIsTextPaused(false);
-    }
   }, [currentIdx]);
-
-  useEffect(() => {
-    return () => {
-      stopPracticeSpeech();
-    };
-  }, []);
-
-  // Speech Helper
-  const handleVoicePlay = async (text: string) => {
-    if (isPlayingText) {
-      if (pausePracticeSpeech()) {
-        setIsTextPaused(true);
-      } else {
-        stopPracticeSpeech();
-        setIsTextPaused(false);
-      }
-      setIsPlayingText(false);
-      return;
-    }
-
-    if (isTextPaused) {
-      const resumed = await resumePracticeSpeech();
-      if (resumed) {
-        setIsPlayingText(true);
-        setIsTextPaused(false);
-        return;
-      }
-      setIsTextPaused(false);
-    }
-
-    await playPracticeSpeech(text, {
-      rate: 0.9,
-      onStart: () => {
-        setIsPlayingText(true);
-        setIsTextPaused(false);
-      },
-      onEnd: () => {
-        setIsPlayingText(false);
-        setIsTextPaused(false);
-      },
-      onError: () => {
-        setIsPlayingText(false);
-        setIsTextPaused(false);
-      },
-    });
-  };
 
   const handleOptionClick = (opt: 'A' | 'B' | 'C' | 'D') => {
     if (isSubmitted) return;
@@ -547,7 +491,7 @@ export default function ReadingTraining({ passage, initialQuestionId, replayAtte
                   <span className="w-3 h-3 bg-[#198754] rounded-full translate-y-0.5" />
                   <div>
                     <span className="text-[#0f5132]">正确推导线索</span>
-                    <p className="text-[10px] text-gray-500 mt-0.5">原文核心解析和替换出处</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">原文定位和替换出处</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-2 bg-[#f8d7da]/50 p-2.5 rounded-xl border border-red-200">
@@ -701,42 +645,11 @@ export default function ReadingTraining({ passage, initialQuestionId, replayAtte
                   </p>
                 </div>
 
-                <ChoiceOptionInsightGrid
-                  testIdPrefix="reading"
-                  insights={buildChoiceOptionInsights({
-                    options: currentQuestion.options,
-                    correctAnswer: currentQuestion.correctAnswer,
-                    selectedAnswer: selectedOpt,
-                    explanation: currentQuestion.explanation,
-                    trapType: currentQuestion.diagnostic?.behaviorDiagnosis?.[0],
-                  })}
-                />
-
-                {/* Explanation and Voice player */}
-                <div className="bg-neutral-50 p-5 rounded-2xl border border-neutral-200/80">
-                  <div className="flex justify-between items-start mb-3">
-                    <span className="text-xs font-bold text-gray-500">
-                  模拟题考点拆解与同义替换精析
-                    </span>
-                    {/* Voice Synth trigger */}
-                    <button
-                      onClick={() => {
-                        const targetText = currentSourceSentence || currentQuestion.explanation;
-                        handleVoicePlay(targetText);
-                      }}
-                      className="ui-button ui-button-secondary ui-button-compact"
-                    >
-                      <Volume2 className="h-3.5 w-3.5" />
-                      <span>{isPlayingText ? '暂停朗读' : isTextPaused ? '继续朗读' : '朗读线索原句'}</span>
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-600 leading-relaxed font-semibold whitespace-pre-line bg-white p-3 rounded-xl border border-gray-100">
-                    {currentQuestion.explanation}
-                  </p>
-                  {currentSentenceSupport ? (
+                {currentSentenceSupport ? (
+                  <div className="bg-neutral-50 p-5 rounded-2xl border border-neutral-200/80">
                     <div
                       data-testid="reading-sentence-translation"
-                      className="mt-3 rounded-xl border border-[#cfe6f2] bg-white p-3 text-xs leading-5"
+                      className="rounded-xl border border-[#cfe6f2] bg-white p-3 text-xs leading-5"
                     >
                       <div className="font-extrabold text-[#003178]">答后句子翻译</div>
                       <p className="mt-2 font-bold text-slate-900">英文原句：{currentSentenceSupport.sourceText}</p>
@@ -755,8 +668,8 @@ export default function ReadingTraining({ passage, initialQuestionId, replayAtte
                         </div>
                       ) : null}
                     </div>
-                  ) : null}
-                </div>
+                  </div>
+                ) : null}
 
               </div>
             )}

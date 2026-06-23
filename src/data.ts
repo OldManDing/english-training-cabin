@@ -1575,6 +1575,7 @@ const CURATED_PHONETIC_OVERRIDES: Record<string, string> = {
   citizen: '/ˈsɪtɪzən/',
   community: '/kəˈmjuːnəti/',
   concept: '/ˈkɑːnsept/',
+  convenient: '/kənˈviːniənt/',
   contact: '/ˈkɑːntækt/',
   contain: '/kənˈteɪn/',
   contribute: '/kənˈtrɪbjuːt/',
@@ -1600,6 +1601,7 @@ const CURATED_PHONETIC_OVERRIDES: Record<string, string> = {
   ignore: '/ɪɡˈnɔːr/',
   illustrate: '/ˈɪləstreɪt/',
   immediate: '/ɪˈmiːdiət/',
+  imitate: '/ˈɪmɪteɪt/',
   improve: '/ɪmˈpruːv/',
   indicate: '/ˈɪndɪkeɪt/',
   individual: '/ˌɪndɪˈvɪdʒuəl/',
@@ -1611,13 +1613,16 @@ const CURATED_PHONETIC_OVERRIDES: Record<string, string> = {
   launch: '/lɔːntʃ/',
   local: '/ˈloʊkl/',
   major: '/ˈmeɪdʒər/',
+  majority: '/məˈdʒɔːrəti/',
   monitor: '/ˈmɑːnɪtər/',
   necessary: '/ˈnesəseri/',
   obtain: '/əbˈteɪn/',
+  ordinary: '/ˈɔːrdəneri/',
   organize: '/ˈɔːrɡənaɪz/',
   outcome: '/ˈaʊtkʌm/',
   perform: '/pərˈfɔːrm/',
   period: '/ˈpɪriəd/',
+  point: '/pɔɪnt/',
   previous: '/ˈpriːviəs/',
   principle: '/ˈprɪnsəpl/',
   process: '/ˈprɑːses/',
@@ -1654,6 +1659,7 @@ const CURATED_PHONETIC_OVERRIDES: Record<string, string> = {
   stress: '/stres/',
   survey: '/ˈsɜːrveɪ/',
   target: '/ˈtɑːrɡɪt/',
+  technology: '/tekˈnɑːlədʒi/',
   theory: '/ˈθɪri/',
   therefore: '/ˈðerfɔːr/',
   transform: '/trænsˈfɔːrm/',
@@ -1672,48 +1678,11 @@ const CURATED_EXTENSION_PHONETICS = new Map<string, string>(
     .map(([word, phonetic]) => [word.toLowerCase(), phonetic] as const),
 );
 
-const FALLBACK_PHONETIC_RULES: Array<[RegExp, string]> = [
-  [/tion/g, 'ʃən'],
-  [/sion/g, 'ʒən'],
-  [/ture/g, 'tʃər'],
-  [/sure/g, 'ʒər'],
-  [/ph/g, 'f'],
-  [/qu/g, 'kw'],
-  [/ght/g, 't'],
-  [/igh/g, 'aɪ'],
-  [/ee/g, 'iː'],
-  [/oo/g, 'uː'],
-  [/ou/g, 'aʊ'],
-  [/ow/g, 'oʊ'],
-  [/ai/g, 'eɪ'],
-  [/ay/g, 'eɪ'],
-  [/ea/g, 'iː'],
-  [/ie/g, 'iː'],
-  [/er$/g, 'ər'],
-  [/or$/g, 'ər'],
-  [/al$/g, 'əl'],
-  [/able$/g, 'əbəl'],
-  [/ible$/g, 'əbəl'],
-  [/ment$/g, 'mənt'],
-  [/ness$/g, 'nəs'],
-  [/ity$/g, 'əti'],
-  [/ive$/g, 'ɪv'],
-  [/ous$/g, 'əs'],
-];
-
 function buildReadablePhoneticFallback(word: string): string {
   const cleaned = word.toLowerCase().replace(/[^a-z]+/g, ' ').trim();
-  if (!cleaned) return '/word/';
+  if (!cleaned) return '发音提示';
 
-  const parts = cleaned.split(/\s+/).map((part) => {
-    let next = part;
-    for (const [pattern, replacement] of FALLBACK_PHONETIC_RULES) {
-      next = next.replace(pattern, replacement);
-    }
-    return next;
-  });
-
-  return '/' + parts.join(' ') + '/';
+  return `发音提示：${cleaned}`;
 }
 
 function resolveCuratedVocabularyPhonetic(word: string): string {
@@ -1854,8 +1823,40 @@ function buildCuratedVocabularyExample(
   const phrase = collocation.trim();
   const lowerPhrase = phrase.toLowerCase();
   const capitalize = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
-  const withArticle = (value: string) => (/^(a|an|the|this|that|these|those)\b/i.test(value) ? value : `the ${value}`);
-  const subjectPhrase = (value: string) => (/^(a|an|the|this|that|these|those)\b/i.test(value) ? capitalize(value) : `The ${value}`);
+  const hasDeterminer = (value: string) => /^(a|an|the|this|that|these|those)\b/i.test(value);
+  const uncountableNounStarters = new Set([
+    'advice',
+    'attention',
+    'damage',
+    'development',
+    'education',
+    'evidence',
+    'feedback',
+    'information',
+    'knowledge',
+    'progress',
+    'research',
+    'support',
+    'technology',
+    'transport',
+    'work',
+  ]);
+  const pluralNounHeads = new Set(['children', 'people']);
+  const needsArticle = (value: string) => {
+    if (hasDeterminer(value)) return false;
+    const tokens = value.toLowerCase().split(/\s+/);
+    const head = tokens.at(-1) ?? '';
+    const starter = tokens[0] ?? '';
+    return !head.endsWith('s')
+      && !starter.endsWith('s')
+      && !pluralNounHeads.has(head)
+      && !uncountableNounStarters.has(head);
+  };
+  const withArticle = (value: string) => {
+    if (!needsArticle(value)) return value;
+    return /^[aeiou]/i.test(value) ? `an ${value}` : `a ${value}`;
+  };
+  const subjectPhrase = (value: string) => capitalize(withArticle(value));
   const firstToken = lowerPhrase.split(/\s+/)[0];
   const verbLikeStarters = new Set([
     'achieve',
@@ -1865,23 +1866,58 @@ function buildCuratedVocabularyExample(
     'affect',
     'afford',
     'announce',
+    'apply',
+    'arrange',
     'assess',
     'assign',
     'assume',
+    'attend',
     'avoid',
+    'build',
+    'cause',
+    'change',
+    'check',
+    'choose',
+    'compare',
     'concentrate',
+    'control',
+    'create',
+    'decide',
+    'develop',
+    'discuss',
     'draw',
+    'express',
+    'follow',
+    'form',
+    'give',
+    'handle',
+    'identify',
     'implement',
+    'improve',
+    'increase',
+    'keep',
+    'lead',
+    'limit',
     'maintain',
     'make',
+    'manage',
+    'offer',
+    'organize',
+    'pay',
+    'prepare',
+    'prevent',
+    'provide',
+    'reduce',
     'remove',
     'retrieve',
+    'solve',
     'support',
+    'take',
     'transfer',
+    'use',
   ]);
-  const isVerbLike = partOfSpeech.includes('verb')
-    || firstToken === word.toLowerCase()
-    || verbLikeStarters.has(firstToken);
+  const isVerbLike = verbLikeStarters.has(firstToken)
+    || (partOfSpeech.includes('verb') && firstToken === word.toLowerCase());
 
   if (lowerPhrase === 'afford the cost') {
     return 'With a scholarship, more learners can afford the cost of an online course.';

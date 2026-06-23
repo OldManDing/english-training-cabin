@@ -198,6 +198,40 @@ describe('practice sentence and vocabulary Chinese support', () => {
     expect(invalidExamples).toEqual([]);
   });
 
+  it('uses collocations as sentence content instead of generic word meanings', () => {
+    const cases = [
+      {
+        word: 'annual',
+        badExample: /helps learners annual report/i,
+        expectedChinese: /年度报告/u,
+      },
+      {
+        word: 'convenient',
+        badExample: /can convenient service/i,
+        expectedChinese: /便捷服务/u,
+      },
+      {
+        word: 'ordinary',
+        badExample: /helps learners ordinary people/i,
+        expectedChinese: /普通人/u,
+      },
+    ];
+
+    for (const testCase of cases) {
+      const item = CET4_VOCABULARY_BANK.find((entry) => entry.word === testCase.word);
+      expect(item).toBeTruthy();
+      expect(item!.example).not.toMatch(testCase.badExample);
+      expect(getVocabularySentenceSupport(item!).chineseMeaning).toMatch(testCase.expectedChinese);
+    }
+
+    const resolve = CET4_VOCABULARY_BANK.find((entry) => entry.word === 'resolve');
+    expect(resolve).toBeTruthy();
+    expect(getVocabularySentenceSupport(resolve!)).toMatchObject({
+      sourceText: 'A realistic task lets learners resolve a conflict instead of guessing.',
+      chineseMeaning: '真实任务能让学习者实际解决冲突，而不是靠猜。',
+    });
+  });
+
   it('shows the real Chinese meaning for the decline example sentence', () => {
     const decline = CET4_VOCABULARY_BANK.find((item) => item.word === 'decline');
     expect(decline).toBeTruthy();
