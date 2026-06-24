@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, CheckCircle2, XCircle, ChevronRight, HelpCircle, Headphones, Sparkles } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, XCircle, ChevronRight, HelpCircle, Headphones, ListChecks, Sparkles, Target } from 'lucide-react';
 import { Attempt, ChoiceOption, Passage, PracticeCompletionReport, Question, SkillArea } from '../types';
 import { getReadingChineseSupport } from '../domain/practice/chineseSupport';
 import { buildChoiceReplayAnswer } from '../domain/practice/attemptReplay';
@@ -16,7 +16,7 @@ import {
 import { buildChoicePracticeReport } from '../domain/practice/reports';
 import { getQuestionSentenceSupport } from '../domain/practice/sentenceTranslations';
 import { getGrammarStructureTopicByFocus } from '../domain/practice/grammarStructureGuides';
-import PracticeMethodGuide from './PracticeMethodGuide';
+import { getPracticeMethodGuide } from '../domain/practice/methodGuides';
 
 interface ReadingTrainingProps {
   passage: Passage;
@@ -483,6 +483,68 @@ export default function ReadingTraining({
   };
 
   const currentFeedback = isSubmitted ? getAIBehaviorFeedback() : null;
+  const methodGuide = getPracticeMethodGuide(methodGuideModuleId);
+  const activeMethodTopic = methodGuide.topicGuides?.find((topic) => topic.id === activeMethodTopicId);
+  const methodSteps = (activeMethodTopic?.methodSteps ?? methodGuide.steps).slice(0, 4);
+  const methodFocus = activeMethodTopic
+    ? [activeMethodTopic.label, ...methodGuide.focus.filter((item) => item !== activeMethodTopic.label).slice(0, 2)]
+    : methodGuide.focus;
+  const isSpecialtyChoicePractice = practiceModuleId === 'grammar';
+
+  const renderMethodQuickPanel = (className = '') => (
+    <section
+      data-testid={`practice-method-guide-${methodGuideModuleId}`}
+      className={`rounded-xl border border-[#cfe6f2] bg-[#f8fbff] p-4 ${className}`}
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-[#eef7fc] px-2.5 py-1 text-[10px] font-black text-[#003178]">
+            <ListChecks className="h-3.5 w-3.5" />
+            解题步骤
+          </div>
+          <h4 className="mt-2 text-sm font-black leading-5 text-[#101828]">
+            {activeMethodTopic ? activeMethodTopic.label : methodGuide.title}
+          </h4>
+          {activeMethodTopic ? (
+            <span
+              data-testid={`practice-method-guide-topic-${methodGuideModuleId}-${activeMethodTopic.id}`}
+              className="mt-2 inline-flex rounded-full bg-[#003178] px-2 py-0.5 text-[10px] font-black text-white"
+            >
+              当前考点
+            </span>
+          ) : null}
+          <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">
+            {activeMethodTopic?.cue ?? methodGuide.intro}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-1.5 sm:justify-end">
+          {methodFocus.map((item) => (
+            <span key={item} className="rounded-full bg-white px-2.5 py-1 text-[11px] font-black text-slate-600 ring-1 ring-slate-200">
+              {item}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <ol className="mt-3 grid gap-2">
+        {methodSteps.map((step, index) => (
+          <li key={step} className="flex gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold leading-5 text-slate-700 ring-1 ring-slate-100">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#003178] text-[10px] font-black text-white">
+              {index + 1}
+            </span>
+            <span>{step}</span>
+          </li>
+        ))}
+      </ol>
+
+      {activeMethodTopic ? (
+        <div className="mt-3 flex gap-2 rounded-lg bg-white px-3 py-2 text-xs font-bold leading-5 text-slate-600 ring-1 ring-slate-100">
+          <Target className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#003178]" />
+          <span>验算：{activeMethodTopic.checkpoint}</span>
+        </div>
+      ) : null}
+    </section>
+  );
 
   return (
     <div className="app-page-surface flex-1 flex flex-col min-h-[100svh] lg:h-screen overflow-hidden bg-white">
@@ -540,31 +602,40 @@ export default function ReadingTraining({
       <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
         
         {/* Left Side: Passage Container */}
-        <div className="w-full lg:w-1/2 p-4 sm:p-6 lg:p-8 overflow-y-auto border-b lg:border-b-0 lg:border-r border-[#c3c6d4] bg-neutral-50/50 flex flex-col">
-          <div className="bg-white border border-[#cfe6f2] rounded-3xl p-4 sm:p-6 lg:p-8 shadow-xs flex-1">
-            <header className="mb-6 flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center pb-4 border-b border-[#f3faff]">
-              <h2 className="text-xl font-bold text-[#003178] leading-tight flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-[#3b82f6]" /> {passage.title}
-              </h2>
-              <div className="text-xs text-gray-400 font-medium">约 320 词</div>
-            </header>
+        <div className={`w-full ${isSpecialtyChoicePractice ? 'lg:w-[38%]' : 'lg:w-1/2'} p-4 sm:p-6 lg:p-8 overflow-y-auto border-b lg:border-b-0 lg:border-r border-[#c3c6d4] bg-neutral-50/50 flex flex-col`}>
+          <div className={isSpecialtyChoicePractice
+            ? 'flex-1 lg:sticky lg:top-6 lg:self-start'
+            : 'bg-white border border-[#cfe6f2] rounded-xl p-4 sm:p-6 lg:p-8 shadow-xs flex-1'
+          }>
+            {isSpecialtyChoicePractice ? (
+              renderMethodQuickPanel('bg-white')
+            ) : (
+              <>
+                <header className="mb-6 flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center pb-4 border-b border-[#f3faff]">
+                  <h2 className="text-xl font-bold text-[#003178] leading-tight flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-[#3b82f6]" /> {passage.title}
+                  </h2>
+                  <div className="text-xs text-gray-400 font-medium">约 320 词</div>
+                </header>
 
-            {/* Render with dynamic sentence highlighted spans */}
-            <article className="prose max-w-none text-justify">
-              {renderHighlightedContent()}
-            </article>
+                {/* Render with dynamic sentence highlighted spans */}
+                <article className="prose max-w-none text-justify">
+                  {renderHighlightedContent()}
+                </article>
 
-            {chineseSupport?.context ? (
-              <div className="mt-6 rounded-2xl border border-amber-100 bg-amber-50/70 p-4 text-sm font-bold leading-7 text-amber-900">
-                <div className="mb-1 text-[10px] font-black uppercase tracking-widest text-amber-700">
-                  中文材料摘要
-                </div>
-                <p>{chineseSupport.context}</p>
-              </div>
-            ) : null}
+                {chineseSupport?.context ? (
+                  <div className="mt-6 rounded-xl border border-amber-100 bg-amber-50/70 p-4 text-sm font-bold leading-7 text-amber-900">
+                    <div className="mb-1 text-[10px] font-black uppercase tracking-widest text-amber-700">
+                      中文材料摘要
+                    </div>
+                    <p>{chineseSupport.context}</p>
+                  </div>
+                ) : null}
+              </>
+            )}
 
             {/* Custom Interactive Legend (Only visible after submittng response) */}
-            {isSubmitted && (
+            {isSubmitted && !isSpecialtyChoicePractice && (
               <div className="mt-8 pt-6 border-t border-dashed border-gray-200 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-semibold">
                 <div className="flex items-start gap-2 bg-[#d1e7dd]/50 p-2.5 rounded-xl border border-green-200">
                   <span className="w-3 h-3 bg-[#198754] rounded-full translate-y-0.5" />
@@ -586,13 +657,9 @@ export default function ReadingTraining({
         </div>
 
         {/* Right Side: Questions & Explanations Panel */}
-        <div className="w-full lg:w-1/2 p-4 sm:p-6 lg:p-8 overflow-y-auto flex flex-col justify-between bg-white">
-          <div className="space-y-6">
-            <PracticeMethodGuide
-              moduleId={methodGuideModuleId}
-              compact
-              activeTopicId={activeMethodTopicId}
-            />
+        <div className={`w-full ${isSpecialtyChoicePractice ? 'lg:w-[62%]' : 'lg:w-1/2'} p-4 sm:p-6 lg:p-8 overflow-y-auto flex flex-col justify-between bg-white`}>
+          <div className="space-y-6 pb-24">
+            {!isSpecialtyChoicePractice ? renderMethodQuickPanel() : null}
             
             {/* Steps & Topic */}
             <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
@@ -650,8 +717,8 @@ export default function ReadingTraining({
                     key={opt}
                     onClick={() => handleOptionClick(opt)}
                     disabled={isSubmitted}
-                className={`w-full p-4 rounded-2xl border text-left flex items-start gap-3 sm:gap-4 transition-all duration-150 relative ${cardStyle} ${
-                      !isSubmitted ? 'hover:scale-[1.01] pointer-events-auto cursor-pointer' : 'cursor-default'
+                className={`w-full min-h-14 p-4 rounded-lg border text-left flex items-start gap-3 sm:gap-4 transition-colors duration-150 relative ${cardStyle} ${
+                      !isSubmitted ? 'pointer-events-auto cursor-pointer' : 'cursor-default'
                     }`}
                   >
                     <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center font-bold text-xs shrink-0 ${indicatorStyle}`}>
@@ -675,7 +742,7 @@ export default function ReadingTraining({
 
             {/* Confidence Choice before submission */}
             {!isSubmitted && (
-              <div className="p-4 bg-neutral-50 border border-neutral-200 rounded-2xl">
+              <div className="p-4 bg-neutral-50 border border-neutral-200 rounded-xl">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-[#434652] mb-3">
                   <HelpCircle className="h-4 w-4 text-[#003178]" />
                   <span>答题把握度诊断 (影响错因分析和复习优先级)：</span>
@@ -699,7 +766,7 @@ export default function ReadingTraining({
                         onChange={() => handleConfidenceChange(item.id as ChoiceConfidence)}
                         className="sr-only peer"
                       />
-                      <div className="flex min-h-11 w-full items-center justify-center rounded-xl border border-gray-200 bg-white px-1 py-2 text-xs font-semibold text-gray-500 transition-all transition-colors hover:bg-gray-50 peer-checked:border-2">
+                      <div className="flex min-h-11 w-full items-center justify-center rounded-lg border border-gray-200 bg-white px-1 py-2 text-xs font-semibold text-gray-500 transition-colors hover:bg-gray-50 peer-checked:border-2">
                         {item.label}
                       </div>
                     </label>
@@ -714,7 +781,7 @@ export default function ReadingTraining({
                 {recordStatus !== 'idle' ? (
                   <div
                     data-testid="reading-record-status"
-                    className={`rounded-2xl border px-3 py-2 text-xs font-black ${
+                    className={`rounded-xl border px-3 py-2 text-xs font-black ${
                       recordStatus === 'failed'
                         ? 'border-rose-200 bg-rose-50 text-rose-700'
                         : 'border-emerald-200 bg-emerald-50 text-emerald-700'
@@ -729,7 +796,7 @@ export default function ReadingTraining({
                 ) : null}
                 
                 {/* AI Behavioral Diagnostic Panel */}
-                <div className="bg-[#f3faff] border border-[#cfe6f2] rounded-2xl p-4">
+                <div className="bg-[#f3faff] border border-[#cfe6f2] rounded-xl p-4">
                   <div className="flex flex-col gap-2 mb-2 sm:flex-row sm:justify-between sm:items-center">
                     <div className="text-xs font-bold text-[#003178] flex items-center gap-1">
                       <Sparkles className="h-3.5 w-3.5 animate-bounce" />
@@ -740,16 +807,16 @@ export default function ReadingTraining({
                     </span>
                   </div>
                   <h4 className="text-sm font-extrabold text-[#071e27]">{currentFeedback.title}</h4>
-                  <p className="text-xs text-[#434652] mt-1.5 leading-relaxed bg-white p-2.5 rounded-xl border border-[#cfe6f2]/80">
+                  <p className="text-xs text-[#434652] mt-1.5 leading-relaxed bg-white p-2.5 rounded-lg border border-[#cfe6f2]/80">
                     {currentFeedback.description}
                   </p>
                 </div>
 
                 {currentSentenceSupport ? (
-                  <div className="bg-neutral-50 p-5 rounded-2xl border border-neutral-200/80">
+                  <div className="bg-neutral-50 p-5 rounded-xl border border-neutral-200/80">
                     <div
                       data-testid="reading-sentence-translation"
-                      className="rounded-xl border border-[#cfe6f2] bg-white p-3 text-xs leading-5"
+                      className="rounded-lg border border-[#cfe6f2] bg-white p-3 text-xs leading-5"
                     >
                       <div className="font-extrabold text-[#003178]">答后句子翻译</div>
                       <p className="mt-2 font-bold text-slate-900">英文原句：{currentSentenceSupport.sourceText}</p>
@@ -760,7 +827,7 @@ export default function ReadingTraining({
                             断句译文
                           </div>
                           {currentSentenceSupport.chunks.map((chunk) => (
-                            <div key={chunk.sourceText} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+                            <div key={chunk.sourceText} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
                               <p className="font-bold text-slate-800">{chunk.sourceText}</p>
                               <p className="mt-1 text-[11px] font-semibold text-slate-600">{chunk.chineseMeaning}</p>
                             </div>
@@ -777,7 +844,7 @@ export default function ReadingTraining({
           </div>
 
           {/* Bottom Action Footer */}
-          <div className="pt-6 border-t border-[#cfe6f2] mt-8 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center bg-white">
+          <div className="sticky bottom-0 z-10 -mx-4 mt-8 flex flex-col gap-3 border-t border-[#cfe6f2] bg-white/95 px-4 pb-1 pt-4 backdrop-blur sm:-mx-6 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:-mx-8 lg:px-8">
             <div className="text-xs text-gray-400">
               {isSubmitted ? '仔细核对线索，点按右侧按键递进。' : '选中答案即可提交，把握度可按需要调整。'}
             </div>
