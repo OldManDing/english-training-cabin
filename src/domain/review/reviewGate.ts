@@ -1,5 +1,5 @@
 import { ReviewItem } from '../../types';
-import { isReviewItemDueOn, sortWrongQuestionReviewItems } from './reviewQueue';
+import { isReviewItemDueOn, sortWrongQuestionReviewItems, toLocalDateKey } from './reviewQueue';
 
 export const DAILY_REQUIRED_REVIEW_LIMIT = 3;
 
@@ -14,11 +14,11 @@ export interface ReviewGateStatus {
 }
 
 function todayIsoDate(): string {
-  return new Date().toISOString().slice(0, 10);
+  return toLocalDateKey();
 }
 
 function wasReviewedOn(item: ReviewItem, date: string): boolean {
-  return item.lastReviewedAt?.slice(0, 10) === date;
+  return item.lastReviewedAt ? toLocalDateKey(item.lastReviewedAt) === date : false;
 }
 
 export function buildReviewGateStatus(reviewItems: ReviewItem[], date = todayIsoDate()): ReviewGateStatus {

@@ -17,13 +17,12 @@ import {
 import { ChoiceOption, MemoryReviewTask, ReviewCompletionEvidence, ReviewItem } from '../types';
 import { buildReviewVariantRecommendations, type CoachModuleId } from '../domain/productCoach';
 import type { ReviewGateStatus } from '../domain/review/reviewGate';
-import { isReviewItemDue, sortWrongQuestionReviewItems } from '../domain/review/reviewQueue';
+import { isReviewItemDueOn, sortWrongQuestionReviewItems, toLocalDateKey } from '../domain/review/reviewQueue';
 import { resolveRedoQuestionTranslation } from '../domain/review/redoTranslation';
 import { pausePracticeSpeech, playPracticeSpeech, resumePracticeSpeech, stopPracticeSpeech } from '../lib/practiceSpeech';
 
 interface ReviewSectionProps {
   onTriggerModal?: (title: string, body: string) => void;
-  persistedReviewCount?: number;
   persistedReviewItems?: ReviewItem[];
   reviewGateStatus?: ReviewGateStatus;
   onCompleteReviewItem?: (reviewItemId: string, evidence: ReviewCompletionEvidence) => Promise<void> | void;
@@ -41,19 +40,19 @@ const REVIEW_OUTCOMES: Array<{
   {
     value: 'mastered',
     label: '已掌握',
-    body: '这题已经能直接判断，下次晚一点再出现。',
+    body: '能直接判断。',
     className: 'border-emerald-200 bg-emerald-50 text-emerald-900 hover:border-emerald-500',
   },
   {
     value: 'unclear',
     label: '还模糊',
-    body: '知道大概方向，但证据或规则还不稳。',
+    body: '方向有，但不稳。',
     className: 'border-amber-200 bg-amber-50 text-amber-900 hover:border-amber-500',
   },
   {
     value: 'again',
     label: '仍不会',
-    body: '继续保持高优先级，尽快再复习。',
+    body: '继续高频复习。',
     className: 'border-rose-200 bg-rose-50 text-rose-900 hover:border-rose-500',
   },
 ];
@@ -163,7 +162,6 @@ function buildRedoSpeechText(item: ReviewItem): string {
 
 export default function ReviewSection({
   onTriggerModal,
-  persistedReviewCount = 0,
   persistedReviewItems = [],
   reviewGateStatus,
   onCompleteReviewItem,
@@ -184,15 +182,25 @@ export default function ReviewSection({
     () => sortWrongQuestionReviewItems(persistedReviewItems),
     [persistedReviewItems],
   );
-  const availableReviewItems = useMemo(
-    () => sortedReviewItems.filter((item) => !completedReviewIdSet.has(item.id)),
-    [completedReviewIdSet, sortedReviewItems],
+  const reviewDate = reviewGateStatus?.date ?? toLocalDateKey();
+  const dueReviewItems = useMemo(
+    () => sortedReviewItems.filter((item) => isReviewItemDueOn(item, reviewDate)),
+    [reviewDate, sortedReviewItems],
   );
-  const dueReviewItems = useMemo(() => availableReviewItems.filter((item) => isReviewItemDue(item)), [availableReviewItems]);
+  const upcomingReviewItems = useMemo(
+    () => sortedReviewItems
+      .filter((item) => !isReviewItemDueOn(item, reviewDate))
+      .sort((left, right) => (left.nextReviewAt ?? '').localeCompare(right.nextReviewAt ?? '')),
+    [reviewDate, sortedReviewItems],
+  );
+  const availableReviewItems = useMemo(
+    () => dueReviewItems.filter((item) => !completedReviewIdSet.has(item.id)),
+    [completedReviewIdSet, dueReviewItems],
+  );
   const selectedReview = selectedReviewItemId
     ? availableReviewItems.find((item) => item.id === selectedReviewItemId)
     : undefined;
-  const activeReview = selectedReview ?? dueReviewItems[0] ?? availableReviewItems[0];
+  const activeReview = selectedReview ?? availableReviewItems[0];
   const activeTask = getReviewTask(activeReview);
   const redoQuestion = activeReview?.redoQuestion;
   const redoOptions = redoQuestion?.options
@@ -210,10 +218,9 @@ export default function ReviewSection({
   const simpleRecallAnswer = activeReview && activeTask ? buildSimpleRecallAnswer(activeReview, activeTask) : '';
   const redoCorrect = getRedoCorrect(activeReview, redoAnswer);
   const feedbackVisible = Boolean(activeReview && (!redoQuestion || answerRevealed));
-  const visibleDueCount = dueReviewItems.length || Math.max(0, persistedReviewCount - completedReviewIds.length);
-  const averageMastery = sortedReviewItems.length > 0
-    ? Math.round(sortedReviewItems.reduce((sum, item) => sum + (item.masteryScore ?? 35), 0) / sortedReviewItems.length)
-    : 0;
+  const averageMastery = availableReviewItems.length > 0
+    ? Math.round(availableReviewItems.reduce((sum, item) => sum + (item.masteryScore ?? 35), 0) / availableReviewItems.length)
+    : null;
 
   useEffect(() => {
     setRedoAnswer('');
@@ -330,7 +337,7 @@ export default function ReviewSection({
   const showMethodDetail = () => {
     onTriggerModal?.(
       '错题队列怎么做',
-      '重做原题，看反馈，再按掌握度自评。系统会安排下次复习。',
+      '重做原题 -> 看反馈 -> 自评掌握度。',
     );
   };
 
@@ -347,7 +354,7 @@ export default function ReviewSection({
           <div>
             <h2 className="text-2xl font-black tracking-tight text-[#101828] sm:text-3xl">复习队列</h2>
             <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-500 sm:text-base">
-              重做到期错题。
+              按到期顺序重做。
             </p>
           </div>
           <button onClick={showMethodDetail} className="ui-button ui-button-secondary">
@@ -360,12 +367,12 @@ export default function ReviewSection({
           <section data-testid="review-gate-status" className="ui-panel bg-[#f8fafc]">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <span className="ui-chip ui-chip-accent">间隔复习计划</span>
+                <span className="ui-chip ui-chip-accent">今日复习</span>
                 <h3 className="mt-3 text-lg font-black text-[#003178]">
                   {reviewGateStatus.locked
-                    ? `建议先完成 ${reviewGateStatus.remainingRequired} 条到期复习`
+                    ? `先完成 ${reviewGateStatus.remainingRequired} 条到期复习`
                     : reviewGateStatus.dueCount > 0
-                    ? '今日最低复习剂量已完成'
+                    ? '最低剂量已完成'
                     : '今天没有到期复习项'}
                 </h3>
               </div>
@@ -387,26 +394,21 @@ export default function ReviewSection({
           </section>
         )}
 
-        <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <section className="grid grid-cols-3 gap-3">
           <div className="ui-panel">
             <ListTodo className="h-5 w-5 text-[#003178]" />
             <span className="mt-3 block text-xs font-bold text-slate-500">待处理</span>
-            <strong className="text-3xl font-black text-[#003178]">{availableReviewItems.length || visibleDueCount}</strong>
+            <strong className="text-3xl font-black text-[#003178]">{availableReviewItems.length}</strong>
           </div>
           <div className="ui-panel">
             <CheckCircle2 className="h-5 w-5 text-[#003178]" />
-            <span className="mt-3 block text-xs font-bold text-slate-500">本轮完成</span>
+            <span className="mt-3 block text-xs font-bold text-slate-500">本轮</span>
             <strong className="text-3xl font-black text-[#003178]">{completedReviewIds.length}</strong>
           </div>
           <div className="ui-panel">
             <Brain className="h-5 w-5 text-[#003178]" />
-            <span className="mt-3 block text-xs font-bold text-slate-500">平均掌握度</span>
-            <strong className="text-3xl font-black text-slate-800">{averageMastery}%</strong>
-          </div>
-          <div className="ui-panel">
-            <RefreshCw className="h-5 w-5 text-[#003178]" />
-            <span className="mt-3 block text-xs font-bold text-slate-500">间隔计划</span>
-            <strong className="text-xl font-black text-[#003178]">1/3/7/14/30 天</strong>
+            <span className="mt-3 block text-xs font-bold text-slate-500">掌握</span>
+            <strong className="text-3xl font-black text-slate-800">{averageMastery === null ? '—' : `${averageMastery}%`}</strong>
           </div>
         </section>
 
@@ -418,7 +420,7 @@ export default function ReviewSection({
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="ui-chip ui-chip-accent">{getCategoryTone(activeReview)}</span>
                     <span className="ui-chip">{activeReview.category}</span>
-                    {isReviewItemDue(activeReview) ? <span className="ui-chip bg-rose-50 text-rose-700">到期</span> : null}
+                    {isReviewItemDueOn(activeReview, reviewDate) ? <span className="ui-chip bg-rose-50 text-rose-700">到期</span> : null}
                   </div>
                   <h3 className="mt-3 text-2xl font-black text-[#101828]">{activeReview.title}</h3>
                   <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
@@ -511,7 +513,7 @@ export default function ReviewSection({
                         onChange={(event) => setRedoAnswer(event.target.value)}
                         rows={5}
                         data-testid="review-redo-text-answer"
-                        placeholder="把这道题重新作答一次，不用写长解析。"
+                        placeholder="重新作答。"
                         className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-semibold leading-7 outline-none transition focus:border-[#003178] focus:bg-white"
                       />
                       <button
@@ -547,9 +549,9 @@ export default function ReviewSection({
                   <div className="flex items-start gap-3">
                     <Lightbulb className="mt-1 h-5 w-5 shrink-0 text-amber-700" />
                     <div>
-                      <h4 className="text-lg font-black text-amber-900">反馈和参考重点</h4>
+                      <h4 className="text-lg font-black text-amber-900">反馈</h4>
                       <p className="mt-1 text-sm font-semibold leading-6 text-slate-700">
-                        看完后不用写长复盘，按真实状态点下面的自评按钮即可。
+                        核对答案后选择掌握状态。
                       </p>
                     </div>
                   </div>
@@ -712,7 +714,7 @@ export default function ReviewSection({
                   队列
                 </h4>
                 <div className="space-y-2">
-                  {(dueReviewItems.length > 0 ? dueReviewItems : availableReviewItems).slice(0, 8).map((item) => (
+                  {availableReviewItems.slice(0, 8).map((item) => (
                     <button
                       key={item.id}
                       type="button"
@@ -737,7 +739,12 @@ export default function ReviewSection({
         ) : (
           <section className="ui-panel">
             <div className="ui-empty-state text-sm font-semibold leading-7">
-              暂无要复习的错题。先完成专项训练或模考，答错的客观题会进入这里按到期顺序重做。
+              今天没有到期复习项。先完成专项训练或模考。
+              {upcomingReviewItems.length > 0 ? (
+                <div className="mt-3 rounded-2xl border border-[#cfe6f2] bg-[#f8fbff] px-4 py-3 text-xs font-bold leading-6 text-[#003178]">
+                  还有 {upcomingReviewItems.length} 条未到期复习项，最早 {formatReviewDate(upcomingReviewItems[0].nextReviewAt)} 再出现。
+                </div>
+              ) : null}
             </div>
           </section>
         )}
@@ -746,16 +753,16 @@ export default function ReviewSection({
           <summary className="flex cursor-pointer list-none items-center justify-between gap-4">
             <h3 className="flex items-center gap-2 text-sm font-black text-[#003178]">
               <AlertCircle className="h-4 w-4" />
-              直达模式规则
+              复习规则
             </h3>
             <ChevronDown className="h-4 w-4 text-slate-400 transition group-open:rotate-180" />
           </summary>
           <div className="mt-4 grid gap-3 md:grid-cols-4">
             {[
-              ['先重做当前错题', '只展示上次答错且需要复习的原题。'],
-              ['立刻看反馈', '选完答案直接核对正确答案、上次答案和解析。'],
-              ['一个按钮完成', '按已掌握、还模糊、仍不会自评。'],
-              ['自动调度', '系统根据结果更新掌握度和下次出现时间。'],
+              ['重做', '先做当前到期题。'],
+              ['核对', '看正确答案和上次答案。'],
+              ['自评', '选择掌握状态。'],
+              ['调度', '更新下次复习时间。'],
             ].map(([title, body]) => (
               <div key={title} className="rounded-2xl bg-[#f8fbfd] p-4">
                 <strong className="text-sm text-slate-900">{title}</strong>

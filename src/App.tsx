@@ -30,7 +30,7 @@ import {
 import { restoreCloudLearningDataWhenLocalEmpty } from './lib/storage/cloudLearningAutoRestore';
 import { buildDailyPlan } from './domain/planner/dailyPlan';
 import { buildReviewGateStatus } from './domain/review/reviewGate';
-import { getDueWrongQuestionReviewItems } from './domain/review/reviewQueue';
+import { getDueWrongQuestionReviewItemsOn } from './domain/review/reviewQueue';
 import { trackTelemetry } from './lib/telemetry';
 import { getStoredAuthToken } from './lib/api';
 import { OnboardingDiagnosticReport } from './domain/diagnostic/onboardingDiagnostic';
@@ -70,7 +70,7 @@ function getDaysRemaining(examDate?: string): number {
 }
 
 function countDueReviews(reviewItems: ReviewItem[]): number {
-  return getDueWrongQuestionReviewItems(reviewItems).length;
+  return getDueWrongQuestionReviewItemsOn(reviewItems).length;
 }
 
 function levelToProfileScore(level: number): number {
@@ -778,7 +778,6 @@ function StudyApp() {
         return (
           <ReviewSection
             onTriggerModal={handleTriggerModal}
-            persistedReviewCount={reviewItemCount}
             persistedReviewItems={persistedReviewItems}
             reviewGateStatus={reviewGateStatus}
             onCompleteReviewItem={handleCompleteReviewItem}

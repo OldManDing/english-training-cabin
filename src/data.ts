@@ -1,3 +1,4 @@
+import { GENERATED_PHONETIC_OVERRIDES } from './domain/practice/generatedPhonetics';
 import { Passage, ReviewItem, AbilityScore, SkillGap, TimelineLog, SpeakingSession } from './types';
 
 export interface VocabularyPracticeItem {
@@ -16,6 +17,14 @@ export interface VocabularyPracticeItem {
   collocation: string;
   example: string;
   explanation: string;
+}
+
+export function formatVocabularyPhonetic(phonetic: string): string {
+  const value = phonetic.trim();
+  if (!value) return '';
+  if (/^发音提示/.test(value)) return '';
+  if (/^\/.+\/$/.test(value)) return value;
+  return '';
 }
 
 export const VOCABULARY_SESSION_SIZE = 40;
@@ -54,7 +63,7 @@ function buildVocabularyItem(row: VocabularyExtensionRow): VocabularyPracticeIte
   return {
     id: `vocab-${word.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`,
     word,
-    phonetic,
+    phonetic: formatVocabularyPhonetic(phonetic),
     partOfSpeech,
     meaning,
     options: {
@@ -274,127 +283,9 @@ const DEGREE_ENGLISH_SYLLABUS_EXTENSION_ROWS: VocabularyExtensionRow[] = [
   ['distractor', '/dɪˈstræktər/', 'noun', '干扰项', 'an option designed to look possible but be wrong', 'a useful example', 'a final paragraph', 'a writing task', 'remove distractors', 'In the 7-option task, students remove two distractors.', 'distractor 对应 7 选 5 阅读要求。'],
 ];
 
-const PRODUCTIVE_PHRASE_PATTERNS = [
-  {
-    suffix: 'strategy',
-    cn: '策略',
-    definition: (word: string) => `a practical plan connected with ${word}`,
-    distractors: ['a random answer without evidence', 'a place for a public event', 'a sound made by a machine'],
-    example: (word: string) => `A clear ${word} strategy helps learners choose the next task instead of reviewing blindly.`,
-  },
-  {
-    suffix: 'evidence',
-    cn: '证据',
-    definition: (word: string) => `information showing whether ${word} is understood or used correctly`,
-    distractors: ['a private feeling that cannot be checked', 'a short break after class', 'a rule about room numbers'],
-    example: (word: string) => `The platform records ${word} evidence after each exercise so progress can be verified.`,
-  },
-  {
-    suffix: 'context',
-    cn: '语境',
-    definition: (word: string) => `the situation in which ${word} is used or understood`,
-    distractors: ['a fixed exam score', 'a list of unrelated names', 'a tool for repairing a device'],
-    example: (word: string) => `Students remember ${word} context better when they meet the expression in a sentence.`,
-  },
-  {
-    suffix: 'awareness',
-    cn: '意识',
-    definition: (word: string) => `understanding of why ${word} matters`,
-    distractors: ['a written permission form only', 'a repeated sound in a recording', 'a number without explanation'],
-    example: (word: string) => `Improving ${word} awareness can make students notice details that were ignored before.`,
-  },
-  {
-    suffix: 'practice',
-    cn: '练习',
-    definition: (word: string) => `regular training connected with ${word}`,
-    distractors: ['a result that cannot be changed', 'a building near the library', 'an opinion with no action'],
-    example: (word: string) => `${word} practice should include recall, feedback, and a short follow-up review.`,
-  },
-  {
-    suffix: 'challenge',
-    cn: '挑战',
-    definition: (word: string) => `a problem learners may meet when dealing with ${word}`,
-    distractors: ['a complete solution that needs no review', 'a piece of furniture in a classroom', 'a festival with no cultural meaning'],
-    example: (word: string) => `A common ${word} challenge is knowing the expression but failing to use it under time pressure.`,
-  },
-  {
-    suffix: 'signal',
-    cn: '信号',
-    definition: (word: string) => `a word or clue that helps readers notice ${word}`,
-    distractors: ['a score that is guessed randomly', 'a building used for sports', 'a private opinion with no text clue'],
-    example: (word: string) => `The ${word} signal helps readers find the key sentence before comparing options.`,
-  },
-  {
-    suffix: 'comparison',
-    cn: '比较',
-    definition: (word: string) => `a way to compare ${word} with another idea or choice`,
-    distractors: ['a sound that cannot be heard clearly', 'a form with no information', 'a habit unrelated to learning'],
-    example: (word: string) => `A ${word} comparison can show why one option is closer to the passage than another.`,
-  },
-  {
-    suffix: 'application',
-    cn: '应用',
-    definition: (word: string) => `the practical use of ${word} in a sentence, passage, or task`,
-    distractors: ['a place where no one studies', 'a number without a unit', 'a copy of an unrelated answer'],
-    example: (word: string) => `${word} application matters because exam questions test use in context, not isolated memory.`,
-  },
-  {
-    suffix: 'method',
-    cn: '方法',
-    definition: (word: string) => `a reliable method for learning, checking, or using ${word}`,
-    distractors: ['a temporary feeling after class', 'a road sign near a school', 'a person who refuses feedback'],
-    example: (word: string) => `A ${word} method should include examples, retrieval, and a short review task.`,
-  },
-  {
-    suffix: 'review',
-    cn: '复习',
-    definition: (word: string) => `planned review that helps learners remember and reuse ${word}`,
-    distractors: ['a public event without learning goals', 'a wrong option copied from the text', 'a tool for measuring weather'],
-    example: (word: string) => `${word} review should return after one day, several days, and a later mixed exercise.`,
-  },
-  {
-    suffix: 'response',
-    cn: '回应',
-    definition: (word: string) => `a written or spoken response connected with ${word}`,
-    distractors: ['an empty room used for storage', 'a rule that prevents all questions', 'a trip that has no destination'],
-    example: (word: string) => `A strong ${word} response uses the expression accurately and explains the reason.`,
-  },
-  {
-    suffix: 'accuracy',
-    cn: '准确性',
-    definition: (word: string) => `accuracy in understanding or expressing ${word}`,
-    distractors: ['a fast answer with no evidence', 'a festival held in winter', 'a device that only stores photos'],
-    example: (word: string) => `${word} accuracy improves when students compare the source sentence with their answer.`,
-  },
-  {
-    suffix: 'output',
-    cn: '输出',
-    definition: (word: string) => `language output that uses ${word} in a meaningful context`,
-    distractors: ['a hidden cost in a contract', 'a silent reading room only', 'a random list of names'],
-    example: (word: string) => `${word} output turns recognition into writing, speaking, or translation ability.`,
-  },
-] as const;
-
-const CET4_PRODUCTIVE_PHRASE_ROWS: VocabularyExtensionRow[] = [
-  ...CET4_SYLLABUS_EXTENSION_ROWS,
-  ...DEGREE_ENGLISH_SYLLABUS_EXTENSION_ROWS,
-].slice(0, 100).flatMap(([word, , , meaning]) => PRODUCTIVE_PHRASE_PATTERNS.map((pattern): VocabularyExtensionRow => {
-  const phrase = `${word} ${pattern.suffix}`;
-  return [
-    phrase,
-    '/phrase/',
-    'phrase',
-    `${meaning}${pattern.cn}`,
-    pattern.definition(word),
-    pattern.distractors[0],
-    pattern.distractors[1],
-    pattern.distractors[2],
-    phrase,
-    pattern.example(word),
-    `${phrase} 是围绕 ${word} 扩展的 CET-4 输出语块，用于阅读同义替换、写作论证和翻译表达。`,
-  ];
-}));
-
+function capitalizeEnglish(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
 
 type CuratedCoreVocabularySeed = readonly [
   word: string,
@@ -1556,11 +1447,13 @@ function resolveCuratedVocabularyMeaning(
 
 const CURATED_PHONETIC_OVERRIDES: Record<string, string> = {
   achieve: '/əˈtʃiːv/',
+  adequate: '/ˈædɪkwət/',
   adjust: '/əˈdʒʌst/',
   advance: '/ədˈvæns/',
   advocate: '/ˈædvəkeɪt/',
   affect: '/əˈfekt/',
   afford: '/əˈfɔːrd/',
+  airline: '/ˈerlaɪn/',
   announce: '/əˈnaʊns/',
   annual: '/ˈænjuəl/',
   argument: '/ˈɑːrɡjumənt/',
@@ -1570,17 +1463,23 @@ const CURATED_PHONETIC_OVERRIDES: Record<string, string> = {
   atmosphere: '/ˈætməsfɪr/',
   available: '/əˈveɪləbl/',
   avoid: '/əˈvɔɪd/',
+  behalf: '/bɪˈhæf/',
   behavior: '/bɪˈheɪvjər/',
   circumstance: '/ˈsɜːrkəmstæns/',
   citizen: '/ˈsɪtɪzən/',
   community: '/kəˈmjuːnəti/',
   concept: '/ˈkɑːnsept/',
+  commitment: '/kəˈmɪtmənt/',
+  committee: '/kəˈmɪti/',
   convenient: '/kənˈviːniənt/',
+  consult: '/kənˈsʌlt/',
   contact: '/ˈkɑːntækt/',
   contain: '/kənˈteɪn/',
   contribute: '/kənˈtrɪbjuːt/',
+  corporation: '/ˌkɔːrpəˈreɪʃn/',
   create: '/kriˈeɪt/',
   debate: '/dɪˈbeɪt/',
+  decrease: '/dɪˈkriːs/',
   develop: '/dɪˈveləp/',
   device: '/dɪˈvaɪs/',
   effect: '/ɪˈfekt/',
@@ -1603,9 +1502,11 @@ const CURATED_PHONETIC_OVERRIDES: Record<string, string> = {
   immediate: '/ɪˈmiːdiət/',
   imitate: '/ˈɪmɪteɪt/',
   improve: '/ɪmˈpruːv/',
+  increase: '/ɪnˈkriːs/',
   indicate: '/ˈɪndɪkeɪt/',
   individual: '/ˌɪndɪˈvɪdʒuəl/',
   industry: '/ˈɪndəstri/',
+  infectious: '/ɪnˈfekʃəs/',
   inform: '/ɪnˈfɔːrm/',
   inspire: '/ɪnˈspaɪər/',
   involve: '/ɪnˈvɑːlv/',
@@ -1614,7 +1515,9 @@ const CURATED_PHONETIC_OVERRIDES: Record<string, string> = {
   local: '/ˈloʊkl/',
   major: '/ˈmeɪdʒər/',
   majority: '/məˈdʒɔːrəti/',
+  mere: '/mɪr/',
   monitor: '/ˈmɑːnɪtər/',
+  nearby: '/ˌnɪrˈbaɪ/',
   necessary: '/ˈnesəseri/',
   obtain: '/əbˈteɪn/',
   ordinary: '/ˈɔːrdəneri/',
@@ -1626,17 +1529,21 @@ const CURATED_PHONETIC_OVERRIDES: Record<string, string> = {
   previous: '/ˈpriːviəs/',
   principle: '/ˈprɪnsəpl/',
   process: '/ˈprɑːses/',
+  project: '/ˈprɑːdʒekt/',
   promote: '/prəˈmoʊt/',
   proposal: '/prəˈpoʊzl/',
   public: '/ˈpʌblɪk/',
   quality: '/ˈkwɑːləti/',
   range: '/reɪndʒ/',
+  recall: '/rɪˈkɔːl/',
   recent: '/ˈriːsnt/',
   recognize: '/ˈrekəɡnaɪz/',
   recommend: '/ˌrekəˈmend/',
   reduce: '/rɪˈduːs/',
   reflect: '/rɪˈflekt/',
+  reject: '/rɪˈdʒekt/',
   relation: '/rɪˈleɪʃn/',
+  repeat: '/rɪˈpiːt/',
   represent: '/ˌreprɪˈzent/',
   require: '/rɪˈkwaɪər/',
   research: '/rɪˈsɜːrtʃ/',
@@ -1648,8 +1555,10 @@ const CURATED_PHONETIC_OVERRIDES: Record<string, string> = {
   secure: '/sɪˈkjʊr/',
   select: '/sɪˈlekt/',
   senior: '/ˈsiːniər/',
+  segment: '/ˈseɡmənt/',
   sequence: '/ˈsiːkwəns/',
   service: '/ˈsɜːrvɪs/',
+  shortage: '/ˈʃɔːrtɪdʒ/',
   significant: '/sɪɡˈnɪfɪkənt/',
   similar: '/ˈsɪmələr/',
   situation: '/ˌsɪtʃuˈeɪʃn/',
@@ -1665,6 +1574,7 @@ const CURATED_PHONETIC_OVERRIDES: Record<string, string> = {
   transform: '/trænsˈfɔːrm/',
   typical: '/ˈtɪpɪkl/',
   update: '/ˌʌpˈdeɪt/',
+  upset: '/ʌpˈset/',
   urban: '/ˈɜːrbən/',
   vehicle: '/ˈviːəkl/',
   version: '/ˈvɜːrʒn/',
@@ -1678,18 +1588,12 @@ const CURATED_EXTENSION_PHONETICS = new Map<string, string>(
     .map(([word, phonetic]) => [word.toLowerCase(), phonetic] as const),
 );
 
-function buildReadablePhoneticFallback(word: string): string {
-  const cleaned = word.toLowerCase().replace(/[^a-z]+/g, ' ').trim();
-  if (!cleaned) return '发音提示';
-
-  return `发音提示：${cleaned}`;
-}
-
 function resolveCuratedVocabularyPhonetic(word: string): string {
   const key = word.toLowerCase();
   return CURATED_EXTENSION_PHONETICS.get(key)
     ?? CURATED_PHONETIC_OVERRIDES[key]
-    ?? buildReadablePhoneticFallback(key);
+    ?? GENERATED_PHONETIC_OVERRIDES[key]
+    ?? '';
 }
 
 type CuratedDistractorKind = 'noun' | 'verb' | 'adjective' | 'adverb';
@@ -1822,11 +1726,12 @@ function buildCuratedVocabularyExample(
 ): string {
   const phrase = collocation.trim();
   const lowerPhrase = phrase.toLowerCase();
-  const capitalize = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
+  const capitalize = capitalizeEnglish;
   const hasDeterminer = (value: string) => /^(a|an|the|this|that|these|those)\b/i.test(value);
   const uncountableNounStarters = new Set([
     'advice',
     'attention',
+    'culture',
     'damage',
     'development',
     'education',
@@ -1835,10 +1740,17 @@ function buildCuratedVocabularyExample(
     'information',
     'knowledge',
     'progress',
+    'quality',
     'research',
+    'service',
     'support',
     'technology',
+    'traffic',
+    'treatment',
     'transport',
+    'usage',
+    'violence',
+    'wisdom',
     'work',
   ]);
   const pluralNounHeads = new Set(['children', 'people']);
@@ -1854,73 +1766,197 @@ function buildCuratedVocabularyExample(
   };
   const withArticle = (value: string) => {
     if (!needsArticle(value)) return value;
-    return /^[aeiou]/i.test(value) ? `an ${value}` : `a ${value}`;
+    const normalized = value.trim().toLowerCase();
+    const vowelSound = /^(honest|hour)\b/i.test(normalized)
+      || (/^[aeiou]/i.test(normalized) && !/^(uni|use|user|useful|usual|one)\b/i.test(normalized));
+    return vowelSound ? `an ${value}` : `a ${value}`;
   };
   const subjectPhrase = (value: string) => capitalize(withArticle(value));
   const firstToken = lowerPhrase.split(/\s+/)[0];
+  const partOfSpeechLower = partOfSpeech.toLowerCase();
   const verbLikeStarters = new Set([
+    'accept',
     'achieve',
     'adjust',
+    'admit',
     'advance',
     'advocate',
     'affect',
     'afford',
+    'allow',
+    'alter',
     'announce',
     'apply',
+    'appreciate',
     'arrange',
     'assess',
     'assign',
     'assume',
     'attend',
     'avoid',
+    'be',
+    'become',
     'build',
+    'cancel',
     'cause',
     'change',
     'check',
     'choose',
+    'collect',
+    'combine',
+    'communicate',
+    'complain',
+    'conclude',
+    'confirm',
+    'consult',
+    'consume',
+    'contain',
     'compare',
     'concentrate',
     'control',
+    'convert',
+    'convince',
+    'cooperate',
     'create',
+    'criticize',
     'decide',
+    'deliver',
+    'depend',
     'develop',
+    'describe',
+    'design',
+    'determine',
     'discuss',
     'draw',
+    'educate',
+    'eliminate',
+    'enable',
+    'encounter',
+    'entertain',
+    'estimate',
+    'evaluate',
+    'examine',
+    'exchange',
+    'explore',
+    'export',
+    'feel',
+    'forbid',
     'express',
     'follow',
     'form',
+    'gain',
+    'generate',
     'give',
     'handle',
     'identify',
     'implement',
+    'import',
     'improve',
     'increase',
+    'inform',
+    'inspire',
+    'involve',
     'keep',
+    'launch',
     'lead',
     'limit',
     'maintain',
     'make',
     'manage',
+    'monitor',
+    'obtain',
     'offer',
     'organize',
     'pay',
+    'perform',
     'prepare',
     'prevent',
     'provide',
+    'promote',
+    'recognize',
+    'recommend',
     'reduce',
+    'reflect',
+    'regulate',
     'remove',
+    'represent',
     'retrieve',
+    'restrict',
+    'reveal',
+    'revise',
+    'secure',
+    'select',
+    'save',
     'solve',
     'support',
     'take',
+    'target',
+    'train',
     'transfer',
+    'transform',
+    'update',
     'use',
+    'withdraw',
+    'witness',
+    'wonder',
   ]);
   const isVerbLike = verbLikeStarters.has(firstToken)
-    || (partOfSpeech.includes('verb') && firstToken === word.toLowerCase());
+    || (partOfSpeechLower === 'verb' && firstToken === word.toLowerCase());
+  const exactExamples: Record<string, string> = {
+    'resolve a conflict': 'A realistic task lets learners resolve a conflict instead of guessing.',
+    'volunteer service': 'Volunteer service gave students a chance to support younger learners.',
+    'traffic jam': 'A traffic jam near the station delayed the morning bus.',
+    'medical treatment': 'The town opened a clinic to provide medical treatment for elderly residents.',
+    'market trend': 'The report used a market trend to explain why local stores changed prices.',
+    'train workers': 'The company will train workers before introducing new equipment.',
+    'tuition fee': 'The notice explained how students could pay the tuition fee in two parts.',
+    'universal value': 'Respect for fairness is a universal value in public discussion.',
+    'feel upset': 'Students may feel upset when feedback only points out mistakes without guidance.',
+    'word usage': 'The teacher corrected word usage in each student’s draft.',
+    'valuable advice': 'The teacher gave valuable advice on how to revise the first draft.',
+    'wide variety': 'The library offered a wide variety of books for the reading campaign.',
+    'accident victim': 'The report described how an accident victim received help from local volunteers.',
+    'school violence': 'The meeting discussed school violence and ways to protect students.',
+    'traditional virtue': 'Honesty is a traditional virtue that appears often in Chinese stories.',
+    'computer virus': 'A computer virus damaged several files before the technician removed it.',
+    'vital role': 'Clear communication plays a vital role in group projects.',
+    'witness change': 'Residents can witness change when public services respond to feedback.',
+    'withdraw money': 'Students can withdraw money from the campus ATM before the trip.',
+    'wonder why': 'Some readers wonder why the writer changed his opinion in the final paragraph.',
+    'serious wound': 'The nurse cleaned the serious wound before sending the patient to hospital.',
+    'youth culture': 'The article described youth culture through music, fashion, and online habits.',
+    'safe zone': 'The map marked a safe zone for students during the emergency drill.',
+  };
 
   if (lowerPhrase === 'afford the cost') {
     return 'With a scholarship, more learners can afford the cost of an online course.';
+  }
+  if (exactExamples[lowerPhrase]) {
+    return exactExamples[lowerPhrase];
+  }
+  if (lowerPhrase === 'whereas others') {
+    return 'Some students preferred online feedback, whereas others wanted face-to-face guidance.';
+  }
+  if (lowerPhrase === 'willing to help') {
+    return 'Several volunteers were willing to help after the community notice was posted.';
+  }
+  if (lowerPhrase === 'worth reading') {
+    return 'The article is worth reading because it explains a real campus problem.';
+  }
+  if (lowerPhrase === 'approximately twenty minutes') {
+    return 'The interview lasted approximately twenty minutes in the student center.';
+  }
+  if (lowerPhrase === 'on behalf') {
+    return 'The student spoke on behalf of the class at the meeting.';
+  }
+  if (lowerPhrase === 'for instance') {
+    return 'For instance, a short notice can explain the new rule clearly.';
+  }
+  if (lowerPhrase.startsWith('according to ')) {
+    return 'According to the survey, students preferred shorter review tasks.';
+  }
+  if (/^(therefore|hence)\b/i.test(lowerPhrase)) {
+    return 'The team reviewed feedback and therefore improved the service.';
   }
   if (lowerPhrase.startsWith('although ')) {
     return `${capitalize(phrase)}, learners can still make progress through focused practice.`;
@@ -1943,28 +1979,28 @@ function buildCuratedVocabularyExample(
 
   if (isVerbLike) {
     const verbExamples = [
-      `Careful planning helps students ${phrase} during daily study.`,
-      `A focused exercise helps learners ${phrase} before the exam.`,
-      `Teacher feedback helps students ${phrase} more accurately.`,
-      `A realistic task lets learners ${phrase} instead of guessing.`,
-      `Regular review helps students ${phrase} with confidence.`,
-      `A clear example shows how learners can ${phrase} in context.`,
-      `Timed practice helps students ${phrase} under pressure.`,
-      `Group discussion helps learners ${phrase} and explain their choice.`,
+      `During the project meeting, students learned to ${phrase} before making a decision.`,
+      `In the writing workshop, a short checklist helped learners ${phrase} clearly.`,
+      `After reading the notice, the group decided to ${phrase} instead of waiting.`,
+      `A campus survey showed why residents needed to ${phrase} in daily life.`,
+      `Before the deadline, the team used feedback to ${phrase}.`,
+      `The discussion gave students a chance to ${phrase} in a real situation.`,
+      `A community program helped volunteers ${phrase} with practical support.`,
+      `The teacher used a local example to show how people can ${phrase}.`,
     ];
     return verbExamples[index % verbExamples.length];
   }
 
   const objectPhrase = withArticle(phrase);
   const nounExamples = [
-    `${subjectPhrase(phrase)} helps learners understand the topic more clearly.`,
-    `The passage describes ${objectPhrase} in a familiar campus situation.`,
-    `${subjectPhrase(phrase)} can become the key clue in a listening question.`,
-    `Students discuss ${objectPhrase} when they prepare for a writing task.`,
-    `${subjectPhrase(phrase)} makes the speaker's attitude easier to understand.`,
-    `A class report connects ${objectPhrase} with evidence from daily life.`,
-    `${subjectPhrase(phrase)} gives learners a concrete detail for comparison.`,
-    `The dialogue mentions ${objectPhrase} while explaining a practical problem.`,
+    `The campus survey collected views on ${objectPhrase} from first-year students.`,
+    `A local report used ${objectPhrase} to explain a change in daily life.`,
+    `${subjectPhrase(phrase)} became the main reason for revising the plan.`,
+    `The reading passage described ${objectPhrase} through a real example.`,
+    `During the workshop, students compared ${objectPhrase} with another case.`,
+    `The notice mentioned ${objectPhrase} because many residents had questions.`,
+    `A short interview showed how ${objectPhrase} affected the family.`,
+    `The group presentation connected ${objectPhrase} with evidence from the survey.`,
   ];
 
   return nounExamples[index % nounExamples.length];
@@ -1997,9 +2033,6 @@ const CET4_CURATED_CORE_EXTENSION_ROWS: VocabularyExtensionRow[] =
       word + ' is a core CET-4 word. Focus on using "' + collocation + '" in context.',
     ];
   });
-
-export const CET4_OUTPUT_PHRASE_BANK: VocabularyPracticeItem[] =
-  CET4_PRODUCTIVE_PHRASE_ROWS.map(buildVocabularyItem);
 
 const CET4_SYLLABUS_EXTENSION_VOCABULARY: VocabularyPracticeItem[] =
   [
@@ -2538,6 +2571,39 @@ export const CET4_VOCABULARY_BANK: VocabularyPracticeItem[] = rebalanceVocabular
   },
   ...CET4_SYLLABUS_EXTENSION_VOCABULARY,
 ]));
+
+function buildOutputPhrasePracticeItem(item: VocabularyPracticeItem, index: number): VocabularyPracticeItem {
+  const phrase = item.collocation.trim();
+  const correctDefinition = item.options[item.correctAnswer];
+  const [distractorB, distractorC, distractorD] = buildCuratedVocabularyDistractors(
+    phrase,
+    'phrase',
+    correctDefinition,
+    index + 10_000,
+  );
+
+  return {
+    id: `vocab-${phrase.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`,
+    word: phrase,
+    phonetic: '/phrase/',
+    partOfSpeech: 'phrase',
+    meaning: `${phrase}（${item.meaning}）`,
+    options: {
+      A: correctDefinition,
+      B: distractorB,
+      C: distractorC,
+      D: distractorD,
+    },
+    correctAnswer: 'A',
+    collocation: phrase,
+    example: item.example,
+    explanation: `${phrase} 是 ${item.word} 的常用语境搭配，重点放在例句中的实际用法。`,
+  };
+}
+
+export const CET4_OUTPUT_PHRASE_BANK: VocabularyPracticeItem[] = rebalanceVocabularyBank(
+  dedupeVocabularyItems(CET4_VOCABULARY_BANK.map(buildOutputPhrasePracticeItem)),
+);
 
 export const INITIAL_PASSAGE: Passage = {
   id: 'cet-ai-edu',

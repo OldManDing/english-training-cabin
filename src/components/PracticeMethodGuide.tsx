@@ -123,16 +123,18 @@ export default function PracticeMethodGuide({
         </div>
       ) : null}
 
-      <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-[#dde5ee] bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs font-bold leading-5 text-slate-600">
-          {guide.payoff}
-        </p>
-        <div className="inline-flex items-center gap-1.5 text-xs font-black text-[#003178]">
-          <Target className="h-4 w-4" />
-          先方法，后练习
-          <ArrowRight className="h-3.5 w-3.5" />
+      {!compact ? (
+        <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-[#dde5ee] bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs font-bold leading-5 text-slate-600">
+            {guide.payoff}
+          </p>
+          <div className="inline-flex items-center gap-1.5 text-xs font-black text-[#003178]">
+            <Target className="h-4 w-4" />
+            先方法，后练习
+            <ArrowRight className="h-3.5 w-3.5" />
+          </div>
         </div>
-      </div>
+      ) : null}
     </section>
   );
 }

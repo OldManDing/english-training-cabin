@@ -1,6 +1,6 @@
 import { DailyPlan, ReviewItem, SkillProfile, StudyGoal } from '../../types';
 import { buildStageProgressSummary } from '../progress/abilityEvidence';
-import { isReviewItemDueOn, sortWrongQuestionReviewItems } from '../review/reviewQueue';
+import { isReviewItemDueOn, sortWrongQuestionReviewItems, toLocalDateKey } from '../review/reviewQueue';
 
 interface BuildDailyPlanInput {
   goal: Pick<StudyGoal, 'id' | 'examId' | 'examDate' | 'dailyMinutes' | 'prioritySkills'>;
@@ -12,7 +12,7 @@ interface BuildDailyPlanInput {
 }
 
 function todayIsoDate(): string {
-  return new Date().toISOString().slice(0, 10);
+  return toLocalDateKey();
 }
 
 function daysUntilExam(examDate: string, date: string): number {

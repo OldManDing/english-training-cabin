@@ -610,26 +610,10 @@ test('MVP critical reading flow persists local learning evidence', async ({ page
 
   await page.getByRole('button', { name: '复习队列' }).click();
   await expect(page.getByRole('heading', { name: '复习队列' })).toBeVisible();
-  await expect(page.getByTestId('review-direct-card')).toBeVisible();
-  const speechCallCountBeforeReview = await page.evaluate(() => (window as any).__speechSynthesisCalls?.length ?? 0);
-  await page.getByTestId('review-redo-speech-toggle').click();
-  await expect(page.getByTestId('review-redo-speech-toggle')).toContainText('暂停语音');
-  await expect
-    .poll(async () => page.evaluate(() => (window as any).__speechSynthesisCalls?.length ?? 0))
-    .toBeGreaterThan(speechCallCountBeforeReview);
-  const reviewSpeechText = await page.evaluate(() => (window as any).__speechSynthesisCalls?.at(-1) ?? '');
-  expect(reviewSpeechText).toContain('阅读定位句');
-  const practicedReadingQuestions = CET4_READING_BANK.flatMap((passage) => passage.questions).slice(0, 5);
-  expect(practicedReadingQuestions.some((question) => reviewSpeechText.includes(question.question))).toBe(true);
-  await page.getByTestId('review-redo-choice-A').click();
-  await expect(page.getByTestId('review-direct-feedback')).toBeVisible();
-  await expect(page.getByTestId('review-redo-translation')).toBeVisible();
-  await expect(page.getByTestId('review-redo-prompt-translation')).toBeVisible();
-  await expect(page.getByTestId('review-redo-option-translation-A')).toBeVisible();
-  await page.getByTestId('review-outcome-mastered').click();
-  await expect(page.getByRole('heading', { name: '复习队列' })).toBeVisible();
+  await expect(page.getByTestId('review-direct-card')).toHaveCount(0);
+  await expect(page.getByText(/还有 \d+ 条未到期复习项/)).toBeVisible();
 
-  const reviewedEvidence = await page.evaluate(async () => {
+  const scheduledReviewEvidence = await page.evaluate(async () => {
     function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
       return new Promise((resolve, reject) => {
         request.onsuccess = () => resolve(request.result);
@@ -642,40 +626,25 @@ test('MVP critical reading flow persists local learning evidence', async ({ page
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
-    const tx = db.transaction(['reviewItems', 'skillProfiles', 'practiceSessions', 'attempts'], 'readonly');
+    const tx = db.transaction(['reviewItems', 'practiceSessions', 'attempts'], 'readonly');
     const items = await requestToPromise(tx.objectStore('reviewItems').getAll());
-    const reviewProfile = await requestToPromise(tx.objectStore('skillProfiles').get('cet4-reading-review'));
     const reviewSessions = await requestToPromise(tx.objectStore('practiceSessions').getAll());
     const reviewAttempts = await requestToPromise(tx.objectStore('attempts').getAll());
     db.close();
     return {
-      reviewed: items.some((item) => Boolean(item.lastReviewedAt) && item.masteryScore > 35),
-      reviewProfile,
-      reviewSession: reviewSessions.find((session) => session.moduleId === 'review'),
-      reviewAttempt: reviewAttempts.find((attempt) => attempt.moduleId === 'review'),
+      reviewItemCount: items.length,
+      scheduledCount: items.filter((item) => Boolean(item.nextReviewAt) && new Date(item.nextReviewAt).getTime() > Date.now()).length,
+      reviewedCount: items.filter((item) => Boolean(item.lastReviewedAt)).length,
+      reviewSessionCount: reviewSessions.filter((session) => session.moduleId === 'review').length,
+      reviewAttemptCount: reviewAttempts.filter((attempt) => attempt.moduleId === 'review').length,
     };
   });
 
-  expect(reviewedEvidence.reviewed).toBeTruthy();
-  expect(reviewedEvidence.reviewProfile).toMatchObject({
-    skillArea: 'reading',
-  });
-  expect(reviewedEvidence.reviewSession).toMatchObject({
-    moduleId: 'review',
-    modeId: 'wrong-question-redo-active-recall',
-    status: 'completed',
-  });
-  expect(reviewedEvidence.reviewAttempt).toMatchObject({
-    moduleId: 'review',
-    questionTypeId: 'wrong-question-redo-active-recall',
-  });
-  expect(reviewedEvidence.reviewAttempt.answer.redoAnswer).toBe('A');
-  expect(reviewedEvidence.reviewAttempt.answer.redoPrompt).toBeTruthy();
-  expect(typeof reviewedEvidence.reviewAttempt.answer.redoCorrect).toBe('boolean');
-  expect(reviewedEvidence.reviewAttempt.answer.recallAnswer).toContain('我错在');
-  expect(reviewedEvidence.reviewAttempt.answer.clozeAnswer).toBeTruthy();
-  expect(reviewedEvidence.reviewAttempt.answer.reviewOutcome).toBe('mastered');
-  expect(reviewedEvidence.reviewAttempt.answer.productionAnswer).toContain('本次自评：已掌握');
+  expect(scheduledReviewEvidence.reviewItemCount).toBeGreaterThan(0);
+  expect(scheduledReviewEvidence.scheduledCount).toBeGreaterThan(0);
+  expect(scheduledReviewEvidence.reviewedCount).toBe(0);
+  expect(scheduledReviewEvidence.reviewSessionCount).toBe(0);
+  expect(scheduledReviewEvidence.reviewAttemptCount).toBe(0);
 });
 
 test('unfinished reading practice resumes from the saved draft position', async ({ page }) => {
@@ -790,12 +759,24 @@ test('practice question status numbers open the selected module question', async
   await expect(page.getByRole('heading', { name: CET4_VOCABULARY_BANK[1].word })).toBeVisible();
   await page.getByTestId('vocabulary-back-to-practice').click();
 
+  const accompanyIndex = CET4_VOCABULARY_BANK.findIndex((item) => item.word === 'accompany');
+  expect(accompanyIndex).toBeGreaterThanOrEqual(0);
+  const accompanyItem = CET4_VOCABULARY_BANK[accompanyIndex];
+  await page.getByTestId('practice-module-select-vocabulary').click();
+  await page.getByRole('button', { name: /展开当前筛选/ }).click();
+  await page.getByTestId(`practice-question-status-vocabulary-${accompanyIndex + 1}`).click();
+  await expect(page.getByRole('heading', { name: 'accompany' })).toBeVisible();
+  await expect(page.getByText(accompanyItem.phonetic, { exact: true })).toBeVisible();
+  await expect(page.getByText(/发音提示/)).toHaveCount(0);
+  await page.getByTestId('vocabulary-back-to-practice').click();
+
   await page.getByTestId('practice-module-select-listening').click();
   await page.getByTestId('practice-question-status-listening-2').click();
   await expect(page.getByText('Question 2')).toBeVisible();
   await page.getByTestId('listening-back-to-practice').click();
 
   await page.getByTestId('practice-module-select-grammar').click();
+  await expect(page.getByTestId('practice-question-status-grammar')).toBeInViewport();
   await expect(page.getByTestId('practice-method-guide-topic-grammar-tense')).toContainText('时态题');
   await expect(page.getByTestId('practice-method-guide-topic-grammar-voice')).toContainText('语态题');
   await expect(page.getByTestId('practice-question-status-group-grammar-tense')).toContainText('时态题');
@@ -1073,6 +1054,69 @@ test('due review reminder does not block grammar practice', async ({ page }) => 
   await expect(page.getByRole('heading', { name: /专项练习/ })).toBeVisible();
   await page.getByRole('button', { name: '开始语法训练' }).click();
   await expect(page.getByRole('heading', { name: '语法与完形填空训练舱' })).toBeVisible();
+});
+
+test('review queue hides future wrong-question reviews until they are due', async ({ page }) => {
+  await registerAndEnterApp(page, 'mvp-review-future-only');
+  await resetLocalLearningData(page);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: '今日训练' })).toBeVisible();
+
+  await page.evaluate(async () => {
+    function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
+      return new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('english-training-cabin');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const tx = db.transaction(['reviewItems'], 'readwrite');
+    await requestToPromise(tx.objectStore('reviewItems').put({
+      id: 'future-review-1',
+      title: '未来才到期的错题',
+      category: '错题',
+      detail: '这条错题用于验证未到期复习项不会提前出现在复习队列。',
+      daysAgo: 0,
+      targetType: 'question',
+      targetId: 'future-question-1',
+      examId: 'cet4',
+      moduleId: 'reading',
+      skillArea: 'reading',
+      masteryScore: 35,
+      priorityScore: 95,
+      reviewIntervalDays: 2,
+      nextReviewAt: new Date(Date.now() + 2 * 86_400_000).toISOString(),
+      createdAt: new Date().toISOString(),
+      redoQuestion: {
+        kind: 'single-choice',
+        prompt: 'Which option best matches the passage?',
+        options: {
+          A: 'The correct paraphrase',
+          B: 'The previous wrong choice',
+        },
+        correctAnswer: 'A',
+        userAnswer: 'B',
+      },
+      learningMethod: 'wrong-question-redo-active-recall',
+    }));
+    db.close();
+  });
+
+  await page.reload();
+  await expect(page.getByRole('heading', { name: '今日训练' })).toBeVisible();
+  await expect(page.getByTestId('review-gate-banner')).toHaveCount(0);
+
+  await page.getByRole('button', { name: '复习队列' }).click();
+  await expect(page.getByRole('heading', { name: '复习队列' })).toBeVisible();
+  await expect(page.getByTestId('review-direct-card')).toHaveCount(0);
+  await expect(page.getByText(/先完成专项训练或模考/)).toBeVisible();
+  await expect(page.getByText(/还有 1 条未到期复习项/)).toBeVisible();
+  await expect(page.getByText('未来才到期的错题')).toHaveCount(0);
 });
 
 test('listening practice starts automatic speech playback', async ({ page }) => {
@@ -1803,10 +1847,10 @@ test('all MVP sections render their primary controls', async ({ page }) => {
 
   await page.getByRole('button', { name: '复习队列' }).click();
   await expect(page.getByRole('heading', { name: '复习队列' })).toBeVisible();
-  await expect(page.getByText(/暂无要复习的错题/)).toBeVisible();
+  await expect(page.getByText(/先完成专项训练或模考/)).toBeVisible();
 
   await page.getByRole('button', { name: '口语重说' }).click();
-  await expect(page.getByRole('heading', { name: /口语重说/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '口语重说 - 准备开始' })).toBeVisible();
   await expect(page.getByRole('button', { name: '开始录音' })).toBeVisible();
 
   await page.getByRole('button', { name: '能力进展' }).click();

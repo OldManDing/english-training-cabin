@@ -34,21 +34,18 @@ describe('practice sentence and vocabulary Chinese support', () => {
     expect(correctOption?.chineseMeaning).not.toBe(adapt!.meaning);
   });
 
-  it('translates generated phrase vocabulary options without depending on a fixed answer letter', () => {
-    const generated = CET4_OUTPUT_PHRASE_BANK.find((item) => item.word === 'accurate strategy');
+  it('translates output phrase vocabulary options without depending on a fixed answer letter', () => {
+    const generated = CET4_OUTPUT_PHRASE_BANK.find((item) => item.word === 'accurate information');
     expect(generated).toBeTruthy();
 
     const support = getVocabularyQuestionSupport(generated!);
     const correctOption = support.optionTranslations.find((option) => option.isCorrect);
-    const distractorOption = support.optionTranslations.find(
-      (option) => option.sourceText === 'a random answer without evidence',
-    );
+    const distractorTranslations = support.optionTranslations.filter((option) => !option.isCorrect);
 
     expect(correctOption?.sourceText).toBe(generated!.options[generated!.correctAnswer]);
-    expect(correctOption?.chineseMeaning).toContain(generated!.meaning);
-    expect(distractorOption?.sourceText).toBe('a random answer without evidence');
-    expect(distractorOption?.isCorrect).toBe(false);
-    expect(distractorOption?.chineseMeaning).toBeTruthy();
+    expect(correctOption?.chineseMeaning).toBe('正确且精确');
+    expect(distractorTranslations).toHaveLength(3);
+    expect(distractorTranslations.every((option) => /[\u4e00-\u9fff]/u.test(option.chineseMeaning))).toBe(true);
   });
 
   it('translates method definition options as direct Chinese phrases', () => {
@@ -271,6 +268,29 @@ describe('practice sentence and vocabulary Chinese support', () => {
     })).filter(({ support }) => (
       !/[\u4e00-\u9fff]/u.test(support.chineseMeaning)
       || forbiddenMeaningPatterns.some((pattern) => pattern.test(support.chineseMeaning))
+    ));
+
+    expect(invalidItems).toEqual([]);
+  });
+
+  it('keeps output phrases natural, translated, and free of artificial templates', () => {
+    const vocabularyCollocations = new Set(CET4_VOCABULARY_BANK.map((item) => item.collocation));
+    const forbiddenExamples = [
+      /^A clear .+ strategy helps learners choose the next task instead of reviewing blindly\.$/u,
+      /^The platform records .+ evidence after each exercise so progress can be verified\.$/u,
+      /^Students remember .+ context better when they meet the expression in a sentence\.$/u,
+      /^A common .+ challenge is knowing the expression but failing to use it under time pressure\.$/u,
+      /^.+ output turns recognition into writing, speaking, or translation ability\.$/u,
+      /\baccurate accuracy\b/u,
+    ];
+    const invalidItems = CET4_OUTPUT_PHRASE_BANK.map((item) => ({
+      word: item.word,
+      example: item.example,
+      support: getVocabularySentenceSupport(item),
+    })).filter(({ word, example, support }) => (
+      !vocabularyCollocations.has(word)
+      || forbiddenExamples.some((pattern) => pattern.test(word) || pattern.test(example))
+      || /暂缺|请以英文原句/u.test(support.chineseMeaning)
     ));
 
     expect(invalidItems).toEqual([]);

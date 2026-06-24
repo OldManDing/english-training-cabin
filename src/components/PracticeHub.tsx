@@ -492,6 +492,12 @@ export default function PracticeHub({
     if (!hasManualSelection) setSelectedModuleId(recommendedModuleId);
   }, [hasManualSelection, recommendedModuleId]);
 
+  useEffect(() => {
+    if (!hasManualSelection) return;
+    const target = document.getElementById(`practice-question-status-${selectedModule.id}`);
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [hasManualSelection, selectedModule.id]);
+
   return (
     <div className="app-page-surface ui-page">
       <div className="ui-page-content space-y-5">
@@ -506,7 +512,7 @@ export default function PracticeHub({
                 专项练习
               </h2>
               <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
-                先看解题方法，再进专项练习；已答题可在题号列表回看。
+                先看方法，再开始练习。
               </p>
               <div data-testid="practice-hub-summary" className="mt-3 flex flex-wrap gap-2 text-[11px] font-black">
                 <span className="ui-chip ui-chip-accent">已记录 {recordedAttemptCount} 次作答</span>
@@ -526,17 +532,14 @@ export default function PracticeHub({
             <div className="mt-5 rounded-2xl border border-[#cfe6f2] bg-[#f8fbff] px-4 py-3">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <div className="text-xs font-black text-[#003178]">推荐</div>
-                  <p className="mt-1 text-sm font-bold leading-6 text-slate-700">
-                    建议：{recommendedModule.label}
-                  </p>
+                  <div className="text-xs font-black text-[#003178]">推荐：{recommendedModule.label}</div>
                 </div>
                 <button
                   type="button"
                   onClick={recommendedModule.onStart}
                   className="ui-button ui-button-primary shrink-0"
                 >
-                  进入推荐专项
+                  开始推荐专项
                   <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
@@ -565,7 +568,7 @@ export default function PracticeHub({
             return (
               <article
                 key={module.id}
-                className={`ui-panel flex min-h-[250px] flex-col transition ${
+                className={`ui-panel flex min-h-[220px] flex-col transition ${
                   isActive ? 'border-[#003178] bg-[#f8fbff] ring-1 ring-[#dcecff]' : 'hover:border-[#003178]/30'
                 }`}
               >
@@ -638,7 +641,7 @@ export default function PracticeHub({
         )}
 
         {isCet4 && (
-          <PracticeMethodGuide moduleId={selectedModule.id} />
+          <PracticeMethodGuide moduleId={selectedModule.id} compact />
         )}
 
         {isCet4 && selectedTrainingCamps.length > 0 && (
@@ -647,24 +650,23 @@ export default function PracticeHub({
               <div>
                 <span className="ui-chip ui-chip-accent">
                   <ListChecks className="h-3.5 w-3.5" />
-                  {selectedModule.label}训练营
+                  训练重点
                 </span>
-                <h3 className="mt-3 text-lg font-black text-[#101828]">训练营</h3>
               </div>
               <button
                 type="button"
                 onClick={selectedModule.onStart}
                 className="ui-button ui-button-primary shrink-0"
               >
-                进入{selectedTrainingCamps[0]?.title ?? selectedModule.label}训练营
+                开始训练
                 <ChevronRight className="h-4 w-4" />
               </button>
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-3">
               {selectedTrainingCamps.map((camp) => (
-                <article key={camp.id} className="rounded-2xl border border-[#dde5ee] bg-[#f8fafc] p-4">
+                <article key={camp.id} className="rounded-2xl border border-[#dde5ee] bg-[#f8fafc] p-3">
                   <div className="text-sm font-black text-[#003178]">{camp.title}</div>
-                  <p className="mt-2 line-clamp-2 text-xs font-bold leading-5 text-slate-600">{camp.focus}</p>
+                  <p className="mt-1 line-clamp-1 text-xs font-bold leading-5 text-slate-600">{camp.focus}</p>
                 </article>
               ))}
             </div>
@@ -850,7 +852,7 @@ function QuestionStatusPanel({
   );
 
   return (
-    <section data-testid={`practice-question-status-${moduleId}`} className="ui-panel">
+    <section id={`practice-question-status-${moduleId}`} data-testid={`practice-question-status-${moduleId}`} className="ui-panel">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <span className="ui-chip ui-chip-accent">

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, CheckCircle2, ChevronRight, Headphones, PauseCircle, Volume2, XCircle } from 'lucide-react';
-import { CET4_VOCABULARY_BANK, VocabularyPracticeItem, VOCABULARY_SESSION_SIZE } from '../data';
+import { CET4_VOCABULARY_BANK, VocabularyPracticeItem, VOCABULARY_SESSION_SIZE, formatVocabularyPhonetic } from '../data';
 import { Attempt, ChoiceOption, PracticeCompletionReport } from '../types';
 import { buildChoiceReplayAnswer } from '../domain/practice/attemptReplay';
 import {
@@ -161,6 +161,7 @@ export default function VocabularyTraining({
   );
   const currentItem = sessionItems[currentIdx] ?? sessionItems[0];
   const nextItem = sessionItems[currentIdx + 1];
+  const currentPhonetic = formatVocabularyPhonetic(currentItem.phonetic);
   const currentAutoSpeechText = currentItem ? `${currentItem.word}. ${currentItem.example}` : '';
   const nextAutoSpeechText = nextItem ? `${nextItem.word}. ${nextItem.example}` : '';
   const sentenceSupport = currentItem ? getVocabularySentenceSupport(currentItem) : null;
@@ -247,24 +248,27 @@ export default function VocabularyTraining({
     });
   };
 
-  const buildVocabularyQuestion = (item: VocabularyPracticeItem) => ({
-    id: item.id,
-    question: `${item.word}${item.phonetic ? ` ${item.phonetic}` : ``}: ${item.example}`,
-    options: item.options,
-    optionTranslations: getVocabularyQuestionSupport(item).optionTranslations.reduce<Partial<Record<Choice, string>>>((result, translation) => {
-      result[translation.key] = translation.chineseMeaning;
-      return result;
-    }, {}),
-    correctAnswer: item.correctAnswer,
-    type: '词义辨析与听音识别',
-    trapType: '关键语块漏听',
-    moduleId: 'vocabulary',
-    questionTypeId: 'cet4-core-vocabulary',
-    correctSentence: `${item.collocation}. ${item.example}`,
-    correctSentenceTranslation: getVocabularySentenceSupport(item).chineseMeaning,
-    questionTranslation: getVocabularyQuestionSupport(item).prompt.chineseMeaning,
-    explanation: item.explanation,
-  });
+  const buildVocabularyQuestion = (item: VocabularyPracticeItem) => {
+    const phonetic = formatVocabularyPhonetic(item.phonetic);
+    return {
+      id: item.id,
+      question: `${item.word}${phonetic ? ` ${phonetic}` : ``}: ${item.example}`,
+      options: item.options,
+      optionTranslations: getVocabularyQuestionSupport(item).optionTranslations.reduce<Partial<Record<Choice, string>>>((result, translation) => {
+        result[translation.key] = translation.chineseMeaning;
+        return result;
+      }, {}),
+      correctAnswer: item.correctAnswer,
+      type: '词义辨析与听音识别',
+      trapType: '关键语块漏听',
+      moduleId: 'vocabulary',
+      questionTypeId: 'cet4-core-vocabulary',
+      correctSentence: `${item.collocation}. ${item.example}`,
+      correctSentenceTranslation: getVocabularySentenceSupport(item).chineseMeaning,
+      questionTranslation: getVocabularyQuestionSupport(item).prompt.chineseMeaning,
+      explanation: item.explanation,
+    };
+  };
 
   const buildVocabularyReport = (
     targetAnswers: VocabularyAnswer[],
@@ -571,7 +575,7 @@ export default function VocabularyTraining({
             </div>
             <h1 className="text-4xl font-black tracking-tight text-[#071e27] sm:text-5xl">{currentItem.word}</h1>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-sm font-bold text-slate-500">
-              {currentItem.phonetic ? <span>{currentItem.phonetic}</span> : null}
+              {currentPhonetic ? <span>{currentPhonetic}</span> : null}
               <span className="rounded-full bg-slate-100 px-2 py-1 text-xs">{currentItem.partOfSpeech}</span>
               <span className="rounded-full bg-amber-50 px-2 py-1 text-xs text-amber-700">{currentItem.meaning}</span>
             </div>

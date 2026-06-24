@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildReviewGateStatus } from '../../src/domain/review/reviewGate';
 import { ReviewItem } from '../../src/types';
 
@@ -28,6 +28,10 @@ function reviewItem(overrides: Partial<ReviewItem>): ReviewItem {
 }
 
 describe('buildReviewGateStatus', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('locks new practice until all due reviews are completed when due count is under the daily limit', () => {
     const status = buildReviewGateStatus([
       reviewItem({ id: 'a', priorityScore: 70 }),
@@ -68,6 +72,22 @@ describe('buildReviewGateStatus', () => {
     expect(status.dueCount).toBe(2);
     expect(status.requiredToday).toBe(3);
     expect(status.remainingRequired).toBe(0);
+  });
+
+  it('uses the local date when counting reviews completed after local midnight', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 5, 24, 0, 30, 0));
+
+    const status = buildReviewGateStatus([
+      reviewItem({
+        id: 'local-midnight',
+        nextReviewAt: new Date(2026, 5, 25, 0, 30, 0).toISOString(),
+        lastReviewedAt: new Date(2026, 5, 24, 0, 10, 0).toISOString(),
+      }),
+    ]);
+
+    expect(status.date).toBe('2026-06-24');
+    expect(status.completedToday).toBe(1);
   });
 
   it('does not lock when there are no due reviews', () => {

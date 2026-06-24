@@ -261,6 +261,11 @@ export default function TodayDashboard({
     if (task.skillArea === 'writing' || task.skillArea === 'translation') return { Icon: Edit2, border: 'border-l-[#003178]', bg: 'bg-[#f8fafc]', icon: 'text-[#003178]' };
     return { Icon: BookOpen, border: 'border-l-[#003178]', bg: 'bg-[#eef7fc]', icon: 'text-[#003178]' };
   };
+  const getPriorityLabel = (priority: DailyPlan['tasks'][number]['priority']) => {
+    if (priority === 'high') return '优先';
+    if (priority === 'medium') return '常规';
+    return '补充';
+  };
 
   const triggerTimeEdit = () => {
     if (onOpenSettings) {
@@ -294,7 +299,7 @@ export default function TodayDashboard({
                 今日训练
               </h2>
               <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-600">
-                只保留一个最该做的主动作，并说明为什么做、做完会改变什么。
+                按优先级开始今天的训练。
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -386,14 +391,13 @@ export default function TodayDashboard({
             </div>
 
             <div className="mt-5 flex flex-wrap gap-2 text-[11px] font-black">
-              <span className="ui-chip">{primaryTaskSummary}</span>
-              <span className="ui-chip">{targetExamName}</span>
+              <span className="ui-chip">{targetExamName} · {primaryTaskSummary}</span>
               <span className="ui-chip">证据 {abilityEvidenceCount} 条</span>
               <span className="ui-chip">{strategy === 'efficient' ? '高效模式' : '巩固模式'}</span>
             </div>
 
             <p data-testid="today-coach-insight" className="mt-4 line-clamp-2 text-xs font-semibold leading-5 text-slate-500">
-              {coachInsight.expectedGain} · {coachInsight.risk}
+              {coachInsight.expectedGain}
             </p>
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -502,7 +506,7 @@ export default function TodayDashboard({
                       <div className="min-w-0">
                         <h4 className="truncate text-sm font-black text-[#003178]">{task.title}</h4>
                         <p className="mt-1 line-clamp-1 text-xs font-semibold text-slate-500">
-                          {task.reason} · {task.estimatedMinutes}m
+                          {getPriorityLabel(task.priority)} · {task.estimatedMinutes}m
                         </p>
                       </div>
                     </div>
@@ -562,8 +566,8 @@ export default function TodayDashboard({
               </div>
               <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
                 {[
-                  ['efficient', '高效模式', '限时训练，优先推进弱项'],
-                  ['review', '巩固模式', '放慢节奏，优先消化错因'],
+                  ['efficient', '高效模式', '限时推进弱项'],
+                  ['review', '巩固模式', '优先消化错因'],
                 ].map(([value, label, detail]) => (
                   <button
                     key={value}

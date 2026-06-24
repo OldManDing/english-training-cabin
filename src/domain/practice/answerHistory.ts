@@ -1,4 +1,4 @@
-import { CET4_VOCABULARY_BANK, INITIAL_PASSAGE } from '../../data';
+import { CET4_VOCABULARY_BANK, INITIAL_PASSAGE, formatVocabularyPhonetic } from '../../data';
 import {
   CET4_CAREFUL_READING_PRACTICE_QUESTIONS,
   CET4_CLOZE_PRACTICE_QUESTIONS,
@@ -212,13 +212,14 @@ export function buildAnsweredQuestionSnapshotIndex(): SnapshotIndex {
   CET4_VOCABULARY_BANK.forEach((item) => {
     const sentenceSupport = getVocabularySentenceSupport(item);
     const questionSupport = getVocabularyQuestionSupport(item);
+    const phonetic = formatVocabularyPhonetic(item.phonetic);
     putSnapshot(index, {
       id: item.id,
       moduleId: 'vocabulary',
       questionTypeId: 'cet4-core-vocabulary',
       title: item.word,
       sourceLabel: '词汇听音',
-      prompt: `${item.word} ${item.phonetic}: ${item.example}`,
+      prompt: `${item.word}${phonetic ? ` ${phonetic}` : ''}: ${item.example}`,
       promptTranslation: `词义：${item.meaning}；例句：${sentenceSupport.chineseMeaning}`,
       context: item.collocation,
       contextTranslation: questionSupport.prompt.chineseMeaning,

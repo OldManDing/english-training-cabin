@@ -186,9 +186,6 @@ export default function LaunchReadinessNotice({ onOpen }: LaunchReadinessNoticeP
           </div>
           <div className="min-w-0">
             <h2 className="text-xs font-black text-[#003178]">本地保存 · 原创模拟 · AI 可降级</h2>
-            <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-500">
-              详细说明收起，需要时再查看。
-            </p>
             <div
               className={`mt-2 inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border px-2.5 py-1.5 text-[11px] font-bold leading-4 ${aiStatusCopy.className}`}
               data-testid="ai-status-strip"

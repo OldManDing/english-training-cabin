@@ -93,8 +93,16 @@ describe('CET-4 syllabus-aligned question bank coverage', () => {
         return item.phonetic.trim().toLowerCase() === `/${normalizedWord}/`;
       })
       .map((item) => ({ word: item.word, phonetic: item.phonetic }));
+    const readablePhoneticFallbacks = CET4_VOCABULARY_BANK
+      .filter((item) => /^发音提示/.test(item.phonetic.trim()))
+      .map((item) => ({ word: item.word, phonetic: item.phonetic }));
     const malformedGeneratedExamples = CET4_VOCABULARY_BANK
       .filter((item) => [
+        /^A clear .+ strategy helps learners choose the next task instead of reviewing blindly\.$/i,
+        /^The platform records .+ evidence after each exercise so progress can be verified\.$/i,
+        /^Students remember .+ context better when they meet the expression in a sentence\.$/i,
+        /^A common .+ challenge is knowing the expression but failing to use it under time pressure\.$/i,
+        /^.+ output turns recognition into writing, speaking, or translation ability\.$/i,
         /helps learners annual report/i,
         /helps learners available resources/i,
         /can convenient service/i,
@@ -121,7 +129,37 @@ describe('CET-4 syllabus-aligned question bank coverage', () => {
     expect(duplicateOptionItems).toEqual([]);
     expect(repeatedDistractorGroups).toEqual([]);
     expect(exactWordPhoneticPlaceholders).toEqual([]);
+    expect(readablePhoneticFallbacks).toEqual([]);
     expect(malformedGeneratedExamples).toEqual([]);
+  });
+
+  it('keeps CET-4 output phrases sourced from natural vocabulary collocations', () => {
+    const vocabularyCollocations = new Set(CET4_VOCABULARY_BANK.map((item) => item.collocation));
+    const nonVocabularyPhrases = CET4_OUTPUT_PHRASE_BANK
+      .filter((item) => !vocabularyCollocations.has(item.word))
+      .map((item) => item.word);
+    const artificialPhrases = CET4_OUTPUT_PHRASE_BANK
+      .filter((item) => [
+        'accurate strategy',
+        'accurate accuracy',
+        'accessible awareness',
+        'accessible accuracy',
+      ].includes(item.word))
+      .map((item) => ({ word: item.word, example: item.example }));
+    const oldTemplateExamples = CET4_OUTPUT_PHRASE_BANK
+      .filter((item) => [
+        /^A clear .+ strategy helps learners choose the next task instead of reviewing blindly\.$/i,
+        /^The platform records .+ evidence after each exercise so progress can be verified\.$/i,
+        /^Students remember .+ context better when they meet the expression in a sentence\.$/i,
+        /^A common .+ challenge is knowing the expression but failing to use it under time pressure\.$/i,
+        /^.+ output turns recognition into writing, speaking, or translation ability\.$/i,
+      ].some((pattern) => pattern.test(item.example)))
+      .map((item) => ({ word: item.word, example: item.example }));
+
+    expect(CET4_OUTPUT_PHRASE_BANK.length).toBeGreaterThanOrEqual(1_000);
+    expect(nonVocabularyPhrases).toEqual([]);
+    expect(artificialPhrases).toEqual([]);
+    expect(oldTemplateExamples).toEqual([]);
   });
 
   it('keeps CET-4 vocabulary correct answers distributed across A-D', () => {
