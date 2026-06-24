@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { CET4_VOCABULARY_BANK, VOCABULARY_SESSION_SIZE } from '../../src/data';
 import {
+  CET4_CLOZE_PRACTICE_QUESTIONS,
   CET4_GRAMMAR_PRACTICE_QUESTIONS,
   CET4_LISTENING_PRACTICE_QUESTIONS,
   CET4_MOCK_EXAM,
@@ -139,6 +140,13 @@ async function installServerTtsSuccessMock(page: Page) {
   return {
     requestCount: () => requestCount,
   };
+}
+
+async function submitVisibleChoiceQuestionByOptionText(page: Page, optionText: string) {
+  await page.locator('button').filter({ hasText: optionText }).first().click();
+  await expect(page.getByTestId('reading-submit')).toBeEnabled();
+  await page.getByTestId('reading-submit').click();
+  await expect(page.getByTestId('reading-post-answer-support')).toBeVisible();
 }
 
 async function installSpeechSynthesisMock(page: Page) {
@@ -790,6 +798,33 @@ test('practice question status numbers open the selected module question', async
   await page.getByTestId('practice-module-select-writing').click();
   await page.getByTestId('practice-question-status-writing-2').click();
   await expect(page.getByText(CET4_WRITING_PROMPT_BANK[1].title, { exact: true })).toBeVisible();
+});
+
+test('grammar and cloze specialty questions submit and mark answered immediately', async ({ page }) => {
+  await installSpeechSynthesisMock(page);
+  await registerAndEnterApp(page, 'mvp-grammar-cloze-submit');
+  await resetLocalLearningData(page);
+  await page.reload();
+
+  await page.locator('aside button').nth(1).click();
+
+  await page.getByTestId('practice-module-select-grammar').click();
+  await page.getByTestId('practice-question-status-grammar-1').click();
+  await expect(page.getByText(CET4_GRAMMAR_PRACTICE_QUESTIONS[0].prompt)).toBeVisible();
+  await submitVisibleChoiceQuestionByOptionText(page, CET4_GRAMMAR_PRACTICE_QUESTIONS[0].options.A);
+  await page.getByTestId('reading-back-to-practice').click();
+  await page.getByTestId('practice-module-select-grammar').click();
+  await page.getByTestId('practice-question-filter-grammar-answered').click();
+  await expect(page.getByTestId('practice-question-status-grammar-1')).toBeVisible();
+
+  await page.getByTestId('practice-module-select-cloze').click();
+  await page.getByTestId('practice-question-status-cloze-1').click();
+  await expect(page.getByText(CET4_CLOZE_PRACTICE_QUESTIONS[0].prompt)).toBeVisible();
+  await submitVisibleChoiceQuestionByOptionText(page, CET4_CLOZE_PRACTICE_QUESTIONS[0].options.A);
+  await page.getByTestId('reading-back-to-practice').click();
+  await page.getByTestId('practice-module-select-cloze').click();
+  await page.getByTestId('practice-question-filter-cloze-answered').click();
+  await expect(page.getByTestId('practice-question-status-cloze-1')).toBeVisible();
 });
 
 test('answered question status numbers replay saved answer evidence across modules', async ({ page }) => {

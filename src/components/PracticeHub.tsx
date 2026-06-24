@@ -578,6 +578,7 @@ export default function PracticeHub({
                   onClick={() => {
                     setHasManualSelection(true);
                     setSelectedModuleId(module.id);
+                    setStatusFilter('all');
                   }}
                   aria-pressed={isActive}
                   className="flex flex-1 flex-col text-left focus:outline-none focus:ring-2 focus:ring-[#003178]/20"

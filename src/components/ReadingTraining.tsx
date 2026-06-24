@@ -24,9 +24,11 @@ interface ReadingTrainingProps {
   replayAttempt?: Attempt;
   onBack: () => void;
   onComplete: (score: number, report: PracticeCompletionReport) => void;
+  onAnswerRecorded?: (report: PracticeCompletionReport) => Promise<void> | void;
 }
 
 type ReadingAnswer = ChoicePracticeDraftAnswer;
+type AnswerRecordStatus = 'idle' | 'saving' | 'saved' | 'failed';
 
 const findQuestionIndexById = (passage: Passage, questionId?: string) => {
   if (!questionId) return 0;
@@ -102,15 +104,26 @@ const loadReadingDraftState = (passage: Passage, initialQuestionId?: string, rep
   };
 };
 
-export default function ReadingTraining({ passage, initialQuestionId, replayAttempt, onBack, onComplete }: ReadingTrainingProps) {
+export default function ReadingTraining({
+  passage,
+  initialQuestionId,
+  replayAttempt,
+  onBack,
+  onComplete,
+  onAnswerRecorded,
+}: ReadingTrainingProps) {
   const [initialDraft] = useState(() => loadReadingDraftState(passage, initialQuestionId, replayAttempt));
   const draftKey = practiceDraftKeys.reading(passage.id);
   const isFirstQuestionSync = useRef(true);
+  const recordWriteRef = useRef<Promise<void>>(Promise.resolve());
   const [currentIdx, setCurrentIdx] = useState(initialDraft.currentIdx);
   const [selectedOpt, setSelectedOpt] = useState<ChoiceOption | null>(initialDraft.selectedOpt);
   const [confidence, setConfidence] = useState<ChoiceConfidence | null>(initialDraft.confidence);
   const [isSubmitted, setIsSubmitted] = useState(initialDraft.isSubmitted);
   const [userAnswers, setUserAnswers] = useState<ReadingAnswer[]>(initialDraft.answers);
+  const [recordStatus, setRecordStatus] = useState<AnswerRecordStatus>(
+    initialDraft.isSubmitted && onAnswerRecorded ? 'saved' : 'idle',
+  );
   const [startedAt] = useState(() => initialDraft.startedAt);
 
   const currentQuestion: Question = passage.questions[currentIdx];
@@ -125,6 +138,7 @@ export default function ReadingTraining({ passage, initialQuestionId, replayAtte
   const practiceModuleId = passage.moduleId ?? 'reading';
   const practiceQuestionTypeId = currentQuestion.questionTypeId ?? passage.questions[0]?.questionTypeId ?? 'careful-reading';
   const practiceSkillArea: SkillArea = practiceModuleId === 'grammar' ? 'grammar' : 'reading';
+  const readingSessionId = `session-${practiceModuleId}-${passage.id}-${startedAt.replace(/[^A-Za-z0-9]/g, '-')}`;
   const chineseSupport = getReadingChineseSupport(passage.id, currentQuestion);
   const trainingTitle = practiceModuleId === 'grammar'
     ? '语法与完形填空训练舱'
@@ -162,6 +176,90 @@ export default function ReadingTraining({ passage, initialQuestionId, replayAtte
     });
   };
 
+  const buildReportQuestion = (question: Question) => ({
+    id: question.id,
+    question: question.question,
+    options: question.options,
+    optionTranslations: getReadingChineseSupport(passage.id, question)?.options,
+    correctAnswer: question.correctAnswer,
+    type: question.type,
+    moduleId: question.moduleId,
+    questionTypeId: question.questionTypeId ?? practiceQuestionTypeId,
+    correctSentence: question.correctSentence,
+    correctSentenceTranslation: getQuestionSentenceSupport({
+      sentence: question.correctSentence,
+      explanation: question.explanation,
+    })?.chineseMeaning,
+    questionTranslation: getReadingChineseSupport(passage.id, question)?.question,
+    explanation: question.explanation,
+  });
+
+  const buildReadingReport = (
+    targetAnswers: ReadingAnswer[],
+    options: {
+      sessionStatus: 'active' | 'completed';
+      includeEvidence: boolean;
+      answeredOnly: boolean;
+    },
+  ) => {
+    const answeredPairs = options.answeredOnly
+      ? targetAnswers.flatMap((answer, index) => {
+        if (!answer) return [];
+        const question = answer.questionId
+          ? passage.questions.find((entry) => String(entry.id) === answer.questionId)
+          : passage.questions[index];
+        return question ? [{ question, answer }] : [];
+      })
+      : [];
+    const selectedPairs = options.answeredOnly
+      ? answeredPairs
+      : passage.questions.map((question, index) => ({ question, answer: targetAnswers[index] }));
+
+    return buildChoicePracticeReport({
+      examId: passage.examId ?? 'cet4',
+      sessionId: readingSessionId,
+      sessionStatus: options.sessionStatus,
+      moduleId: practiceModuleId,
+      questionTypeId: practiceQuestionTypeId,
+      modeId: `${practiceQuestionTypeId}-practice`,
+      skillArea: practiceSkillArea,
+      plannedMinutes: practiceModuleId === 'grammar' ? 12 : 18,
+      startedAt,
+      questions: selectedPairs.map((pair) => buildReportQuestion(pair.question)),
+      answers: selectedPairs.map((pair) => ({
+        selected: pair.answer?.selected,
+        correct: Boolean(pair.answer?.correct),
+        confidence: pair.answer?.confidence,
+      })),
+      attemptIdForQuestion: (question) => `attempt-${readingSessionId}-${question.id}`,
+      includeReviewItems: options.includeEvidence,
+      includeSkillProfiles: options.includeEvidence,
+    });
+  };
+
+  const queueReadingAnswerRecord = (nextAnswers: ReadingAnswer[]) => {
+    if (!onAnswerRecorded || nextAnswers.every((answer) => !answer)) return;
+    const report = buildReadingReport(nextAnswers, {
+      sessionStatus: 'active',
+      includeEvidence: false,
+      answeredOnly: true,
+    });
+
+    setRecordStatus('saving');
+    const write = recordWriteRef.current
+      .catch(() => undefined)
+      .then(() => Promise.resolve(onAnswerRecorded(report)))
+      .then(() => {
+        setRecordStatus('saved');
+      })
+      .catch((error) => {
+        console.error('Failed to persist reading answer:', error);
+        setRecordStatus('failed');
+      });
+
+    recordWriteRef.current = write.catch(() => undefined);
+  };
+
   // Reset states on question change
   useEffect(() => {
     if (isFirstQuestionSync.current) {
@@ -171,13 +269,21 @@ export default function ReadingTraining({ passage, initialQuestionId, replayAtte
       setSelectedOpt(savedAnswer?.selected ?? null);
       setConfidence(savedAnswer?.confidence ?? null);
       setIsSubmitted(Boolean(savedAnswer));
+      setRecordStatus(savedAnswer && onAnswerRecorded ? 'saved' : 'idle');
     }
   }, [currentIdx]);
 
-  const handleOptionClick = (opt: 'A' | 'B' | 'C' | 'D') => {
+  useEffect(() => {
+    if (!initialDraft.restored || initialDraft.replayed || userAnswers.every((answer) => !answer)) return;
+    queueReadingAnswerRecord(userAnswers);
+  }, []);
+
+  const handleOptionClick = (opt: ChoiceOption) => {
     if (isSubmitted) return;
+    const nextConfidence = confidence ?? 'not_sure';
     setSelectedOpt(opt);
-    persistDraft({ selectedOpt: opt, isSubmitted: false });
+    if (!confidence) setConfidence(nextConfidence);
+    persistDraft({ selectedOpt: opt, confidence: nextConfidence, isSubmitted: false });
   };
 
   const handleConfidenceChange = (nextConfidence: ChoiceConfidence) => {
@@ -187,7 +293,9 @@ export default function ReadingTraining({ passage, initialQuestionId, replayAtte
   };
 
   const handleSubmit = () => {
-    if (!selectedOpt || !confidence) return;
+    if (!selectedOpt) return;
+    const finalConfidence = confidence ?? 'not_sure';
+    if (!confidence) setConfidence(finalConfidence);
 
     const correct = selectedOpt === currentQuestion.correctAnswer;
     setIsSubmitted(true);
@@ -197,7 +305,7 @@ export default function ReadingTraining({ passage, initialQuestionId, replayAtte
     newAnswers[currentIdx] = {
       selected: selectedOpt,
       correct,
-      confidence,
+      confidence: finalConfidence,
       questionId: String(currentQuestion.id),
       moduleId: currentQuestion.moduleId ?? passage.moduleId ?? 'reading',
       questionTypeId: currentQuestion.questionTypeId ?? passage.questions[0]?.questionTypeId ?? 'careful-reading',
@@ -205,10 +313,11 @@ export default function ReadingTraining({ passage, initialQuestionId, replayAtte
     setUserAnswers(newAnswers);
     persistDraft({
       selectedOpt,
-      confidence,
+      confidence: finalConfidence,
       isSubmitted: true,
       answers: newAnswers,
     });
+    queueReadingAnswerRecord(newAnswers);
   };
 
   const handleNext = () => {
@@ -219,6 +328,7 @@ export default function ReadingTraining({ passage, initialQuestionId, replayAtte
       setSelectedOpt(savedAnswer?.selected ?? null);
       setConfidence(savedAnswer?.confidence ?? null);
       setIsSubmitted(Boolean(savedAnswer));
+      setRecordStatus(savedAnswer && onAnswerRecorded ? 'saved' : 'idle');
       persistDraft({
         currentIdx: nextIdx,
         selectedOpt: savedAnswer?.selected ?? null,
@@ -230,38 +340,14 @@ export default function ReadingTraining({ passage, initialQuestionId, replayAtte
       // Calculate overall score
       const correctCount = userAnswers.filter(ans => ans?.correct).length;
       const finalScore = Math.round((correctCount / passage.questions.length) * 100);
-      const report = buildChoicePracticeReport({
-        examId: passage.examId ?? 'cet4',
-        moduleId: practiceModuleId,
-        questionTypeId: practiceQuestionTypeId,
-        modeId: `${practiceQuestionTypeId}-practice`,
-        skillArea: practiceSkillArea,
-        plannedMinutes: practiceModuleId === 'grammar' ? 12 : 18,
-        startedAt,
-        questions: passage.questions.map((question) => ({
-          id: question.id,
-          question: question.question,
-          options: question.options,
-          optionTranslations: getReadingChineseSupport(passage.id, question)?.options,
-          correctAnswer: question.correctAnswer,
-          type: question.type,
-          moduleId: question.moduleId,
-          questionTypeId: question.questionTypeId ?? practiceQuestionTypeId,
-          correctSentence: question.correctSentence,
-          correctSentenceTranslation: getQuestionSentenceSupport({
-            sentence: question.correctSentence,
-            explanation: question.explanation,
-          })?.chineseMeaning,
-          questionTranslation: getReadingChineseSupport(passage.id, question)?.question,
-          explanation: question.explanation,
-        })),
-        answers: userAnswers.map((answer) => ({
-          selected: answer?.selected,
-          correct: Boolean(answer?.correct),
-          confidence: answer?.confidence,
-        })),
+      const report = buildReadingReport(userAnswers, {
+        sessionStatus: 'completed',
+        includeEvidence: true,
+        answeredOnly: false,
       });
-      onComplete(finalScore, report);
+      void recordWriteRef.current.finally(() => {
+        onComplete(finalScore, report);
+      });
     }
   };
 
@@ -450,13 +536,6 @@ export default function ReadingTraining({ passage, initialQuestionId, replayAtte
         </div>
       </div>
 
-      <PracticeMethodGuide
-        moduleId={methodGuideModuleId}
-        compact
-        activeTopicId={activeMethodTopicId}
-        className="mx-4 mt-4 mb-4 sm:mx-6 lg:mx-8"
-      />
-
       {/* Split Screens Panel */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
         
@@ -509,6 +588,11 @@ export default function ReadingTraining({ passage, initialQuestionId, replayAtte
         {/* Right Side: Questions & Explanations Panel */}
         <div className="w-full lg:w-1/2 p-4 sm:p-6 lg:p-8 overflow-y-auto flex flex-col justify-between bg-white">
           <div className="space-y-6">
+            <PracticeMethodGuide
+              moduleId={methodGuideModuleId}
+              compact
+              activeTopicId={activeMethodTopicId}
+            />
             
             {/* Steps & Topic */}
             <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
@@ -573,12 +657,12 @@ export default function ReadingTraining({ passage, initialQuestionId, replayAtte
                     <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center font-bold text-xs shrink-0 ${indicatorStyle}`}>
                       {opt}
                     </div>
-                    <div className={`min-w-0 text-sm font-bold ${isCurrentSelected && !isSubmitted ? 'text-white' : 'text-[#071e27]'}`}>
+                    <div className="min-w-0 text-sm font-bold text-[#071e27]">
                       <span className="block">{currentQuestion.options[opt]}</span>
                       {isSubmitted && chineseSupport?.options?.[opt] ? (
                         <span
                           data-testid={`reading-option-translation-${opt}`}
-                          className={`mt-1 block text-xs font-semibold leading-5 ${isCurrentSelected && !isSubmitted ? 'text-white/80' : 'text-slate-500'}`}
+                          className="mt-1 block text-xs font-semibold leading-5 text-slate-500"
                         >
                           {chineseSupport.options[opt]}
                         </span>
@@ -627,6 +711,22 @@ export default function ReadingTraining({ passage, initialQuestionId, replayAtte
             {/* AI Diagnosis and Explanations Area (After Submit) */}
             {isSubmitted && currentFeedback && (
               <div data-testid="reading-post-answer-support" className="space-y-4 animate-fadeIn">
+                {recordStatus !== 'idle' ? (
+                  <div
+                    data-testid="reading-record-status"
+                    className={`rounded-2xl border px-3 py-2 text-xs font-black ${
+                      recordStatus === 'failed'
+                        ? 'border-rose-200 bg-rose-50 text-rose-700'
+                        : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                    }`}
+                  >
+                    {recordStatus === 'saving'
+                      ? '正在写入作答记录'
+                      : recordStatus === 'failed'
+                        ? '作答记录写入失败，请稍后重试'
+                        : '本题已写入作答记录'}
+                  </div>
+                ) : null}
                 
                 {/* AI Behavioral Diagnostic Panel */}
                 <div className="bg-[#f3faff] border border-[#cfe6f2] rounded-2xl p-4">
@@ -679,14 +779,14 @@ export default function ReadingTraining({ passage, initialQuestionId, replayAtte
           {/* Bottom Action Footer */}
           <div className="pt-6 border-t border-[#cfe6f2] mt-8 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center bg-white">
             <div className="text-xs text-gray-400">
-              {isSubmitted ? '仔细核对线索，点按右侧按键递进。' : '请勾选选项以及把握度后，提交诊断。'}
+              {isSubmitted ? '仔细核对线索，点按右侧按键递进。' : '选中答案即可提交，把握度可按需要调整。'}
             </div>
 
             {!isSubmitted ? (
               <button
                 onClick={handleSubmit}
                 data-testid="reading-submit"
-                disabled={!selectedOpt || !confidence}
+                disabled={!selectedOpt}
                 className="ui-button ui-button-primary ui-button-full sm:w-auto"
               >
                 提交此题并查看错因诊断

@@ -679,6 +679,17 @@ function StudyApp() {
     }
   };
 
+  const handleRecordChoiceAnswer = async (report: PracticeCompletionReport) => {
+    try {
+      await persistCompletionReport(report);
+    } catch (error) {
+      console.error('Failed to persist choice answer:', error);
+      trackTelemetry('client_error', { area: 'choice_answer_persist' });
+      handleTriggerModal('作答保存失败', '本题作答没有成功写入记录，请稍后重试。');
+      throw error;
+    }
+  };
+
   const handleCompleteMockExam = (score: number, report: PracticeCompletionReport) => {
     setActiveTab('progress');
     trackTelemetry('practice_completed', {
@@ -931,6 +942,7 @@ function StudyApp() {
             passage={customPassage}
             onBack={handleBackFromPractice}
             onComplete={handleCompletePractice}
+            onAnswerRecorded={handleRecordChoiceAnswer}
           />
         </Suspense>
       ) : subjectivePracticeMode ? (
