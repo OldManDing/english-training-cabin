@@ -11,7 +11,10 @@ import {
   CET4_TRANSLATION_PROMPT_BANK,
   CET4_WRITING_PROMPT_BANK,
 } from '../../src/questionBank';
+import { orderGrammarStructureQuestions } from '../../src/domain/practice/grammarStructureGuides';
 import { registerAndEnterApp, registerApiAccount } from './helpers/auth';
+
+const ORDERED_GRAMMAR_STRUCTURE_QUESTIONS = orderGrammarStructureQuestions(CET4_GRAMMAR_PRACTICE_QUESTIONS);
 
 const universalDiagnosticTextAnswer =
   'With the development of online learning, more college students can arrange their study time flexibly. To reduce exam pressure, students should divide review tasks into several small steps. In my opinion, regular review and AI tools are useful because students can get feedback. For example, I often make grammar mistakes in English practice, so next time I will correct them carefully and explain my answer more naturally.';
@@ -790,7 +793,7 @@ test('practice question status numbers open the selected module question', async
   await expect(page.getByTestId('practice-question-status-group-grammar-tense')).toContainText('时态题');
   await expect(page.getByTestId('practice-question-status-group-grammar-voice')).toContainText('语态题');
   await page.getByTestId('practice-question-status-grammar-2').click();
-  await expect(page.getByText(CET4_GRAMMAR_PRACTICE_QUESTIONS[1].prompt)).toBeVisible();
+  await expect(page.getByText(ORDERED_GRAMMAR_STRUCTURE_QUESTIONS[1].prompt)).toBeVisible();
   await expect(page.getByText('核心考向：时态|现在完成时')).toBeVisible();
   await expect(page.getByTestId('practice-method-guide-topic-grammar-tense')).toContainText('当前考点');
   await page.getByTestId('reading-back-to-practice').click();
@@ -810,8 +813,8 @@ test('grammar and cloze specialty questions submit and mark answered immediately
 
   await page.getByTestId('practice-module-select-grammar').click();
   await page.getByTestId('practice-question-status-grammar-1').click();
-  await expect(page.getByText(CET4_GRAMMAR_PRACTICE_QUESTIONS[0].prompt)).toBeVisible();
-  await submitVisibleChoiceQuestionByOptionText(page, CET4_GRAMMAR_PRACTICE_QUESTIONS[0].options.A);
+  await expect(page.getByText(ORDERED_GRAMMAR_STRUCTURE_QUESTIONS[0].prompt)).toBeVisible();
+  await submitVisibleChoiceQuestionByOptionText(page, ORDERED_GRAMMAR_STRUCTURE_QUESTIONS[0].options.A);
   await page.getByTestId('reading-back-to-practice').click();
   await page.getByTestId('practice-module-select-grammar').click();
   await page.getByTestId('practice-question-filter-grammar-answered').click();
@@ -825,6 +828,29 @@ test('grammar and cloze specialty questions submit and mark answered immediately
   await page.getByTestId('practice-module-select-cloze').click();
   await page.getByTestId('practice-question-filter-cloze-answered').click();
   await expect(page.getByTestId('practice-question-status-cloze-1')).toBeVisible();
+});
+
+test('grammar status number jump opens the selected unanswered question after a submitted draft', async ({ page }) => {
+  await installSpeechSynthesisMock(page);
+  await registerAndEnterApp(page, 'mvp-grammar-number-jump-after-submit');
+  await resetLocalLearningData(page);
+  await page.reload();
+
+  await page.getByRole('button', { name: '专项练习' }).click();
+  await page.getByTestId('practice-module-select-grammar').click();
+  await page.getByTestId('practice-question-status-grammar-1').click();
+  await expect(page.getByText(ORDERED_GRAMMAR_STRUCTURE_QUESTIONS[0].prompt)).toBeVisible();
+  await submitVisibleChoiceQuestionByOptionText(page, ORDERED_GRAMMAR_STRUCTURE_QUESTIONS[0].options.A);
+  await expect(page.getByTestId('reading-next')).toBeVisible();
+
+  await page.getByTestId('reading-back-to-practice').click();
+  await page.getByTestId('practice-module-select-grammar').click();
+  await page.getByTestId('practice-question-status-grammar-2').click();
+
+  await expect(page.getByText(ORDERED_GRAMMAR_STRUCTURE_QUESTIONS[1].prompt)).toBeVisible();
+  await expect(page.getByTestId('reading-submit')).toBeVisible();
+  await expect(page.getByTestId('reading-submit')).toBeDisabled();
+  await expect(page.getByTestId('reading-next')).toHaveCount(0);
 });
 
 test('answered question status numbers replay saved answer evidence across modules', async ({ page }) => {

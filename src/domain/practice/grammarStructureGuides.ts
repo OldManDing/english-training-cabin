@@ -170,3 +170,22 @@ export function getGrammarStructureTopicByLabel(label: string | undefined): Gram
     topic.label === label || topic.shortLabel === label
   )) ?? DEFAULT_TOPIC;
 }
+
+export function compareGrammarStructureFocus(
+  leftFocus: string | undefined,
+  rightFocus: string | undefined,
+): number {
+  const topicOrder = new Map(GRAMMAR_STRUCTURE_TOPIC_GUIDES.map((topic, index) => [topic.id, index]));
+  const leftTopic = getGrammarStructureTopicByFocus(leftFocus);
+  const rightTopic = getGrammarStructureTopicByFocus(rightFocus);
+
+  return (topicOrder.get(leftTopic.id) ?? 999) - (topicOrder.get(rightTopic.id) ?? 999);
+}
+
+export function orderGrammarStructureQuestions<T extends { trapType?: string; id?: string | number }>(
+  questions: readonly T[],
+): T[] {
+  return [...questions].sort((left, right) => (
+    compareGrammarStructureFocus(left.trapType, right.trapType)
+  ));
+}

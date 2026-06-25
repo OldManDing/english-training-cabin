@@ -90,15 +90,28 @@ const loadReadingDraftState = (passage: Passage, initialQuestionId?: string, rep
     ? findQuestionIndexById(passage, initialQuestionId)
     : clampDraftIndex(draft.currentIdx, passage.questions.length);
   const savedAnswer = answers[currentIdx];
-  const isSubmitted = Boolean(draft.isSubmitted || savedAnswer);
+  const isExplicitQuestionJump = Boolean(initialQuestionId);
+  const isSubmitted = isExplicitQuestionJump
+    ? Boolean(savedAnswer)
+    : Boolean(draft.isSubmitted || savedAnswer);
+  const selectedAnswer = isExplicitQuestionJump
+    ? savedAnswer?.selected ?? null
+    : isSubmitted
+      ? savedAnswer?.selected ?? draft.selectedOpt ?? null
+      : draft.selectedOpt ?? null;
+  const selectedConfidence = isExplicitQuestionJump
+    ? savedAnswer?.confidence ?? null
+    : isSubmitted
+      ? savedAnswer?.confidence ?? draft.confidence ?? null
+      : draft.confidence ?? null;
 
   return {
     restored: !initialQuestionId,
     replayed: false,
     startedAt: draft.startedAt ?? fallback.startedAt,
     currentIdx,
-    selectedOpt: isSubmitted ? savedAnswer?.selected ?? draft.selectedOpt ?? null : draft.selectedOpt ?? null,
-    confidence: isSubmitted ? savedAnswer?.confidence ?? draft.confidence ?? null : draft.confidence ?? null,
+    selectedOpt: selectedAnswer,
+    confidence: selectedConfidence,
     isSubmitted,
     answers,
   };

@@ -3,6 +3,7 @@ import { CET4_GRAMMAR_PRACTICE_QUESTIONS } from '../../src/questionBank';
 import {
   getGrammarStructureTopicByFocus,
   GRAMMAR_STRUCTURE_TOPIC_GUIDES,
+  orderGrammarStructureQuestions,
 } from '../../src/domain/practice/grammarStructureGuides';
 
 describe('grammar structure topic guides', () => {
@@ -38,5 +39,36 @@ describe('grammar structure topic guides', () => {
       expect(guide.methodSteps).toHaveLength(3);
       expect(guide.checkpoint).toMatch(/\S/);
     }
+  });
+
+  it('orders grammar practice into consecutive topic groups for focused drilling', () => {
+    const orderedQuestions = orderGrammarStructureQuestions(CET4_GRAMMAR_PRACTICE_QUESTIONS);
+    const topicSequence = orderedQuestions.map((question) => getGrammarStructureTopicByFocus(question.trapType).id);
+    const firstTopic = topicSequence[0];
+    const firstTopicCount = topicSequence.filter((topic) => topic === firstTopic).length;
+    const topicTransitions = topicSequence.reduce<string[]>((transitions, topic) => {
+      if (transitions.at(-1) !== topic) transitions.push(topic);
+      return transitions;
+    }, []);
+
+    for (const topicId of new Set(topicSequence)) {
+      const indexes = topicSequence
+        .map((topic, index) => (topic === topicId ? index : -1))
+        .filter((index) => index >= 0);
+      expect(indexes.at(-1)! - indexes[0] + 1).toBe(indexes.length);
+    }
+
+    expect(firstTopic).toBe('tense');
+    expect(firstTopicCount).toBeGreaterThan(8);
+    expect(topicTransitions).toEqual([
+      'tense',
+      'voice',
+      'nonfinite',
+      'clauses',
+      'agreement',
+      'fixed',
+      'comparison',
+      'inversion',
+    ]);
   });
 });

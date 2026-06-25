@@ -6,6 +6,7 @@ import {
   CET4_READING_BANK,
 } from '../../questionBank';
 import { Attempt, ChoiceOption, Passage } from '../../types';
+import { orderGrammarStructureQuestions } from './grammarStructureGuides';
 import {
   type ChoicePracticeDraftAnswer,
   loadPracticeDraft,
@@ -24,6 +25,7 @@ import {
 
 const GRAMMAR_DRAFT_PASSAGE_ID = 'cet4-grammar-structure-practice';
 const CLOZE_DRAFT_PASSAGE_ID = 'cet4-cloze-context-practice';
+const ORDERED_CET4_GRAMMAR_PRACTICE_QUESTIONS = orderGrammarStructureQuestions(CET4_GRAMMAR_PRACTICE_QUESTIONS);
 const LONG_CONVERSATION_QUESTIONS = CET4_LISTENING_PRACTICE_QUESTIONS
   .filter((question) => question.questionTypeId === 'long-conversation');
 const LISTENING_DRAFT_QUESTION_IDS = new Set(
@@ -187,7 +189,7 @@ export function buildDraftPracticeAttempts(params: {
     const draftStartAttempts = attemptsBeforeDraftStarted(persistedAttempts, grammarDraft);
     appendDraftAttemptsFromAnswers(draftAttempts, {
       answers: Array.isArray(grammarDraft.answers) ? grammarDraft.answers : [],
-      questions: filterDraftQuestions(CET4_GRAMMAR_PRACTICE_QUESTIONS, 'grammar', draftStartAttempts),
+      questions: filterDraftQuestions(ORDERED_CET4_GRAMMAR_PRACTICE_QUESTIONS, 'grammar', draftStartAttempts),
       fallbackModuleId: 'grammar',
       fallbackQuestionTypeId: 'grammar-structure',
       createdAt: draftCreatedAt(grammarDraft),

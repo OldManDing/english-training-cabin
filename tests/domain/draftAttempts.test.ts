@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CET4_VOCABULARY_BANK } from '../../src/data';
-import { CET4_READING_BANK } from '../../src/questionBank';
+import { CET4_GRAMMAR_PRACTICE_QUESTIONS, CET4_READING_BANK } from '../../src/questionBank';
 import { buildDraftPracticeAttempts } from '../../src/domain/practice/draftAttempts';
 import { practiceDraftKeys } from '../../src/domain/practice/draftProgress';
+import { orderGrammarStructureQuestions } from '../../src/domain/practice/grammarStructureGuides';
 import type { Attempt } from '../../src/types';
 
 function createLocalStorageMock(): Storage {
@@ -149,5 +150,32 @@ describe('draft practice attempts', () => {
 
     expect(attempts.find((attempt) => attempt.moduleId === 'reading')?.questionId).toBe(String(answeredQuestion.id));
     expect(attempts.find((attempt) => attempt.moduleId === 'reading')?.questionId).not.toBe(String(passage.questions[0].id));
+  });
+
+  it('maps legacy grammar drafts with the same ordered question list used by the status grid', () => {
+    const localStorage = installLocalStorage();
+    const orderedGrammarQuestions = orderGrammarStructureQuestions(CET4_GRAMMAR_PRACTICE_QUESTIONS);
+    const now = '2026-06-14T10:00:00.000Z';
+    localStorage.setItem(practiceDraftKeys.reading('cet4-grammar-structure-practice'), JSON.stringify({
+      version: 1,
+      passageId: 'cet4-grammar-structure-practice',
+      startedAt: now,
+      currentIdx: 0,
+      selectedOpt: 'A',
+      confidence: 'sure',
+      isSubmitted: true,
+      answers: [{
+        selected: 'A',
+        correct: true,
+        confidence: 'sure',
+      }],
+      updatedAt: now,
+    }));
+
+    const attempts = buildDraftPracticeAttempts();
+    const grammarAttempt = attempts.find((attempt) => attempt.moduleId === 'grammar');
+
+    expect(grammarAttempt?.questionId).toBe(String(orderedGrammarQuestions[0].id));
+    expect(grammarAttempt?.questionId).not.toBe(String(orderedGrammarQuestions[1].id));
   });
 });

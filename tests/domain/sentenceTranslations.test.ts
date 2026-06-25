@@ -273,6 +273,70 @@ describe('practice sentence and vocabulary Chinese support', () => {
     expect(invalidItems).toEqual([]);
   });
 
+  it('keeps generated vocabulary examples varied and grounded in concrete situations', () => {
+    const generatedItems = CET4_VOCABULARY_BANK.slice(100);
+    const normalizedFrames = generatedItems.map((item) =>
+      item.example
+        .replace(/\b(?:a|an|the)\s+[a-z]+(?:\s+[a-z]+){0,3}\b/giu, '[phrase]')
+        .replace(/\b(?:to|would|could|must)\s+[a-z]+(?:\s+[a-z]+){0,4}\b/giu, '[action]')
+        .replace(/\s+/g, ' ')
+        .trim(),
+    );
+    const frameCounts = normalizedFrames.reduce<Map<string, number>>((counts, frame) => {
+      counts.set(frame, (counts.get(frame) ?? 0) + 1);
+      return counts;
+    }, new Map());
+    const repeatedFrames = [...frameCounts.entries()].filter(([, count]) => count > 60);
+    const weakExamples = generatedItems.filter((item) => [
+      /learners can choose a better answer/i,
+      /where .+ appears in the sentence/i,
+      /gives learners a concrete way/i,
+      /asks students to use/i,
+      /The reading passage mentioned/i,
+      /The example sentence placed/i,
+      /In the practice task/i,
+      /A teacher used a short example/i,
+      /Students used the paragraph/i,
+      /The report explains how people can/i,
+      /The notice showed when people should/i,
+      /The activity gave students a chance/i,
+      /with a clear purpose/i,
+      /in a realistic school situation/i,
+      /in a realistic setting/i,
+      /used .+ as supporting evidence/i,
+      /needed to .* without delaying other work/i,
+      /quickly and still check the result/i,
+      /\b(?:a|an) (?:predict|publish|purchase|accelerate|address|calculate|circle|copy|repair|reserve|strengthen|suppose)\b/i,
+    ].some((pattern) => pattern.test(item.example)));
+    const invalidTranslations = generatedItems.filter((item) => {
+      const chineseMeaning = getVocabularySentenceSupport(item).chineseMeaning;
+      const allowed = chineseMeaning.replace(/\bAI\b/g, '');
+      return /暂缺|请以英文原句/u.test(chineseMeaning) || /[A-Za-z]{2,}/u.test(allowed);
+    });
+
+    expect(repeatedFrames).toEqual([]);
+    expect(weakExamples).toEqual([]);
+    expect(invalidTranslations).toEqual([]);
+  });
+
+  it('keeps representative generated vocabulary examples natural and accurately translated', () => {
+    const expectedExamples = [
+      ['hesitate', 'Students should not hesitate to ask when they need help.', '学生需要帮助时不应犹豫提问。'],
+      ['predict', 'Survey data can help researchers predict a trend.', '调查数据可以帮助研究者预测趋势。'],
+      ['plant', 'Volunteers plant trees near the school every spring.', '志愿者每年春天在学校附近植树。'],
+      ['strengthen', 'Spaced review can strengthen memory over several weeks.', '间隔复习可以在几周内强化记忆。'],
+      ['perfect', 'A perfect score is possible only with careful preparation.', '只有认真准备，才可能取得满分。'],
+      ['central', 'The teacher connected a central idea with a problem students had seen before.', '老师把中心思想和学生以前见过的问题联系起来。'],
+    ] as const;
+
+    for (const [word, example, chineseMeaning] of expectedExamples) {
+      const item = CET4_VOCABULARY_BANK.find((entry) => entry.word === word);
+      expect(item).toBeTruthy();
+      expect(item!.example).toBe(example);
+      expect(getVocabularySentenceSupport(item!).chineseMeaning).toBe(chineseMeaning);
+    }
+  });
+
   it('keeps output phrases natural, translated, and free of artificial templates', () => {
     const vocabularyCollocations = new Set(CET4_VOCABULARY_BANK.map((item) => item.collocation));
     const forbiddenExamples = [

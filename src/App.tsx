@@ -15,6 +15,7 @@ import {
   CET4_READING_BANK,
   type Cet4MockChoiceQuestion,
 } from './questionBank';
+import { orderGrammarStructureQuestions } from './domain/practice/grammarStructureGuides';
 import { Sparkles, X } from 'lucide-react';
 import {
   completeReviewItem,
@@ -174,11 +175,13 @@ function buildChoiceQuestionPassage(params: {
   };
 }
 
+const ORDERED_CET4_GRAMMAR_PRACTICE_QUESTIONS = orderGrammarStructureQuestions(CET4_GRAMMAR_PRACTICE_QUESTIONS);
+
 const CET4_GRAMMAR_STRUCTURE_PASSAGE = buildChoiceQuestionPassage({
   id: 'cet4-grammar-structure-practice',
   title: '语法结构与固定搭配专项',
   content: '本组题用于训练时态、语态、非谓语、从句、连接词和固定搭配。诊断显示语法薄弱时，系统会优先推荐这一组。',
-  questions: CET4_GRAMMAR_PRACTICE_QUESTIONS,
+  questions: ORDERED_CET4_GRAMMAR_PRACTICE_QUESTIONS,
   questionLimit: 8,
 });
 
@@ -192,7 +195,7 @@ const CET4_CLOZE_CONTEXT_PASSAGE = buildChoiceQuestionPassage({
 
 const CET4_GRAMMAR_STRUCTURE_FULL_PASSAGE = buildChoiceQuestionPassage({
   ...CET4_GRAMMAR_STRUCTURE_PASSAGE,
-  questions: CET4_GRAMMAR_PRACTICE_QUESTIONS,
+  questions: ORDERED_CET4_GRAMMAR_PRACTICE_QUESTIONS,
 });
 
 const CET4_CLOZE_CONTEXT_FULL_PASSAGE = buildChoiceQuestionPassage({

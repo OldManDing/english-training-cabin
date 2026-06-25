@@ -41,6 +41,7 @@ import {
   GRAMMAR_STRUCTURE_TOPIC_GUIDES,
   getGrammarStructureTopicByFocus,
   getGrammarStructureTopicByLabel,
+  orderGrammarStructureQuestions,
 } from '../domain/practice/grammarStructureGuides';
 import PracticeMethodGuide from './PracticeMethodGuide';
 
@@ -145,7 +146,7 @@ function buildPracticeQuestionBank(): Record<PracticeModuleId, PracticeQuestionD
       questionTypeId: question.questionTypeId,
       label: question.title,
     })),
-    grammar: CET4_GRAMMAR_PRACTICE_QUESTIONS.map((question) => {
+    grammar: orderGrammarStructureQuestions(CET4_GRAMMAR_PRACTICE_QUESTIONS).map((question) => {
       const topic = getGrammarStructureTopicByFocus(question.trapType);
       return {
         id: question.id,
