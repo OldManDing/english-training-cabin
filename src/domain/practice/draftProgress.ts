@@ -15,6 +15,8 @@ export interface ChoicePracticeDraftAnswer {
   questionTypeId?: string;
 }
 
+export type ChoicePracticeDraftStoredAnswer = ChoicePracticeDraftAnswer | null;
+
 export interface ReadingPracticeDraft {
   version: 1;
   passageId: string;
@@ -23,7 +25,7 @@ export interface ReadingPracticeDraft {
   selectedOpt: ChoiceOption | null;
   confidence: ChoiceConfidence | null;
   isSubmitted: boolean;
-  answers: ChoicePracticeDraftAnswer[];
+  answers: ChoicePracticeDraftStoredAnswer[];
   updatedAt: string;
 }
 

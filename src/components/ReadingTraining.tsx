@@ -27,14 +27,46 @@ interface ReadingTrainingProps {
   onAnswerRecorded?: (report: PracticeCompletionReport) => Promise<void> | void;
 }
 
-type ReadingAnswer = ChoicePracticeDraftAnswer;
+type ReadingAnswer = ChoicePracticeDraftAnswer | undefined;
 type AnswerRecordStatus = 'idle' | 'saving' | 'saved' | 'failed';
+const CHOICE_OPTIONS: ChoiceOption[] = ['A', 'B', 'C', 'D'];
+const CHOICE_CONFIDENCES: ChoiceConfidence[] = ['sure', 'not_sure', 'guess'];
 
 const findQuestionIndexById = (passage: Passage, questionId?: string) => {
   if (!questionId) return 0;
   const targetIndex = passage.questions.findIndex((question) => String(question.id) === questionId);
   return targetIndex >= 0 ? targetIndex : 0;
 };
+
+const getQuestionMatchedAnswer = (
+  answers: ReadingAnswer[],
+  index: number,
+  question: Question | undefined,
+  requireQuestionIdMatch: boolean,
+) => {
+  const answer = answers[index];
+  if (!answer) return undefined;
+  if (!requireQuestionIdMatch || !question) return answer;
+  return answer.questionId && answer.questionId === String(question.id) ? answer : undefined;
+};
+
+const isChoicePracticeDraftAnswer = (answer: unknown): answer is ChoicePracticeDraftAnswer => {
+  if (!answer || typeof answer !== 'object') return false;
+  const candidate = answer as Partial<ChoicePracticeDraftAnswer>;
+  return (
+    CHOICE_OPTIONS.includes(candidate.selected as ChoiceOption)
+    && typeof candidate.correct === 'boolean'
+    && CHOICE_CONFIDENCES.includes(candidate.confidence as ChoiceConfidence)
+  );
+};
+
+const normalizeReadingAnswers = (answers: unknown): ReadingAnswer[] => {
+  if (!Array.isArray(answers)) return [];
+  return answers.map((answer) => (isChoicePracticeDraftAnswer(answer) ? answer : undefined));
+};
+
+const serializeReadingAnswers = (answers: ReadingAnswer[]) =>
+  Array.from(answers, (answer) => answer ?? null);
 
 const createEmptyReadingDraftState = (passage: Passage, initialQuestionId?: string) => ({
   restored: false,
@@ -85,12 +117,13 @@ const loadReadingDraftState = (passage: Passage, initialQuestionId?: string, rep
     return fallback;
   }
 
-  const answers = Array.isArray(draft.answers) ? draft.answers : [];
+  const answers = normalizeReadingAnswers(draft.answers);
   const currentIdx = initialQuestionId
     ? findQuestionIndexById(passage, initialQuestionId)
     : clampDraftIndex(draft.currentIdx, passage.questions.length);
-  const savedAnswer = answers[currentIdx];
+  const currentQuestion = passage.questions[currentIdx];
   const isExplicitQuestionJump = Boolean(initialQuestionId);
+  const savedAnswer = getQuestionMatchedAnswer(answers, currentIdx, currentQuestion, isExplicitQuestionJump);
   const isSubmitted = isExplicitQuestionJump
     ? Boolean(savedAnswer)
     : Boolean(draft.isSubmitted || savedAnswer);
@@ -184,7 +217,7 @@ export default function ReadingTraining({
       selectedOpt: Object.prototype.hasOwnProperty.call(nextState, 'selectedOpt') ? nextState.selectedOpt ?? null : selectedOpt,
       confidence: Object.prototype.hasOwnProperty.call(nextState, 'confidence') ? nextState.confidence ?? null : confidence,
       isSubmitted: nextState.isSubmitted ?? isSubmitted,
-      answers: nextState.answers ?? userAnswers,
+      answers: serializeReadingAnswers(nextState.answers ?? userAnswers),
       updatedAt: new Date().toISOString(),
     });
   };
@@ -600,8 +633,8 @@ export default function ReadingTraining({
               className={`h-2.5 rounded-full transition-all duration-300 ${
                 i === currentIdx
                   ? 'w-8 bg-[#003178]'
-                  : userAnswers[i] !== undefined
-                  ? userAnswers[i].correct
+                  : userAnswers[i]
+                  ? userAnswers[i]?.correct
                     ? 'w-2.5 bg-[#1b6d24]'
                     : 'w-2.5 bg-[#ba1a1a]'
                   : 'w-2.5 bg-gray-200'

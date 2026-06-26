@@ -928,6 +928,7 @@ function StudyApp() {
       ) : isPracticing ? (
         <Suspense fallback={<WorkspaceLoadingFallback />}>
           <ReadingTraining
+            key={`${customPassage.id}:${practiceJumpTarget?.moduleId ?? customPassage.moduleId ?? 'reading'}:${practiceJumpTarget?.questionId ?? 'default'}`}
             initialQuestionId={
               practiceJumpTarget?.moduleId === 'reading'
               || practiceJumpTarget?.moduleId === 'grammar'
