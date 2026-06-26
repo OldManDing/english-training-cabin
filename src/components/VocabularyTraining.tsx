@@ -278,21 +278,19 @@ export default function VocabularyTraining({
       answeredOnly: boolean;
     },
   ) => {
-    const answeredPairs = options.answeredOnly
-      ? targetAnswers.flatMap((answer, index) => {
+    const answeredPairs = targetAnswers.flatMap((answer, index) => {
         if (!answer) return [];
         const item = answer.questionId
           ? CET4_VOCABULARY_BANK.find((entry) => entry.id === answer.questionId)
           : sessionItems[index];
         return item ? [{ item, answer }] : [];
-      })
-      : [];
+      });
     const selectedItems = options.answeredOnly
       ? answeredPairs.map((pair) => pair.item)
-      : sessionItems;
+      : sessionItems.filter((_, index) => Boolean(targetAnswers[index]));
     const selectedAnswers = options.answeredOnly
       ? answeredPairs.map((pair) => pair.answer)
-      : targetAnswers;
+      : targetAnswers.filter((answer): answer is VocabularyAnswer => Boolean(answer));
 
     return buildChoicePracticeReport({
       examId: 'cet4',
@@ -472,12 +470,13 @@ export default function VocabularyTraining({
   };
 
   const finish = (finalAnswers: typeof answers) => {
+    const answeredCount = finalAnswers.filter(Boolean).length;
     const correctCount = finalAnswers.filter((answer) => answer?.correct).length;
-    const score = Math.round((correctCount / Math.max(1, sessionItems.length)) * 100);
+    const score = answeredCount > 0 ? Math.round((correctCount / answeredCount) * 100) : 0;
     const report = buildVocabularyReport(finalAnswers, {
       sessionStatus: 'completed',
       includeEvidence: true,
-      answeredOnly: false,
+      answeredOnly: true,
     });
     clearPracticeDraft(draftKey);
     void recordWriteRef.current.finally(() => {

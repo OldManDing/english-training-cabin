@@ -166,7 +166,8 @@ function buildPracticeQuestionBank(): Record<PracticeModuleId, PracticeQuestionD
     listening: CET4_LISTENING_PRACTICE_QUESTIONS
       .filter((question) => question.questionTypeId === 'long-conversation')
       .map((question, index) => ({
-        id: String(index + 1),
+        id: question.id,
+        legacyIds: [String(index + 1)],
         moduleId: question.moduleId,
         questionTypeId: question.questionTypeId,
         label: `长对话 ${index + 1}`,

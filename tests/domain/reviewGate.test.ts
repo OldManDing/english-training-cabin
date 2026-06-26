@@ -100,11 +100,11 @@ describe('buildReviewGateStatus', () => {
     expect(status.requiredToday).toBe(0);
   });
 
-  it('only counts due wrong-question redo items', () => {
+  it('counts due low-confidence and active-recall items, not only wrong redo items', () => {
     const status = buildReviewGateStatus([
-      reviewItem({ id: 'wrong' }),
+      reviewItem({ id: 'wrong', nextReviewAt: '2026-05-28T00:00:00.000Z' }),
       reviewItem({
-        id: 'correct-redo',
+        id: 'low-confidence-redo',
         redoQuestion: {
           kind: 'single-choice',
           prompt: 'Which option is supported by the passage?',
@@ -116,11 +116,23 @@ describe('buildReviewGateStatus', () => {
         id: 'memory-only',
         redoQuestion: undefined,
         learningMethod: 'active-recall-cloze-production',
+        memoryTask: {
+          version: 1,
+          sourceText: 'Review the low-confidence answer.',
+          recallPrompt: '回忆低信心题的证据。',
+          recallAnswer: 'The evidence is in the sentence.',
+          clozePrompt: 'The evidence is in ____.',
+          clozeAnswer: 'the sentence',
+          chunks: ['the sentence'],
+          productionPrompt: '用这个证据复述答案。',
+          methodNotes: ['先回忆', '再核对'],
+          spacingPlanDays: [1, 3, 7],
+        },
       }),
     ], '2026-05-27');
 
     expect(status.locked).toBe(true);
-    expect(status.dueCount).toBe(1);
-    expect(status.dueItems.map((item) => item.id)).toEqual(['wrong']);
+    expect(status.dueCount).toBe(2);
+    expect(status.dueItems.map((item) => item.id)).toEqual(['low-confidence-redo', 'memory-only']);
   });
 });

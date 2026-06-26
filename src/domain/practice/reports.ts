@@ -278,6 +278,10 @@ function buildReviewItem(params: {
   };
 }
 
+function isSubmittedChoiceAnswer(answer: ChoicePracticeAnswer | undefined): answer is ChoicePracticeAnswer & { selected: ChoiceAnswer } {
+  return Boolean(answer?.selected);
+}
+
 export function buildChoicePracticeReport(input: BuildChoicePracticeReportInput): PracticeCompletionReport {
   const examId = input.examId ?? 'cet4';
   const sessionId = input.sessionId ?? makeId(`session-${input.moduleId}`);
@@ -285,6 +289,11 @@ export function buildChoicePracticeReport(input: BuildChoicePracticeReportInput)
   const now = input.finishedAt ?? new Date().toISOString();
   const totalSeconds = Math.max(1, Math.round((Date.now() - new Date(input.startedAt).getTime()) / 1000));
   const elapsedPerQuestion = Math.max(1, Math.round(totalSeconds / Math.max(1, input.questions.length)));
+
+  const submittedPairs = input.questions.flatMap((question, index) => {
+    const answer = input.answers[index];
+    return isSubmittedChoiceAnswer(answer) ? [{ question, answer, index }] : [];
+  });
 
   const session: PracticeSession = {
     id: sessionId,
@@ -294,12 +303,11 @@ export function buildChoicePracticeReport(input: BuildChoicePracticeReportInput)
     startedAt: input.startedAt,
     finishedAt: sessionStatus === 'completed' || input.finishedAt ? now : undefined,
     plannedMinutes: input.plannedMinutes,
-    questionIds: input.questions.map((question) => String(question.id)),
+    questionIds: submittedPairs.map((pair) => String(pair.question.id)),
     status: sessionStatus,
   };
 
-  const attempts: Attempt[] = input.questions.map((question, index) => {
-    const answer = input.answers[index] ?? { correct: false };
+  const attempts: Attempt[] = submittedPairs.map(({ question, answer, index }) => {
     const mistakeReasons = deriveMistakeReasons({
       answer,
       skillArea: input.skillArea,
@@ -329,7 +337,7 @@ export function buildChoicePracticeReport(input: BuildChoicePracticeReportInput)
       .map((attempt, index) =>
         buildReviewItem({
           attempt,
-          question: input.questions[index],
+          question: submittedPairs[index].question,
           reasons: attempt.mistakeReasons,
           skillArea: input.skillArea,
         }),
@@ -337,7 +345,7 @@ export function buildChoicePracticeReport(input: BuildChoicePracticeReportInput)
       .filter((item): item is ReviewItem => Boolean(item));
 
   const correctCount = attempts.filter((attempt) => attempt.isCorrect).length;
-  const score = Math.round((correctCount / Math.max(1, attempts.length)) * 100);
+  const score = attempts.length > 0 ? Math.round((correctCount / attempts.length) * 100) : 0;
   const skillProfiles: SkillProfile[] = input.includeSkillProfiles === false
     ? []
     : [

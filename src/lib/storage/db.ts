@@ -1,6 +1,7 @@
 import Dexie, { Table } from 'dexie';
 import { repairLegacyVocabularyStatusAttempts } from '../../domain/practice/practicedQuestions';
 import { buildReviewCompletionRecords } from '../../domain/review/reviewCompletion';
+import { sortReviewItems } from '../../domain/review/reviewQueue';
 import { Attempt, PracticeSession, ReviewCompletionEvidence, ReviewItem, SkillProfile, StudyGoal } from '../../types';
 
 export interface LearningDataBackup {
@@ -115,7 +116,7 @@ export async function persistPracticeCompletion(payload: {
 }
 
 export async function loadReviewItems(): Promise<ReviewItem[]> {
-  return db.reviewItems.orderBy('priorityScore').reverse().toArray();
+  return sortReviewItems(await db.reviewItems.toArray());
 }
 
 export async function loadSkillProfiles(): Promise<SkillProfile[]> {
@@ -140,7 +141,7 @@ export async function loadAttempts(): Promise<Attempt[]> {
     }
   });
 
-  return db.attempts.orderBy('createdAt').reverse().toArray();
+  return repair.attempts.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
 export async function persistSkillProfiles(skillProfiles: SkillProfile[]): Promise<void> {

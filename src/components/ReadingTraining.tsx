@@ -199,7 +199,7 @@ export default function ReadingTraining({
       ? 'grammar'
       : 'reading';
   const activeMethodTopicId = practiceModuleId === 'grammar' && practiceQuestionTypeId === 'grammar-structure'
-    ? getGrammarStructureTopicByFocus(currentQuestion.tags?.[0] ?? currentQuestion.type).id
+    ? getGrammarStructureTopicByFocus(currentQuestion.trapType ?? currentQuestion.tags?.[0] ?? currentQuestion.type ?? currentQuestion.explanation).id
     : undefined;
 
   const persistDraft = (nextState: {
@@ -229,6 +229,7 @@ export default function ReadingTraining({
     optionTranslations: getReadingChineseSupport(passage.id, question)?.options,
     correctAnswer: question.correctAnswer,
     type: question.type,
+    trapType: question.trapType,
     moduleId: question.moduleId,
     questionTypeId: question.questionTypeId ?? practiceQuestionTypeId,
     correctSentence: question.correctSentence,
@@ -248,18 +249,18 @@ export default function ReadingTraining({
       answeredOnly: boolean;
     },
   ) => {
-    const answeredPairs = options.answeredOnly
-      ? targetAnswers.flatMap((answer, index) => {
+    const answeredPairs = targetAnswers.flatMap((answer, index) => {
         if (!answer) return [];
         const question = answer.questionId
           ? passage.questions.find((entry) => String(entry.id) === answer.questionId)
           : passage.questions[index];
         return question ? [{ question, answer }] : [];
-      })
-      : [];
+      });
     const selectedPairs = options.answeredOnly
       ? answeredPairs
-      : passage.questions.map((question, index) => ({ question, answer: targetAnswers[index] }));
+      : passage.questions
+        .map((question, index) => ({ question, answer: targetAnswers[index] }))
+        .filter((pair): pair is { question: Question; answer: NonNullable<ReadingAnswer> } => Boolean(pair.answer));
 
     return buildChoicePracticeReport({
       examId: passage.examId ?? 'cet4',
@@ -384,12 +385,13 @@ export default function ReadingTraining({
     } else {
       clearPracticeDraft(draftKey);
       // Calculate overall score
+      const answeredCount = userAnswers.filter(Boolean).length;
       const correctCount = userAnswers.filter(ans => ans?.correct).length;
-      const finalScore = Math.round((correctCount / passage.questions.length) * 100);
+      const finalScore = answeredCount > 0 ? Math.round((correctCount / answeredCount) * 100) : 0;
       const report = buildReadingReport(userAnswers, {
         sessionStatus: 'completed',
         includeEvidence: true,
-        answeredOnly: false,
+        answeredOnly: true,
       });
       void recordWriteRef.current.finally(() => {
         onComplete(finalScore, report);

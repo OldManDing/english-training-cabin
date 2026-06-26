@@ -25,6 +25,15 @@ export function isWrongQuestionReviewItem(item: ReviewItem): boolean {
   return normalizeAnswer(redoQuestion?.userAnswer) !== correctAnswer;
 }
 
+export function isActionableReviewItem(item: ReviewItem): boolean {
+  return Boolean(
+    item.redoQuestion
+    || item.memoryTask
+    || item.detail.trim()
+    || item.title.trim(),
+  );
+}
+
 export function isReviewItemDue(item: ReviewItem, now = new Date().toISOString()): boolean {
   return !item.nextReviewAt || item.nextReviewAt <= now;
 }
@@ -33,16 +42,30 @@ export function isReviewItemDueOn(item: ReviewItem, date: string): boolean {
   return !item.nextReviewAt || toLocalDateKey(item.nextReviewAt) <= date;
 }
 
-export function sortWrongQuestionReviewItems(reviewItems: ReviewItem[]): ReviewItem[] {
+function reviewTime(value?: string): number {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+export function sortReviewItems(reviewItems: ReviewItem[]): ReviewItem[] {
   return reviewItems
-    .filter(isWrongQuestionReviewItem)
-    .sort((left, right) => (right.priorityScore ?? 0) - (left.priorityScore ?? 0));
+    .filter(isActionableReviewItem)
+    .sort((left, right) => {
+      const dueDiff = reviewTime(left.nextReviewAt) - reviewTime(right.nextReviewAt);
+      if (dueDiff !== 0) return dueDiff;
+      return (right.priorityScore ?? 0) - (left.priorityScore ?? 0);
+    });
+}
+
+export function sortWrongQuestionReviewItems(reviewItems: ReviewItem[]): ReviewItem[] {
+  return sortReviewItems(reviewItems);
 }
 
 export function getDueWrongQuestionReviewItems(reviewItems: ReviewItem[], now = new Date().toISOString()): ReviewItem[] {
-  return sortWrongQuestionReviewItems(reviewItems).filter((item) => isReviewItemDue(item, now));
+  return sortReviewItems(reviewItems).filter((item) => isReviewItemDue(item, now));
 }
 
 export function getDueWrongQuestionReviewItemsOn(reviewItems: ReviewItem[], date = toLocalDateKey()): ReviewItem[] {
-  return sortWrongQuestionReviewItems(reviewItems).filter((item) => isReviewItemDueOn(item, date));
+  return sortReviewItems(reviewItems).filter((item) => isReviewItemDueOn(item, date));
 }

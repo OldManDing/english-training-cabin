@@ -29,7 +29,13 @@ const ORDERED_CET4_GRAMMAR_PRACTICE_QUESTIONS = orderGrammarStructureQuestions(C
 const LONG_CONVERSATION_QUESTIONS = CET4_LISTENING_PRACTICE_QUESTIONS
   .filter((question) => question.questionTypeId === 'long-conversation');
 const LISTENING_DRAFT_QUESTION_IDS = new Set(
-  LONG_CONVERSATION_QUESTIONS.map((_, index) => String(index + 1)),
+  LONG_CONVERSATION_QUESTIONS.flatMap((question, index) => [String(question.id), String(index + 1)]),
+);
+const LISTENING_QUESTION_BY_DRAFT_ID = new Map(
+  LONG_CONVERSATION_QUESTIONS.flatMap((question, index) => [
+    [String(question.id), question],
+    [String(index + 1), question],
+  ]),
 );
 
 function confidenceScore(confidence?: ChoiceConfidence | ListeningConfidence): Attempt['confidence'] {
@@ -212,12 +218,12 @@ export function buildDraftPracticeAttempts(params: {
   if (listeningDraft?.version === 1 && listeningDraft.answersByQuestionId) {
     Object.entries(listeningDraft.answersByQuestionId).forEach(([questionId, answer]) => {
       if (!answer?.isSubmitted || !LISTENING_DRAFT_QUESTION_IDS.has(questionId)) return;
-      const question = LONG_CONVERSATION_QUESTIONS[Number(questionId) - 1];
+      const question = LISTENING_QUESTION_BY_DRAFT_ID.get(questionId);
       draftAttempts.push(
         createDraftAttempt({
           moduleId: 'listening',
           questionTypeId: 'long-conversation',
-          questionId,
+          questionId: question?.id ?? questionId,
           answer: answer.selectedAnswer,
           isCorrect: question && answer.selectedAnswer ? answer.selectedAnswer === question.correctAnswer : undefined,
           confidence: confidenceScore(answer.confidence),

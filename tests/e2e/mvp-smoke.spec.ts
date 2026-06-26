@@ -1146,7 +1146,7 @@ test('submitted draft answers count as today records before finishing the sessio
   await expect(page.getByTestId('practice-module-progress-listening')).toContainText(`1/${listeningQuestionTotal}`);
 }); */
 
-test('due review reminder does not block grammar practice', async ({ page }) => {
+test('due review gate blocks grammar practice until reviews are done', async ({ page }) => {
   await registerAndEnterApp(page, 'mvp-review-gate');
   await resetLocalLearningData(page);
   await page.reload();
@@ -1204,7 +1204,10 @@ test('due review reminder does not block grammar practice', async ({ page }) => 
   await page.getByRole('button', { name: '专项练习' }).click();
   await expect(page.getByRole('heading', { name: /专项练习/ })).toBeVisible();
   await page.getByRole('button', { name: '开始语法训练' }).click();
-  await expect(page.getByRole('heading', { name: '语法与完形填空训练舱' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /复习队列/ })).toBeVisible();
+  await page.getByRole('button', { name: '我知道了' }).click();
+  await expect(page.getByTestId('review-direct-card')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '语法与完形填空训练舱' })).toHaveCount(0);
 });
 
 test('review queue hides future wrong-question reviews until they are due', async ({ page }) => {
@@ -1483,7 +1486,8 @@ test('diagnostic weakness updates the daily primary task and routes into the mat
 
   await page.getByTestId('today-primary-task-action').click();
   await expect(page.getByRole('heading', { name: '语法与完形填空训练舱' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '语法结构与固定搭配专项', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /语法与完形填空训练舱：语法结构与固定搭配专项/ })).toBeVisible();
+  await expect(page.getByTestId('practice-method-guide-topic-grammar-tense')).toContainText('当前考点');
 });
 
 test('target exam filters visible question bank and mock exam guides incomplete submissions', async ({ page }) => {

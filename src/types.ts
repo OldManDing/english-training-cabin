@@ -93,6 +93,7 @@ export interface Question {
   correctAnswer: ChoiceOption;
   explanation: string;
   type: string; // e.g., "细节推断", "主旨大意", "词汇理解"
+  trapType?: string;
   chineseSupport?: QuestionChineseSupport;
   tags?: string[];
   difficulty?: 1 | 2 | 3 | 4 | 5;

@@ -162,7 +162,8 @@ describe('buildReviewCompletionRecords', () => {
       now: '2026-05-27T08:05:00.000Z',
     });
 
-    expect(stillWrong.reviewItem.masteryScore).toBe(43);
+    expect(stillWrong.reviewItem.masteryScore).toBe(29);
+    expect(stillWrong.reviewItem.priorityScore).toBe(100);
     expect(stillWrong.attempt.isCorrect).toBe(false);
   });
 
@@ -192,7 +193,8 @@ describe('buildReviewCompletionRecords', () => {
       now: '2026-05-27T08:05:00.000Z',
     });
 
-    expect(again.reviewItem.masteryScore).toBe(43);
+    expect(again.reviewItem.masteryScore).toBe(29);
+    expect(again.reviewItem.priorityScore).toBe(100);
     expect(again.reviewItem.nextReviewAt).toBe('2026-05-28T08:05:00.000Z');
     expect(again.attempt.isCorrect).toBe(false);
   });

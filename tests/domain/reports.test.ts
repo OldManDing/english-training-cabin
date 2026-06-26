@@ -107,6 +107,40 @@ describe('buildChoicePracticeReport', () => {
     expect(report.skillProfiles[0].score).toBe(100);
   });
 
+  it('ignores unanswered choices instead of creating false wrong attempts', () => {
+    const report = buildChoicePracticeReport({
+      moduleId: 'reading',
+      questionTypeId: 'careful-reading',
+      modeId: 'unit-test',
+      skillArea: 'reading',
+      plannedMinutes: 18,
+      startedAt: new Date(Date.now() - 30_000).toISOString(),
+      questions: [
+        { id: 'q1', question: 'Question 1', correctAnswer: 'A' },
+        { id: 'q2', question: 'Question 2', correctAnswer: 'B' },
+        { id: 'q3', question: 'Question 3', correctAnswer: 'C' },
+      ],
+      answers: [
+        { correct: false },
+        { selected: 'B', correct: true, confidence: 'sure' },
+        { correct: false },
+      ],
+    });
+
+    expect(report.session.questionIds).toEqual(['q2']);
+    expect(report.attempts).toHaveLength(1);
+    expect(report.attempts[0]).toMatchObject({
+      questionId: 'q2',
+      answer: 'B',
+      isCorrect: true,
+    });
+    expect(report.reviewItems).toHaveLength(0);
+    expect(report.skillProfiles[0]).toMatchObject({
+      score: 100,
+      evidenceCount: 1,
+    });
+  });
+
   it('creates vocabulary-specific review work for wrong or low-confidence words', () => {
     const report = buildChoicePracticeReport({
       examId: 'cet4',

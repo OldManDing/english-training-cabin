@@ -1,5 +1,5 @@
 import { ReviewItem } from '../../types';
-import { isReviewItemDueOn, sortWrongQuestionReviewItems, toLocalDateKey } from './reviewQueue';
+import { isReviewItemDueOn, sortReviewItems, toLocalDateKey } from './reviewQueue';
 
 export const DAILY_REQUIRED_REVIEW_LIMIT = 3;
 
@@ -22,9 +22,9 @@ function wasReviewedOn(item: ReviewItem, date: string): boolean {
 }
 
 export function buildReviewGateStatus(reviewItems: ReviewItem[], date = todayIsoDate()): ReviewGateStatus {
-  const wrongQuestionItems = sortWrongQuestionReviewItems(reviewItems);
-  const dueItems = wrongQuestionItems.filter((item) => isReviewItemDueOn(item, date));
-  const completedToday = wrongQuestionItems.filter((item) => wasReviewedOn(item, date)).length;
+  const reviewQueueItems = sortReviewItems(reviewItems);
+  const dueItems = reviewQueueItems.filter((item) => isReviewItemDueOn(item, date));
+  const completedToday = reviewQueueItems.filter((item) => wasReviewedOn(item, date)).length;
   const requiredToday = Math.min(DAILY_REQUIRED_REVIEW_LIMIT, dueItems.length + completedToday);
   const remainingRequired = Math.max(0, requiredToday - completedToday);
 

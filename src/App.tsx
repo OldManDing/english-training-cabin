@@ -12,6 +12,7 @@ import { CET4_VOCABULARY_BANK, INITIAL_PASSAGE } from './data';
 import {
   CET4_CLOZE_PRACTICE_QUESTIONS,
   CET4_GRAMMAR_PRACTICE_QUESTIONS,
+  CET4_LISTENING_PRACTICE_QUESTIONS,
   CET4_READING_BANK,
   type Cet4MockChoiceQuestion,
 } from './questionBank';
@@ -60,6 +61,12 @@ const ListeningTraining = lazy(() => import('./components/ListeningTraining'));
 const SettingsSection = lazy(() => import('./components/SettingsSection'));
 const VocabularyTraining = lazy(() => import('./components/VocabularyTraining'));
 const MockExam = lazy(() => import('./components/MockExam'));
+
+const LISTENING_QUESTION_LEGACY_IDS = new Map(
+  CET4_LISTENING_PRACTICE_QUESTIONS
+    .filter((question) => question.questionTypeId === 'long-conversation')
+    .map((question, index) => [String(question.id), String(index + 1)]),
+);
 
 function getDaysRemaining(examDate?: string): number {
   if (!examDate) return 0;
@@ -167,6 +174,7 @@ function buildChoiceQuestionPassage(params: {
       correctAnswer: question.correctAnswer,
       explanation: question.explanation,
       type: question.trapType ?? question.title,
+      trapType: question.trapType,
       tags: [question.trapType ?? question.questionTypeId],
       difficulty: 3,
       sourceType: 'original',
@@ -289,15 +297,19 @@ function StudyApp() {
     }),
   }), [activeTab, isListeningPracticing, isPracticing, isVocabularyPracticing, persistedAttempts, subjectivePracticeMode]);
   const todayAnsweredQuestionCount = useMemo(
-    () => countPracticeAttemptsOnLocalDate(visiblePracticeAttempts),
-    [visiblePracticeAttempts],
+    () => countPracticeAttemptsOnLocalDate(persistedAttempts),
+    [persistedAttempts],
   );
   const practiceJumpAttempt = useMemo(() => {
     if (!practiceJumpTarget) return undefined;
+    const legacyListeningId = practiceJumpTarget.moduleId === 'listening'
+      ? LISTENING_QUESTION_LEGACY_IDS.get(String(practiceJumpTarget.questionId))
+      : undefined;
     return findLatestPracticeAttempt({
       attempts: visiblePracticeAttempts,
       moduleId: practiceJumpTarget.moduleId,
       questionId: practiceJumpTarget.questionId,
+      legacyQuestionIds: legacyListeningId ? [legacyListeningId] : undefined,
     });
   }, [practiceJumpTarget, visiblePracticeAttempts]);
 
@@ -319,20 +331,36 @@ function StudyApp() {
     });
   };
 
+  const showReviewGateModal = (requestedLabel: string) => {
+    handleTriggerModal(
+      '先完成今日复习',
+      `当前还有 ${reviewGateStatus.remainingRequired} 条到期复习未完成。先处理复习队列，再进入${requestedLabel}。`,
+    );
+  };
+
   const startLearningWithReviewReminder = (requestedLabel: string, start: () => void) => {
-    noteReviewGateBypass(requestedLabel);
+    if (reviewGateStatus.locked) {
+      noteReviewGateBypass(requestedLabel);
+      showReviewGateModal(requestedLabel);
+      setActiveTab('review');
+      return;
+    }
     start();
   };
 
   const handleSetActiveTab = (tab: ActiveTab) => {
     const gatedLabels: Partial<Record<ActiveTab, string>> = {
-      practice: '专项练习',
       mock: '阶段模考',
       speaking: '口语重说',
     };
     const requestedLabel = gatedLabels[tab];
 
-    if (requestedLabel) noteReviewGateBypass(requestedLabel);
+    if (requestedLabel && reviewGateStatus.locked) {
+      noteReviewGateBypass(requestedLabel);
+      showReviewGateModal(requestedLabel);
+      setActiveTab('review');
+      return;
+    }
     setActiveTab(tab);
   };
 
@@ -616,11 +644,7 @@ function StudyApp() {
     setSubjectivePracticeMode(null);
   };
 
-  const handleCompletePractice = (score: number, report: PracticeCompletionReport) => {
-    setIsPracticing(false);
-    setPracticeJumpTarget(null);
-    setReadingProgress({ completed: true, score });
-    setActiveTab('progress');
+  const completeAndShowProgress = async (score: number, report: PracticeCompletionReport, closePractice: () => void, errorArea: string, errorTitle: string, errorBody: string) => {
     trackTelemetry('practice_completed', {
       mode: report.session.modeId,
       moduleId: report.session.moduleId,
@@ -628,47 +652,50 @@ function StudyApp() {
       attempts: report.attempts.length,
       reviewItems: report.reviewItems.length,
     });
-    persistCompletionReport(report).catch((error) => {
-      console.error('Failed to persist reading practice:', error);
-      trackTelemetry('client_error', { area: 'reading_practice_persist' });
-      handleTriggerModal('阅读记录保存失败', '本次分数已显示，但错因和复习队列没有成功写入本地数据库。');
-    });
+    try {
+      await persistCompletionReport(report);
+      closePractice();
+      setPracticeJumpTarget(null);
+      setReadingProgress({ completed: true, score });
+      setActiveTab('progress');
+    } catch (error) {
+      console.error(`Failed to persist ${errorArea}:`, error);
+      trackTelemetry('client_error', { area: errorArea });
+      handleTriggerModal(errorTitle, errorBody);
+    }
+  };
+
+  const handleCompletePractice = (score: number, report: PracticeCompletionReport) => {
+    void completeAndShowProgress(
+      score,
+      report,
+      () => setIsPracticing(false),
+      'choice_practice_persist',
+      '作答记录保存失败',
+      '本次作答没有成功写入本地数据库，页面暂不退出。请稍后重试或先导出本地数据。',
+    );
   };
 
   const handleCompleteSubjectivePractice = (score: number, report: PracticeCompletionReport) => {
-    setSubjectivePracticeMode(null);
-    setPracticeJumpTarget(null);
-    setActiveTab('progress');
-    trackTelemetry('practice_completed', {
-      mode: report.session.modeId,
-      moduleId: report.session.moduleId,
+    void completeAndShowProgress(
       score,
-      attempts: report.attempts.length,
-      reviewItems: report.reviewItems.length,
-    });
-    persistCompletionReport(report).catch((error) => {
-      console.error('Failed to persist subjective practice:', error);
-      trackTelemetry('client_error', { area: `${report.session.moduleId}_practice_persist` });
-      handleTriggerModal('主观题记录保存失败', '本次反馈已生成，但错因和能力画像没有成功写入本地数据库。');
-    });
+      report,
+      () => setSubjectivePracticeMode(null),
+      `${report.session.moduleId}_practice_persist`,
+      '主观题记录保存失败',
+      '本次反馈已生成，但错因和能力画像没有成功写入本地数据库。页面暂不退出。',
+    );
   };
 
   const handleCompleteVocabularyPractice = (score: number, report: PracticeCompletionReport) => {
-    setIsVocabularyPracticing(false);
-    setPracticeJumpTarget(null);
-    setActiveTab('progress');
-    trackTelemetry('practice_completed', {
-      mode: report.session.modeId,
-      moduleId: report.session.moduleId,
+    void completeAndShowProgress(
       score,
-      attempts: report.attempts.length,
-      reviewItems: report.reviewItems.length,
-    });
-    persistCompletionReport(report).catch((error) => {
-      console.error('Failed to persist vocabulary practice:', error);
-      trackTelemetry('client_error', { area: 'vocabulary_practice_persist' });
-      handleTriggerModal('词汇练习保存失败', '本次词汇分数已显示，但错因和复习队列没有成功写入本地数据库。');
-    });
+      report,
+      () => setIsVocabularyPracticing(false),
+      'vocabulary_practice_persist',
+      '词汇练习保存失败',
+      '本次词汇记录没有成功写入本地数据库，页面暂不退出。请稍后重试。',
+    );
   };
 
   const handleRecordVocabularyAnswer = async (report: PracticeCompletionReport) => {
@@ -694,19 +721,14 @@ function StudyApp() {
   };
 
   const handleCompleteMockExam = (score: number, report: PracticeCompletionReport) => {
-    setActiveTab('progress');
-    trackTelemetry('practice_completed', {
-      mode: report.session.modeId,
-      moduleId: report.session.moduleId,
+    void completeAndShowProgress(
       score,
-      attempts: report.attempts.length,
-      reviewItems: report.reviewItems.length,
-    });
-    persistCompletionReport(report).catch((error) => {
-      console.error('Failed to persist mock exam:', error);
-      trackTelemetry('client_error', { area: 'mock_exam_persist' });
-      handleTriggerModal('阶段模考保存失败', '本次模考报告已生成，但错因和能力画像没有成功写入本地数据库。');
-    });
+      report,
+      () => undefined,
+      'mock_exam_persist',
+      '阶段模考保存失败',
+      '本次模考报告没有成功写入本地数据库，页面暂不退出。请稍后重试。',
+    );
   };
 
   const handleCompleteSpeakingPractice = async (report: PracticeCompletionReport) => {
@@ -894,23 +916,16 @@ function StudyApp() {
             replayAttempt={practiceJumpTarget?.moduleId === 'listening' ? practiceJumpAttempt : undefined}
             practicedQuestionIds={practicedListeningQuestionIds}
             onBack={handleBackFromPractice}
+            onAnswerRecorded={handleRecordChoiceAnswer}
             onComplete={(score, report) => {
-              setIsListeningPracticing(false);
-              setPracticeJumpTarget(null);
-              setReadingProgress({ completed: true, score });
-              setActiveTab('progress');
-              trackTelemetry('practice_completed', {
-                mode: report.session.modeId,
-                moduleId: report.session.moduleId,
+              void completeAndShowProgress(
                 score,
-                attempts: report.attempts.length,
-                reviewItems: report.reviewItems.length,
-              });
-              persistCompletionReport(report).catch((error) => {
-                console.error('Failed to persist listening practice:', error);
-                trackTelemetry('client_error', { area: 'listening_practice_persist' });
-                handleTriggerModal('听力记录保存失败', '本次分数已显示，但错因和复习队列没有成功写入本地数据库。');
-              });
+                report,
+                () => setIsListeningPracticing(false),
+                'listening_practice_persist',
+                '听力记录保存失败',
+                '本次听力记录没有成功写入本地数据库，页面暂不退出。请稍后重试。',
+              );
             }}
           />
         </Suspense>

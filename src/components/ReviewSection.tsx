@@ -17,7 +17,7 @@ import {
 import { ChoiceOption, MemoryReviewTask, ReviewCompletionEvidence, ReviewItem } from '../types';
 import { buildReviewVariantRecommendations, type CoachModuleId } from '../domain/productCoach';
 import type { ReviewGateStatus } from '../domain/review/reviewGate';
-import { isReviewItemDueOn, sortWrongQuestionReviewItems, toLocalDateKey } from '../domain/review/reviewQueue';
+import { isReviewItemDueOn, sortReviewItems, toLocalDateKey } from '../domain/review/reviewQueue';
 import { resolveRedoQuestionTranslation } from '../domain/review/redoTranslation';
 import { pausePracticeSpeech, playPracticeSpeech, resumePracticeSpeech, stopPracticeSpeech } from '../lib/practiceSpeech';
 
@@ -179,7 +179,7 @@ export default function ReviewSection({
 
   const completedReviewIdSet = useMemo(() => new Set(completedReviewIds), [completedReviewIds]);
   const sortedReviewItems = useMemo(
-    () => sortWrongQuestionReviewItems(persistedReviewItems),
+    () => sortReviewItems(persistedReviewItems),
     [persistedReviewItems],
   );
   const reviewDate = reviewGateStatus?.date ?? toLocalDateKey();
@@ -196,6 +196,10 @@ export default function ReviewSection({
   const availableReviewItems = useMemo(
     () => dueReviewItems.filter((item) => !completedReviewIdSet.has(item.id)),
     [completedReviewIdSet, dueReviewItems],
+  );
+  const remainingReviewItems = useMemo(
+    () => sortedReviewItems.filter((item) => !completedReviewIdSet.has(item.id)),
+    [completedReviewIdSet, sortedReviewItems],
   );
   const selectedReview = selectedReviewItemId
     ? availableReviewItems.find((item) => item.id === selectedReviewItemId)
@@ -218,8 +222,8 @@ export default function ReviewSection({
   const simpleRecallAnswer = activeReview && activeTask ? buildSimpleRecallAnswer(activeReview, activeTask) : '';
   const redoCorrect = getRedoCorrect(activeReview, redoAnswer);
   const feedbackVisible = Boolean(activeReview && (!redoQuestion || answerRevealed));
-  const averageMastery = availableReviewItems.length > 0
-    ? Math.round(availableReviewItems.reduce((sum, item) => sum + (item.masteryScore ?? 35), 0) / availableReviewItems.length)
+  const averageMastery = remainingReviewItems.length > 0
+    ? Math.round(remainingReviewItems.reduce((sum, item) => sum + (item.masteryScore ?? 35), 0) / remainingReviewItems.length)
     : null;
 
   useEffect(() => {
@@ -336,8 +340,8 @@ export default function ReviewSection({
 
   const showMethodDetail = () => {
     onTriggerModal?.(
-      '错题队列怎么做',
-      '重做原题 -> 看反馈 -> 自评掌握度。',
+      '复习队列怎么做',
+      '重做原题或回忆关键点 -> 看反馈 -> 自评掌握度。',
     );
   };
 
@@ -359,7 +363,7 @@ export default function ReviewSection({
           </div>
           <button onClick={showMethodDetail} className="ui-button ui-button-secondary">
             <Sparkles className="h-4 w-4" />
-            错题队列说明
+            复习队列说明
           </button>
         </header>
 

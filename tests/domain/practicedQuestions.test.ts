@@ -5,6 +5,7 @@ import {
   buildPracticeQuestionStatusList,
   buildUnpracticedReadingPassages,
   countPracticeAttemptsOnLocalDate,
+  findLatestPracticeAttempt,
   filterPassageForUnpracticedQuestions,
   filterUnpracticedItems,
   getPracticedQuestionIds,
@@ -88,6 +89,22 @@ describe('practiced question filtering', () => {
     ], attempts, 'vocabulary')).toEqual([{ id: 'vocab-2', label: 'next' }]);
   });
 
+  it('finds the latest practice attempt by current id or legacy id alias', () => {
+    const currentAttempt = makeAttempt('conversation-timed-reading-1', 'listening');
+    const legacyAttempt = {
+      ...makeAttempt('1', 'listening'),
+      id: 'attempt-listening-legacy-1',
+      createdAt: '2026-06-01T00:00:00.000Z',
+    };
+
+    expect(findLatestPracticeAttempt({
+      attempts: [legacyAttempt, currentAttempt],
+      moduleId: 'listening',
+      questionId: 'conversation-timed-reading-1',
+      legacyQuestionIds: ['1'],
+    })?.id).toBe('attempt-listening-legacy-1');
+  });
+
   it('falls back to the original bank when every item has been practiced', () => {
     const items = [{ id: 'vocab-1' }, { id: 'vocab-2' }];
 
@@ -148,6 +165,51 @@ describe('practiced question filtering', () => {
     expect(progress.get('writing')).toMatchObject({ practiced: 1, total: 3, remaining: 2 });
     expect(progress.get('translation')).toMatchObject({ practiced: 1, total: 3, remaining: 2 });
     expect(progress.get('mock')).toMatchObject({ practiced: 1, total: 2, remaining: 1 });
+  });
+
+  it('does not crash when restored attempts miss legacy questionTypeId', () => {
+    const legacyAttempt = makeAttempt('legacy-1', 'reading');
+    delete (legacyAttempt as Partial<Attempt>).questionTypeId;
+
+    const progress = buildPracticeModuleProgress({
+      attempts: [legacyAttempt],
+      totals: {
+        vocabulary: 10,
+        cloze: 5,
+        grammar: 5,
+        reading: 2,
+        listening: 8,
+        writing: 3,
+        translation: 3,
+        mock: 2,
+      },
+    });
+
+    expect(progress.get('reading')).toMatchObject({ practiced: 1, total: 2, remaining: 1 });
+  });
+
+  it('counts repeated writing and translation attempts by unique prompt id', () => {
+    const progress = buildPracticeModuleProgress({
+      attempts: [
+        makeAttempt('writing-campus', 'writing'),
+        { ...makeAttempt('writing-campus', 'writing'), id: 'attempt-writing-campus-redo' },
+        makeAttempt('translation-tea', 'translation'),
+        { ...makeAttempt('translation-tea', 'translation'), id: 'attempt-translation-tea-redo' },
+      ],
+      totals: {
+        vocabulary: 10,
+        cloze: 5,
+        grammar: 5,
+        reading: 2,
+        listening: 8,
+        writing: 3,
+        translation: 3,
+        mock: 2,
+      },
+    });
+
+    expect(progress.get('writing')).toMatchObject({ practiced: 1, total: 3, remaining: 2 });
+    expect(progress.get('translation')).toMatchObject({ practiced: 1, total: 3, remaining: 2 });
   });
 
   it('merges persisted and draft attempts without double-counting the same question', () => {
@@ -229,6 +291,21 @@ describe('practiced question filtering', () => {
     ]);
   });
 
+  it('marks listening status from legacy numeric question ids', () => {
+    const statuses = buildPracticeQuestionStatusList({
+      attempts: [
+        makeAttempt('1', 'listening'),
+      ],
+      moduleId: 'listening',
+      questions: [
+        { id: 'listening-long-conversation-1', legacyIds: ['1'], label: '长对话 1' },
+        { id: 'listening-long-conversation-2', legacyIds: ['2'], label: '长对话 2' },
+      ],
+    });
+
+    expect(statuses.map((item) => item.practiced)).toEqual([true, false]);
+  });
+
   it('repairs legacy vocabulary status saved against questions 241 to 255', () => {
     const legacyWrongAttempts = CET4_VOCABULARY_BANK
       .slice(240, 255)
@@ -247,6 +324,38 @@ describe('practiced question filtering', () => {
     }
     for (let number = 241; number <= 255; number += 1) {
       expect(statusByNumber.get(number)).toBe(false);
+    }
+  });
+
+  it('keeps real vocabulary attempts 251 to 255 when repairing the legacy 241 to 250 offset', () => {
+    const legacyWrongAttempts = CET4_VOCABULARY_BANK
+      .slice(240, 250)
+      .map((item) => makeAttempt(item.id, 'vocabulary'));
+    const realTailAttempts = CET4_VOCABULARY_BANK
+      .slice(250, 255)
+      .map((item) => ({
+        ...makeAttempt(item.id, 'vocabulary'),
+        id: `attempt-real-tail-${item.id}`,
+        sessionId: 'session-vocabulary-real-tail',
+        createdAt: '2026-06-01T00:00:00.000Z',
+      }));
+
+    const statuses = buildPracticeQuestionStatusList({
+      attempts: [...legacyWrongAttempts, ...realTailAttempts],
+      moduleId: 'vocabulary',
+      questions: CET4_VOCABULARY_BANK.map((item) => ({ id: item.id })),
+    });
+
+    const statusByNumber = new Map(statuses.map((status) => [status.number, status.practiced]));
+
+    for (let number = 121; number <= 130; number += 1) {
+      expect(statusByNumber.get(number)).toBe(true);
+    }
+    for (let number = 241; number <= 250; number += 1) {
+      expect(statusByNumber.get(number)).toBe(false);
+    }
+    for (let number = 251; number <= 255; number += 1) {
+      expect(statusByNumber.get(number)).toBe(true);
     }
   });
 
@@ -290,5 +399,25 @@ describe('practiced question filtering', () => {
     });
 
     expect(statuses.map((item) => item.practiced)).toEqual([true, true, false]);
+  });
+
+  it('marks the actual completed mock paper instead of the first paper by count', () => {
+    const statuses = buildPracticeQuestionStatusList({
+      attempts: [],
+      sessions: [
+        {
+          ...makeSession('mock-session-2', 'mock', 'cet4-standard-mock'),
+          questionIds: ['mock-paper-2-writing', 'mock-paper-2-translation'],
+        },
+      ],
+      moduleId: 'mock',
+      questions: [
+        { id: 'mock-paper-1' },
+        { id: 'mock-paper-2' },
+        { id: 'mock-paper-3' },
+      ],
+    });
+
+    expect(statuses.map((item) => item.practiced)).toEqual([false, true, false]);
   });
 });

@@ -60,7 +60,7 @@ describe('buildDailyPlan', () => {
       type: 'review',
       priority: 'high',
     });
-    expect(plan.rationale[0]).toContain('到期错题');
+    expect(plan.rationale[0]).toContain('到期复习');
   });
 
   it('starts with diagnostic before recommending practice when there is no ability evidence', () => {
@@ -98,7 +98,7 @@ describe('buildDailyPlan', () => {
     expect(plan.plannedMinutes).toBe(20);
   });
 
-  it('ignores non-wrong review items when building the daily plan', () => {
+  it('includes due low-confidence and memory-only review items when building the daily plan', () => {
     const plan = buildDailyPlan({
       goal,
       date: '2026-05-24',
@@ -131,8 +131,15 @@ describe('buildDailyPlan', () => {
       ],
     });
 
-    expect(plan.tasks.some((task) => task.type === 'review')).toBe(false);
-    expect(plan.rationale[0]).toContain('今天没有到期错题');
+    const reviewTask = plan.tasks.find((task) => task.type === 'review');
+    expect(reviewTask).toMatchObject({
+      type: 'review',
+      title: expect.stringContaining('2 个到期复习项'),
+      payload: {
+        reviewItemIds: ['correct-redo', 'memory-only'],
+      },
+    });
+    expect(plan.rationale[0]).toContain('到期复习');
   });
 
   it('uses the weakest skill profile for the main practice task', () => {

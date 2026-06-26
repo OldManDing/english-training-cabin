@@ -55,7 +55,7 @@ function completedStepCount(evidence: ReviewCompletionEvidence): number {
 function calculateMasteryScore(currentMastery: number, evidence: ReviewCompletionEvidence): number {
   const completedSteps = completedStepCount(evidence);
   if (completedSteps < 3) return clampScore(currentMastery + completedSteps * 5);
-  if (evidence.redoCorrect === false || evidence.reviewOutcome === 'again') return clampScore(currentMastery + 8);
+  if (evidence.redoCorrect === false || evidence.reviewOutcome === 'again') return clampScore(currentMastery - 6);
   if (evidence.reviewOutcome === 'unclear') return clampScore(currentMastery + 15);
   return clampScore(currentMastery + (currentMastery < 60 ? 25 : 15));
 }
@@ -72,6 +72,11 @@ function nextReviewIntervalDays(masteryScore: number): number {
   if (masteryScore >= 70) return 7;
   if (masteryScore >= 55) return 3;
   return 1;
+}
+
+function nextReviewIntervalDaysForEvidence(masteryScore: number, evidence: ReviewCompletionEvidence): number {
+  if (evidence.redoCorrect === false || evidence.reviewOutcome === 'again') return 1;
+  return nextReviewIntervalDays(masteryScore);
 }
 
 function elapsedSeconds(startedAt: string | undefined, now: string): number {
@@ -103,7 +108,7 @@ export function buildReviewCompletionRecords(input: BuildReviewCompletionRecords
   const now = input.now ?? new Date().toISOString();
   const currentMastery = input.reviewItem.masteryScore ?? 35;
   const masteryScore = calculateMasteryScore(currentMastery, input.evidence);
-  const reviewIntervalDays = nextReviewIntervalDays(masteryScore);
+  const reviewIntervalDays = nextReviewIntervalDaysForEvidence(masteryScore, input.evidence);
   const nextReviewAt = new Date(now);
   nextReviewAt.setDate(nextReviewAt.getDate() + reviewIntervalDays);
 
@@ -118,7 +123,9 @@ export function buildReviewCompletionRecords(input: BuildReviewCompletionRecords
   const reviewItem: ReviewItem = {
     ...input.reviewItem,
     masteryScore,
-    priorityScore: Math.max(10, (input.reviewItem.priorityScore ?? 50) - 25),
+    priorityScore: input.evidence.redoCorrect === false || input.evidence.reviewOutcome === 'again'
+      ? Math.min(100, (input.reviewItem.priorityScore ?? 50) + 10)
+      : Math.max(10, (input.reviewItem.priorityScore ?? 50) - 25),
     reviewIntervalDays,
     lastReviewedAt: now,
     nextReviewAt: nextReviewAt.toISOString(),

@@ -14,6 +14,7 @@ export type PracticeModuleTotals = Record<PracticeProgressModuleId, number>;
 
 export interface PracticeQuestionDescriptor {
   id: string | number;
+  legacyIds?: Array<string | number>;
   moduleId?: string;
   questionTypeId?: string;
   label?: string;
@@ -29,7 +30,7 @@ export interface PracticeQuestionStatusItem {
 }
 
 export function matchesPracticeModuleAttempt(attempt: Attempt, moduleId: PracticeProgressModuleId): boolean {
-  const questionTypeId = attempt.questionTypeId.toLowerCase();
+  const questionTypeId = String(attempt.questionTypeId ?? '').toLowerCase();
   if (moduleId === 'cloze') return attempt.moduleId === 'grammar' && questionTypeId.includes('cloze');
   if (moduleId === 'grammar') return attempt.moduleId === 'grammar' && !questionTypeId.includes('cloze');
   return attempt.moduleId === moduleId;
@@ -62,14 +63,15 @@ export function findLatestPracticeAttempt(params: {
   attempts: Attempt[];
   moduleId: string;
   questionId: string | number;
+  legacyQuestionIds?: Array<string | number>;
 }): Attempt | undefined {
-  const questionId = String(params.questionId);
+  const questionIds = new Set([params.questionId, ...(params.legacyQuestionIds ?? [])].map(String));
   return params.attempts
     .filter((attempt) => {
       const moduleMatches = isPracticeProgressModuleId(params.moduleId)
         ? matchesPracticeModuleAttempt(attempt, params.moduleId)
         : attempt.moduleId === params.moduleId;
-      return moduleMatches && String(attempt.questionId) === questionId;
+      return moduleMatches && questionIds.has(String(attempt.questionId));
     })
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
 }
@@ -183,7 +185,29 @@ export function repairLegacyVocabularyStatusAttempts(attempts: Attempt[]): {
     const source = latestWrongAttemptByQuestionId.get(LEGACY_VOCABULARY_WRONG_IDS[index]);
     return source ? [buildLegacyVocabularyRepairAttempt(source, targetId)] : [];
   });
-  const deleteAttemptIds = wrongAttempts.map((attempt) => attempt.id);
+  const sourceRepairAttemptIds = new Set(
+    LEGACY_VOCABULARY_WRONG_IDS
+      .slice(0, LEGACY_VOCABULARY_TARGET_IDS.length)
+      .flatMap((id) => {
+        const source = latestWrongAttemptByQuestionId.get(id);
+        return source ? [source.id] : [];
+      }),
+  );
+  const sourceRepairAttempts = wrongAttempts.filter((attempt) => sourceRepairAttemptIds.has(attempt.id));
+  const latestSourceTime = Math.max(
+    ...sourceRepairAttempts.map((attempt) => new Date(attempt.createdAt).getTime()).filter(Number.isFinite),
+    0,
+  );
+  const sourceSessionIds = new Set(sourceRepairAttempts.map((attempt) => attempt.sessionId));
+  const isLikelyRealTailAttempt = (attempt: Attempt) => {
+    if (sourceRepairAttemptIds.has(attempt.id)) return false;
+    const createdAt = new Date(attempt.createdAt).getTime();
+    if (Number.isFinite(createdAt) && createdAt > latestSourceTime) return true;
+    return !sourceSessionIds.has(attempt.sessionId);
+  };
+  const deleteAttemptIds = wrongAttempts
+    .filter((attempt) => sourceRepairAttemptIds.has(attempt.id) || !isLikelyRealTailAttempt(attempt))
+    .map((attempt) => attempt.id);
   const deleteAttemptIdSet = new Set(deleteAttemptIds);
 
   return {
@@ -243,18 +267,10 @@ function countPracticedItems(params: {
   moduleId: PracticeProgressModuleId;
 }): number {
   if (params.moduleId === 'mock') {
-    return new Set(
-      params.sessions
-        .filter((session) => session.moduleId === 'mock' || session.modeId.toLowerCase().includes('mock'))
-        .map((session) => session.id),
-    ).size;
+    return countCompletedMockSessions(params.sessions);
   }
 
   const matchedAttempts = params.attempts.filter((attempt) => matchesPracticeModuleAttempt(attempt, params.moduleId));
-  if (params.moduleId === 'writing' || params.moduleId === 'translation') {
-    return matchedAttempts.length;
-  }
-
   return new Set(matchedAttempts.map((attempt) => String(attempt.questionId))).size;
 }
 
@@ -286,10 +302,23 @@ export function buildPracticeModuleProgress(params: {
   return result;
 }
 
-function countCompletedMockSessions(sessions: PracticeSession[]): number {
+function getCompletedMockPaperIds(sessions: PracticeSession[]): Set<string> {
   return new Set(
     sessions
-      .filter((session) => session.moduleId === 'mock' || session.modeId.toLowerCase().includes('mock'))
+      .filter((session) => session.moduleId === 'mock' || String(session.modeId ?? '').toLowerCase().includes('mock'))
+      .flatMap((session) => session.questionIds)
+      .map((questionId) => String(questionId).match(/^(.+)-(?:writing|translation)$/)?.[1])
+      .filter((paperId): paperId is string => Boolean(paperId)),
+  );
+}
+
+function countCompletedMockSessions(sessions: PracticeSession[]): number {
+  const completedPaperIds = getCompletedMockPaperIds(sessions);
+  if (completedPaperIds.size > 0) return completedPaperIds.size;
+
+  return new Set(
+    sessions
+      .filter((session) => session.moduleId === 'mock' || String(session.modeId ?? '').toLowerCase().includes('mock'))
       .map((session) => session.id),
   ).size;
 }
@@ -301,19 +330,25 @@ export function buildPracticeQuestionStatusList(params: {
   questions: PracticeQuestionDescriptor[];
 }): PracticeQuestionStatusItem[] {
   if (params.moduleId === 'mock') {
-    const completedMockCount = countCompletedMockSessions(params.sessions ?? []);
+    const completedMockPaperIds = getCompletedMockPaperIds(params.sessions ?? []);
+    const completedMockCount = completedMockPaperIds.size > 0 ? 0 : countCompletedMockSessions(params.sessions ?? []);
     return params.questions.map((question, index) => ({
       id: String(question.id),
       number: index + 1,
       label: question.label ?? String(index + 1),
       groupLabel: question.groupLabel,
-      practiced: index < completedMockCount,
+      practiced: completedMockPaperIds.size > 0
+        ? completedMockPaperIds.has(String(question.id))
+        : index < completedMockCount,
     }));
   }
 
   const progressAttempts = repairLegacyVocabularyStatusAttempts(params.attempts).attempts;
   const moduleAttempts = progressAttempts.filter((attempt) => matchesPracticeModuleAttempt(attempt, params.moduleId));
-  const questionIds = new Set(params.questions.map((question) => String(question.id)));
+  const questionIds = new Set(params.questions.flatMap((question) => [
+    String(question.id),
+    ...(question.legacyIds ?? []).map(String),
+  ]));
   const practicedIds = new Set(moduleAttempts.map((attempt) => String(attempt.questionId)));
   let legacySubjectiveCount = 0;
 
@@ -322,7 +357,8 @@ export function buildPracticeQuestionStatusList(params: {
   }
 
   return params.questions.map((question, index) => {
-    const exactPracticed = practicedIds.has(String(question.id));
+    const exactPracticed = [question.id, ...(question.legacyIds ?? [])]
+      .some((id) => practicedIds.has(String(id)));
     const legacyPracticed = !exactPracticed && legacySubjectiveCount > 0;
     if (legacyPracticed) legacySubjectiveCount -= 1;
 

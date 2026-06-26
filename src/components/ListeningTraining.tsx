@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Headphones, ArrowLeft, Play, Pause, ChevronDown, ChevronUp, CheckCircle, XCircle, Sparkles, Volume2, RotateCcw, Award, ArrowRight, Sparkle, RefreshCw } from 'lucide-react';
+import { Headphones, ArrowLeft, Play, Pause, ChevronDown, ChevronUp, CheckCircle, XCircle, Sparkles, Volume2, RotateCcw, Award, ArrowRight, Sparkle, RefreshCw, FastForward } from 'lucide-react';
 import { Attempt, ChoiceOption, PracticeCompletionReport, QuestionChineseSupport } from '../types';
 import { getListeningChineseSupport } from '../domain/practice/chineseSupport';
 import { buildListeningReplayAnswer } from '../domain/practice/attemptReplay';
@@ -25,12 +25,13 @@ interface ListeningTrainingProps {
   replayAttempt?: Attempt;
   onBack: () => void;
   onComplete: (score: number, report: PracticeCompletionReport) => void;
+  onAnswerRecorded?: (report: PracticeCompletionReport) => Promise<void> | void;
   practicedQuestionIds?: Iterable<string>;
-  onAddToReview?: (item: { title: string; category: "词汇" | "句式" | "错题"; detail: string }) => void;
 }
 
 interface QuestionItem {
   id: string;
+  legacyId: string;
   question: string;
   options: {
     A: string;
@@ -53,7 +54,8 @@ const LISTENING_TRANSCRIPT_TEXT = CET4_MOCK_EXAM.listening.transcript;
 const LONG_CONVERSATION_PRACTICE_QUESTIONS: QuestionItem[] = CET4_LISTENING_PRACTICE_QUESTIONS
   .filter((question) => question.questionTypeId === 'long-conversation')
   .map((question, index) => ({
-    id: `${index + 1}`,
+    id: question.id,
+    legacyId: `${index + 1}`,
     question: question.prompt,
     options: question.options,
     correctAnswer: question.correctAnswer,
@@ -83,9 +85,9 @@ const buildActiveListeningQuestions = (practicedQuestionIds?: Iterable<string>, 
   if (practicedIds.size === 0) return LONG_CONVERSATION_PRACTICE_QUESTIONS;
 
   const unpracticedQuestions = LONG_CONVERSATION_PRACTICE_QUESTIONS.filter(
-    (question) => !practicedIds.has(question.id),
+    (question) => !practicedIds.has(question.id) && !practicedIds.has(question.legacyId),
   );
-  if (initialQuestionId && !unpracticedQuestions.some((question) => question.id === initialQuestionId)) {
+  if (initialQuestionId && !unpracticedQuestions.some((question) => question.id === initialQuestionId || question.legacyId === initialQuestionId)) {
     return LONG_CONVERSATION_PRACTICE_QUESTIONS;
   }
 
@@ -94,7 +96,7 @@ const buildActiveListeningQuestions = (practicedQuestionIds?: Iterable<string>, 
 
 const findListeningQuestionIndexById = (questions: QuestionItem[], questionId?: string) => {
   if (!questionId) return 0;
-  const targetIndex = questions.findIndex((question) => question.id === questionId);
+  const targetIndex = questions.findIndex((question) => question.id === questionId || question.legacyId === questionId);
   return targetIndex >= 0 ? targetIndex : 0;
 };
 
@@ -109,7 +111,9 @@ const loadListeningDraftState = (baseQuestions: QuestionItem[], initialQuestionI
       startedAt,
       currentQuestionIndex,
       questions: baseQuestions.map((question) => (
-        question.id === initialQuestionId ? { ...question, ...replayAnswer } : question
+        question.id === initialQuestionId || question.legacyId === initialQuestionId
+          ? { ...question, ...replayAnswer }
+          : question
       )),
     };
   }
@@ -128,7 +132,7 @@ const loadListeningDraftState = (baseQuestions: QuestionItem[], initialQuestionI
   const answersByQuestionId = draft.answersByQuestionId ?? {};
   const questions = baseQuestions.map((question) => ({
     ...question,
-    ...answersByQuestionId[question.id],
+    ...(answersByQuestionId[question.id] ?? answersByQuestionId[question.legacyId]),
   }));
 
   return {
@@ -147,8 +151,8 @@ export default function ListeningTraining({
   replayAttempt,
   onBack,
   onComplete,
+  onAnswerRecorded,
   practicedQuestionIds,
-  onAddToReview,
 }: ListeningTrainingProps) {
   const [baseQuestions] = useState(() => buildActiveListeningQuestions(practicedQuestionIds, initialQuestionId));
   const [initialDraft] = useState(() => loadListeningDraftState(baseQuestions, initialQuestionId, replayAttempt));
@@ -157,11 +161,11 @@ export default function ListeningTraining({
   // Playback States
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPlaybackPaused, setIsPlaybackPaused] = useState(false);
-  const [currentTime, setCurrentTime] = useState(15); // Start at 15s like in screenshot
+  const [currentTime, setCurrentTime] = useState(0);
   const [audioSpeed, setAudioSpeed] = useState<number>(1.0);
   const [autoPlaybackEnabled, setAutoPlaybackEnabled] = useState(true);
   const [autoPlaybackAttempted, setAutoPlaybackAttempted] = useState(false);
-  const totalDuration = 165; // 2 minutes 45 seconds (165s)
+  const totalDuration = Math.max(60, Math.round(LISTENING_TRANSCRIPT_TEXT.split(/\s+/).filter(Boolean).length / 2.4));
   const [activeTab, setActiveTab] = useState<'ref' | 'focus' | 'shadow' | 'write' | 'listen'>('focus'); // "精听" mode is active
   
   // Waveform Equalizer heights
@@ -177,6 +181,7 @@ export default function ListeningTraining({
   const [questions, setQuestions] = useState<QuestionItem[]>(initialDraft.questions);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const submittedQuestionCount = questions.filter((question) => question.isSubmitted && question.selectedAnswer).length;
 
   const persistDraft = (nextQuestions: QuestionItem[] = questions, nextQuestionIndex = currentQuestionIndex) => {
     savePracticeDraft<ListeningPracticeDraft>(practiceDraftKeys.listening, {
@@ -236,6 +241,13 @@ export default function ListeningTraining({
       if (target >= totalDuration) return totalDuration;
       return target;
     });
+    if (isPlaying) {
+      triggerToast(amount > 0 ? '已跳过前方片段，语音会从当前位置继续训练。' : '已回到前一段重点句，语音会从当前位置继续训练。');
+      stopPracticeSpeech();
+      setIsPlaying(false);
+      setIsPlaybackPaused(false);
+      void window.setTimeout(() => startAudioPlayback('manual'), 0);
+    }
   };
 
   const startAudioPlayback = async (source: 'auto' | 'manual' = 'manual') => {
@@ -362,18 +374,64 @@ export default function ListeningTraining({
     }
   };
 
+  const buildListeningReport = (targetQuestions: QuestionItem[], options: {
+    sessionStatus: 'active' | 'completed';
+    includeEvidence: boolean;
+  }) => {
+    const submittedQuestions = targetQuestions.filter((question) => question.isSubmitted && question.selectedAnswer);
+    return buildChoicePracticeReport({
+      examId: 'cet4',
+      moduleId: 'listening',
+      questionTypeId: 'long-conversation',
+      modeId: 'listening-focus-practice',
+      skillArea: 'listening',
+      plannedMinutes: 10,
+      startedAt,
+      sessionStatus: options.sessionStatus,
+      questions: submittedQuestions.map((question) => ({
+        id: question.id,
+        question: question.question,
+        options: question.options,
+        optionTranslations: question.chineseSupport?.options,
+        correctAnswer: question.correctAnswer,
+        trapType: question.trapType,
+        correctSentence: question.transcriptionPoint,
+        correctSentenceTranslation: getQuestionSentenceSupport({
+          sentence: question.transcriptionPoint,
+          explanation: question.explanation,
+        })?.chineseMeaning,
+        questionTranslation: question.chineseSupport?.question,
+        explanation: question.explanation,
+      })),
+      answers: submittedQuestions.map((question) => ({
+        selected: question.selectedAnswer,
+        correct: question.selectedAnswer === question.correctAnswer,
+        confidence: question.confidence,
+      })),
+      includeReviewItems: options.includeEvidence,
+      includeSkillProfiles: options.includeEvidence,
+    });
+  };
+
   const handleAddToReviewQueue = () => {
     const activeQ = questions[currentQuestionIndex];
-    if (onAddToReview) {
-      onAddToReview({
-        title: `听力错题: Section A Q${activeQ.id}`,
-        category: "错题",
-        detail: `Q: ${activeQ.question} (原因: 错选了 ${activeQ.selectedAnswer}，正解为 ${activeQ.correctAnswer}。陷阱点: ${activeQ.trapType})`
-      });
-      triggerToast("已成功为您拉入「复习队列」，后续将根据艾宾浩斯记忆原理循环推送！");
-    } else {
-      triggerToast("本题错因已标记；完成本轮听力后会自动写入本地复习队列。");
+    if (!activeQ.isSubmitted || !activeQ.selectedAnswer) {
+      triggerToast('先提交本题，再加入复习队列。');
+      return;
     }
+
+    const report = buildListeningReport([activeQ], {
+      sessionStatus: 'active',
+      includeEvidence: true,
+    });
+    void Promise.resolve(onAnswerRecorded?.(report))
+      .then(() => {
+        triggerToast('已写入复习队列。');
+      })
+      .catch((error) => {
+        console.error('Failed to persist listening review item:', error);
+        triggerToast('复习队列写入失败，请稍后重试。');
+      });
   };
 
   const handleNextQuestion = () => {
@@ -383,37 +441,12 @@ export default function ListeningTraining({
       persistDraft(questions, nextIndex);
     } else {
       clearPracticeDraft(practiceDraftKeys.listening);
-      // Complete practice
-      const correctCalculated = questions.filter(q => q.selectedAnswer === q.correctAnswer).length;
-      const score = Math.round((correctCalculated / questions.length) * 100);
-      const report = buildChoicePracticeReport({
-        examId: 'cet4',
-        moduleId: 'listening',
-        questionTypeId: 'long-conversation',
-        modeId: 'listening-focus-practice',
-        skillArea: 'listening',
-        plannedMinutes: 10,
-        startedAt,
-        questions: questions.map((question) => ({
-          id: question.id,
-          question: question.question,
-          options: question.options,
-          optionTranslations: question.chineseSupport?.options,
-          correctAnswer: question.correctAnswer,
-          trapType: question.trapType,
-          correctSentence: question.transcriptionPoint,
-          correctSentenceTranslation: getQuestionSentenceSupport({
-            sentence: question.transcriptionPoint,
-            explanation: question.explanation,
-          })?.chineseMeaning,
-          questionTranslation: question.chineseSupport?.question,
-          explanation: question.explanation,
-        })),
-        answers: questions.map((question) => ({
-          selected: question.selectedAnswer,
-          correct: question.selectedAnswer === question.correctAnswer,
-          confidence: question.confidence,
-        })),
+      const submittedQuestions = questions.filter((question) => question.isSubmitted && question.selectedAnswer);
+      const correctCalculated = submittedQuestions.filter(q => q.selectedAnswer === q.correctAnswer).length;
+      const score = submittedQuestions.length > 0 ? Math.round((correctCalculated / submittedQuestions.length) * 100) : 0;
+      const report = buildListeningReport(questions, {
+        sessionStatus: 'completed',
+        includeEvidence: true,
       });
       onComplete(score, report);
     }
@@ -427,6 +460,15 @@ export default function ListeningTraining({
     sentence: activeQ.transcriptionPoint,
     explanation: activeQ.explanation,
   });
+  const showTranscript = activeTab !== 'shadow';
+  const showQuestionPanel = activeTab !== 'listen';
+  const modeHint: Record<typeof activeTab, string> = {
+    ref: '原速训练：按真实速度完整听，再作答。',
+    focus: '精听模式：边看原文边核对关键词。',
+    shadow: '盲听：先隐藏原文，只靠声音判断。',
+    write: '听写：听完后写下关键词或完整句，再核对原文。',
+    listen: '影子跟读：跟读材料，先练声音和节奏，再回到题目。',
+  };
 
   return (
     <div className="app-page-surface ui-page relative overflow-hidden">
@@ -456,7 +498,7 @@ export default function ListeningTraining({
               听力训练 - 长对话
             </h1>
             <p className="text-[11px] text-gray-400">
-              CET-4 原创模拟长对话 · {questions.length} 题结构化精听
+              CET-4 原创模拟长对话 · 已提交 {submittedQuestionCount}/{questions.length} 题
             </p>
             {initialDraft.replayed ? (
               <span
@@ -621,7 +663,7 @@ export default function ListeningTraining({
                     className="ui-button ui-button-secondary ui-button-icon rounded-full"
                     title="前进10秒"
                   >
-                    <Volume2 className="h-4 w-4" />
+                    <FastForward className="h-4 w-4" />
                   </button>
                 </div>
 
@@ -640,12 +682,34 @@ export default function ListeningTraining({
               data-testid="listening-auto-speech-status"
               className="mt-3 rounded-2xl bg-white px-4 py-3 text-center text-xs font-bold leading-5 text-slate-500"
             >
-              {autoPlaybackEnabled ? '自动播报开启' : '自动播报关闭'}
+              {modeHint[activeTab]} {autoPlaybackEnabled ? '自动播报开启' : '自动播报关闭'}
             </p>
 
           </div>
 
+          {activeTab === 'write' ? (
+            <div data-testid="listening-dictation-panel" className="rounded-3xl border border-[#cfe6f2] bg-white p-4">
+              <label className="text-xs font-black text-[#003178]" htmlFor="listening-dictation-notes">
+                听写记录
+              </label>
+              <textarea
+                id="listening-dictation-notes"
+                rows={5}
+                className="mt-3 w-full rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold leading-6 outline-none focus:border-[#003178] focus:bg-white"
+                placeholder="写下听到的关键词、数字、转折词或完整句。"
+              />
+            </div>
+          ) : null}
+
+          {activeTab === 'listen' ? (
+            <div data-testid="listening-shadow-panel" className="rounded-3xl border border-[#cfe6f2] bg-white p-4 text-sm font-semibold leading-6 text-slate-600">
+              <div className="text-xs font-black text-[#003178]">影子跟读</div>
+              <p className="mt-2">播放一句后立刻跟读，重点模仿停顿、重音和转折词。完成后切回精听模式做题。</p>
+            </div>
+          ) : null}
+
           {/* Transcript Accordion */}
+          {showTranscript ? (
           <div className="border border-[#cfe6f2] rounded-3xl overflow-hidden shadow-2xs">
             <button
               onClick={() => setIsTranscriptionExpanded(!isTranscriptionExpanded)}
@@ -668,10 +732,16 @@ export default function ListeningTraining({
               </div>
             )}
           </div>
+          ) : (
+            <div data-testid="listening-blind-mode-panel" className="rounded-3xl border border-dashed border-[#cfe6f2] bg-[#f8fbff] p-4 text-sm font-bold leading-6 text-[#003178]">
+              盲听模式已隐藏原文。先完成本题，再切回精听核对证据句。
+            </div>
+          )}
 
         </div>
 
         {/* Right column: Question card & AI diagnosis details */}
+        {showQuestionPanel ? (
         <div className="w-full lg:w-1/2 p-4 sm:p-6 lg:p-8 overflow-y-auto flex flex-col space-y-6">
           
           {/* Progress Section */}
@@ -694,7 +764,7 @@ export default function ListeningTraining({
           {/* Question detail box */}
           <div className="bg-white border-2 border-[#cfe6f2] hover:border-[#003178] transition-colors rounded-3xl p-4 sm:p-6 shadow-sm">
             <div className="text-[10px] font-bold text-[#003178] bg-[#dbf1fe] px-2.5 py-1 rounded-full border border-[#cfe6f2] inline-block mb-3">
-              Question {activeQ.id}
+              Question {activeQ.legacyId}
             </div>
             
             <h3 className="font-extrabold text-base text-[#071e27] mb-5 leading-tight">
@@ -936,6 +1006,7 @@ export default function ListeningTraining({
           )}
 
         </div>
+        ) : null}
 
       </div>
 
