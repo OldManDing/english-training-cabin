@@ -624,6 +624,92 @@ const KNOWN_SENTENCE_TRANSLATIONS: Record<string, string> = {
     '文章通过音乐、时尚和网络习惯描述了青年文化。',
   'The map marked a safe zone for students during the emergency drill.':
     '地图为应急演练中的学生标出了安全区。',
+  'Regular reading and speaking practice can improve language ability.':
+    '规律的阅读和口语练习可以提高语言能力。',
+  'The school contacted parents when student absence became frequent.':
+    '学生缺勤变得频繁时，学校联系了家长。',
+  'The team chose free online tools because it had a limited budget.':
+    '由于预算有限，团队选择了免费的在线工具。',
+  'Clear feedback is a key component of effective language practice.':
+    '清晰反馈是有效语言练习的关键组成部分。',
+  'The library app offers a convenient service for reserving study rooms.':
+    '图书馆应用提供便捷服务，方便预约自习室。',
+  'Public debate can help citizens understand a policy.':
+    '公共辩论可以帮助公民理解一项政策。',
+  'Clear user feedback can increase the commercial value of a service.':
+    '清晰的用户反馈可以提升一项服务的商业价值。',
+  'Air pollution can affect children’s health in busy cities.':
+    '在繁忙城市中，空气污染可能影响儿童健康。',
+  'Many international programs aim to protect world peace.':
+    '许多国际项目旨在维护世界和平。',
+  'Good time management helps students finish review tasks before work.':
+    '良好的时间管理能帮助学生在工作前完成复习任务。',
+  'Students study psychology to understand how people learn and behave.':
+    '学生学习心理学，以理解人们如何学习和表现。',
+  'Excess pressure can reduce students’ confidence before an exam.':
+    '过度压力会降低学生考前的信心。',
+  'Better technology can improve crop production in rural areas.':
+    '更好的技术可以提升农村地区的农作物产量。',
+  'Flood control protects towns during heavy rain.':
+    '洪水防控能在暴雨期间保护城镇。',
+  'Mass communication changes how people receive public information.':
+    '大众传播改变了人们接收公共信息的方式。',
+  'Neat handwriting helps teachers read answers clearly.':
+    '工整的书写能帮助老师清楚阅读答案。',
+  'Knowing word origin can help students remember vocabulary.':
+    '了解词源可以帮助学生记忆词汇。',
+  'The article discussed social justice in public education.':
+    '文章讨论了公共教育中的社会公平。',
+  'A research fund supported the student survey.':
+    '一笔研究基金支持了这项学生调查。',
+  'A sleep disorder can affect daytime study.':
+    '睡眠障碍会影响白天学习。',
+  'Students show courage when they ask questions after a difficult lesson.':
+    '学生在一节难课后主动提问时表现出勇气。',
+  'A careful reader should mention a detail only when it supports the main idea.':
+    '细心的读者只有在细节支持主旨时才应提到它。',
+  'Problems arise when instructions are unclear.':
+    '说明不清楚时，问题就会出现。',
+  'The study group set aside time to review difficult words.':
+    '学习小组留出时间复习难词。',
+  'Students usually behave well when classroom rules are clear.':
+    '课堂规则清楚时，学生通常表现良好。',
+  'Candidates compose an essay after reading the short passage.':
+    '考生阅读短文后写一篇作文。',
+  'Some students earn income through part-time work during holidays.':
+    '一些学生在假期通过兼职获得收入。',
+  'Learners eventually succeed when they keep practicing with feedback.':
+    '学习者持续带着反馈练习时，最终会成功。',
+  'Public feedback can force change in a slow service system.':
+    '公众反馈可以促使响应缓慢的服务系统作出改变。',
+  'The project can move forward after the team agrees on a plan.':
+    '团队就计划达成一致后，项目可以向前推进。',
+  'Good writers frame a question before collecting evidence.':
+    '好的写作者会在收集证据前构建问题。',
+  'Readers grasp meaning faster when examples are clear.':
+    '例子清楚时，读者能更快把握含义。',
+  'Clear rules guard safety during a science activity.':
+    '清楚的规则能在科学活动中保障安全。',
+  'Busy students may hardly notice small errors in a first draft.':
+    '忙碌的学生可能几乎注意不到初稿中的小错误。',
+  'Many residents hate waste and support recycling programs.':
+    '许多居民讨厌浪费，并支持回收项目。',
+  'The claim is indeed true when the data supports it.':
+    '当数据支持这一说法时，它确实是真的。',
+  'Overseas study can broaden a student’s academic experience.':
+    '海外学习可以拓宽学生的学术经历。',
+  'Some learners prefer reading short articles before discussion.':
+    '一些学习者更喜欢在讨论前阅读短文。',
+  'The committee may reject a proposal if it lacks evidence.':
+    '如果提案缺少证据，委员会可能会拒绝它。',
+  'Some workers retire early because of health problems.':
+    '一些工人因健康问题提前退休。',
+  'The teacher may suggest a method after checking common mistakes.':
+    '老师检查常见错误后可能会建议一种方法。',
+  'Students can survive difficulty when they ask for help early.':
+    '学生及早求助时，就能渡过难关。',
+  'The listening task was somewhat difficult for new learners.':
+    '这项听力任务对新学习者来说有些困难。',
   'The team reviewed feedback and therefore improved the service.':
     '团队复盘了反馈，因此改进了服务。',
   'The interview lasted approximately twenty minutes in the student center.':
@@ -1223,6 +1309,7 @@ const CORE_DEFINITION_OPTION_TRANSLATIONS: Record<string, string> = {
   'communication or action between people or things': '人与人或事物之间的交流或作用',
   'an important topic or problem': '重要话题或问题',
   'to take part in an activity': '参加活动',
+  'to one side or away from the main point': '在一旁；偏离主要话题',
   'a rule or plan used by an organization or government': '组织或政府采用的规则或计划',
   'to support or encourage something': '支持或鼓励某事',
   'to need or demand something': '需要或要求某事',
@@ -1393,6 +1480,7 @@ const COLLOCATION_USAGE_TRANSLATIONS: Record<string, string> = {
   'available resources': '可用资源',
   'build trust': '建立信任',
   'convenient service': '便捷服务',
+  'commercial value': '商业价值',
   'computer virus': '电脑病毒',
   'data privacy': '数据隐私',
   'digital technology': '数字技术',
@@ -1402,7 +1490,11 @@ const COLLOCATION_USAGE_TRANSLATIONS: Record<string, string> = {
   'feel upset': '感到沮丧',
   'human mentorship': '人的指导',
   'imitate pronunciation': '模仿发音',
+  'key component': '关键组成部分',
+  'language ability': '语言能力',
   'learning resources': '学习资源',
+  'limited budget': '有限预算',
+  'air pollution': '空气污染',
   'main point': '主要观点',
   'major change': '重大变化',
   'majority opinion': '多数意见',
@@ -1411,13 +1503,16 @@ const COLLOCATION_USAGE_TRANSLATIONS: Record<string, string> = {
   'necessary step': '必要步骤',
   'ordinary people': '普通人',
   'practical wisdom': '实用智慧',
+  'public debate': '公共辩论',
   'reduce waste': '减少浪费',
   'resolve a conflict': '解决冲突',
   'safe zone': '安全区',
   'school violence': '校园暴力',
   'serious wound': '严重伤口',
   'similar meaning': '相似含义',
+  'student absence': '学生缺勤',
   'support an argument': '支持论点',
+  'time management': '时间管理',
   'traffic jam': '交通拥堵',
   'traditional virtue': '传统美德',
   'tuition fee': '学费',
@@ -2719,12 +2814,8 @@ function buildVocabularyFallback(item: VocabularySentenceInput): Pick<PracticeSe
               chineseMeaning: '有了奖学金支持',
             },
             {
-              sourceText: 'more learners can afford the cost',
-              chineseMeaning: '更多学习者能够负担得起费用',
-            },
-            {
-              sourceText: 'of an online course',
-              chineseMeaning: '在线课程的',
+              sourceText: 'more learners can afford the cost of an online course',
+              chineseMeaning: '更多学习者能够负担得起一门在线课程的费用',
             },
           ],
         };

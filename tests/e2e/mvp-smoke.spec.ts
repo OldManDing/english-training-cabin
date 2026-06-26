@@ -529,6 +529,35 @@ async function chooseComboboxOption(page: Page, label: string, optionName: strin
   await page.getByRole('option', { name: optionName }).click();
 }
 
+async function openVocabularyItem(page: Page, word: string) {
+  const targetIndex = CET4_VOCABULARY_BANK.findIndex((item) => item.word === word);
+  expect(targetIndex).toBeGreaterThanOrEqual(0);
+  const targetItem = CET4_VOCABULARY_BANK[targetIndex];
+  const packIndex = Math.floor(targetIndex / VOCABULARY_SESSION_SIZE);
+  const currentIdx = targetIndex % VOCABULARY_SESSION_SIZE;
+
+  await page.evaluate(({ packIndex, currentIdx }) => {
+    const now = new Date().toISOString();
+    localStorage.setItem('english-training-cabin:practice-draft:vocabulary', JSON.stringify({
+      version: 1,
+      startedAt: now,
+      packIndex,
+      currentIdx,
+      selectedOpt: null,
+      confidence: null,
+      isSubmitted: false,
+      answers: [],
+      updatedAt: now,
+    }));
+  }, { packIndex, currentIdx });
+
+  await page.getByRole('button', { name: '专项练习' }).click();
+  await page.getByTestId('practice-module-action-vocabulary').click();
+  await expect(page.getByRole('heading', { name: targetItem.word })).toBeVisible();
+
+  return targetItem;
+}
+
 test('MVP critical reading flow persists local learning evidence', async ({ page }) => {
   await installSpeechSynthesisMock(page);
   await registerAndEnterApp(page, 'mvp-reading');
@@ -1735,31 +1764,7 @@ test('generated vocabulary example shows sentence-use chunk translations after s
   await resetLocalLearningData(page);
   await page.reload();
 
-  const targetIndex = CET4_VOCABULARY_BANK.findIndex((item) => item.word === 'afford');
-  expect(targetIndex).toBeGreaterThanOrEqual(0);
-  const targetItem = CET4_VOCABULARY_BANK[targetIndex];
-  const packIndex = Math.floor(targetIndex / VOCABULARY_SESSION_SIZE);
-  const currentIdx = targetIndex % VOCABULARY_SESSION_SIZE;
-
-  await page.evaluate(({ packIndex, currentIdx }) => {
-    const now = new Date().toISOString();
-    localStorage.setItem('english-training-cabin:practice-draft:vocabulary', JSON.stringify({
-      version: 1,
-      startedAt: now,
-      packIndex,
-      currentIdx,
-      selectedOpt: null,
-      confidence: null,
-      isSubmitted: false,
-      answers: [],
-      updatedAt: now,
-    }));
-  }, { packIndex, currentIdx });
-
-  await page.getByRole('button', { name: '专项练习' }).click();
-  await page.getByTestId('practice-module-action-vocabulary').click();
-
-  await expect(page.getByRole('heading', { name: targetItem.word })).toBeVisible();
+  const targetItem = await openVocabularyItem(page, 'afford');
   await page.getByRole('button', { name: new RegExp(`^${targetItem.correctAnswer}\\. `) }).click();
   await page.getByRole('button', { name: '有把握' }).click();
   await page.getByRole('button', { name: '提交词汇答案' }).click();
@@ -1773,10 +1778,38 @@ test('generated vocabulary example shows sentence-use chunk translations after s
   );
   await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('With a scholarship');
   await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('有了奖学金支持');
-  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('more learners can afford the cost');
-  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('更多学习者能够负担得起费用');
-  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('of an online course');
-  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('在线课程的');
+  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('more learners can afford the cost of an online course');
+  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('更多学习者能够负担得起一门在线课程的费用');
+});
+
+test('vocabulary translations render natural collocation examples in the browser', async ({ page }) => {
+  await installSpeechSynthesisMock(page);
+  await registerAndEnterApp(page, 'mvp-vocabulary-natural-translations');
+  await resetLocalLearningData(page);
+  await page.reload();
+
+  const commercialItem = await openVocabularyItem(page, 'commercial');
+  await expect(page.getByRole('heading', { name: commercialItem.word })).toBeVisible();
+  await expect(page.getByText('Clear user feedback can increase the commercial value of a service.')).toBeVisible();
+  await page.getByRole('button', { name: new RegExp(`^${commercialItem.correctAnswer}\\. `) }).click();
+  await page.getByRole('button', { name: '有把握' }).click();
+  await page.getByRole('button', { name: '提交词汇答案' }).click();
+  await expect(page.getByTestId('vocabulary-sentence-translation')).toContainText(
+    '清晰的用户反馈可以提升一项服务的商业价值。',
+  );
+  await expect(page.getByTestId('vocabulary-sentence-translation')).not.toContainText('商业的价值');
+
+  await page.getByTestId('vocabulary-back-to-practice').click();
+  const psychologyItem = await openVocabularyItem(page, 'psychology');
+  await expect(page.getByRole('heading', { name: psychologyItem.word })).toBeVisible();
+  await expect(page.getByText('Students study psychology to understand how people learn and behave.')).toBeVisible();
+  await page.getByRole('button', { name: new RegExp(`^${psychologyItem.correctAnswer}\\. `) }).click();
+  await page.getByRole('button', { name: '有把握' }).click();
+  await page.getByRole('button', { name: '提交词汇答案' }).click();
+  await expect(page.getByTestId('vocabulary-sentence-translation')).toContainText(
+    '学生学习心理学，以理解人们如何学习和表现。',
+  );
+  await expect(page.getByTestId('vocabulary-sentence-translation')).not.toContainText('必须心理学');
 });
 
 test('vocabulary practice keeps a visible message when browser speech synthesis fails', async ({ page }) => {

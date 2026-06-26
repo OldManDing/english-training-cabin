@@ -126,6 +126,7 @@ describe('practice sentence and vocabulary Chinese support', () => {
       /大意为/u,
       /不匹配的干扰释义/u,
     ];
+    const allowedEnglishInChinese = /\b(?:AI|CET)\b|a、an、the/gu;
     const invalidOptions = CET4_VOCABULARY_BANK.flatMap((item) =>
       getVocabularyQuestionSupport(item).optionTranslations.map((option) => ({
         word: item.word,
@@ -134,6 +135,7 @@ describe('practice sentence and vocabulary Chinese support', () => {
     ).filter(({ option }) => (
       !/[\u4e00-\u9fff]/u.test(option.chineseMeaning)
       || forbiddenOptionPatterns.some((pattern) => pattern.test(option.chineseMeaning))
+      || /[A-Za-z]{2,}/u.test(option.chineseMeaning.replace(allowedEnglishInChinese, ''))
     ));
 
     expect(invalidOptions).toEqual([]);
@@ -168,12 +170,8 @@ describe('practice sentence and vocabulary Chinese support', () => {
         chineseMeaning: '有了奖学金支持',
       },
       {
-        sourceText: 'more learners can afford the cost',
-        chineseMeaning: '更多学习者能够负担得起费用',
-      },
-      {
-        sourceText: 'of an online course',
-        chineseMeaning: '在线课程的',
+        sourceText: 'more learners can afford the cost of an online course',
+        chineseMeaning: '更多学习者能够负担得起一门在线课程的费用',
       },
     ]);
   });
@@ -327,6 +325,16 @@ describe('practice sentence and vocabulary Chinese support', () => {
       ['strengthen', 'Spaced review can strengthen memory over several weeks.', '间隔复习可以在几周内强化记忆。'],
       ['perfect', 'A perfect score is possible only with careful preparation.', '只有认真准备，才可能取得满分。'],
       ['central', 'The teacher connected a central idea with a problem students had seen before.', '老师把中心思想和学生以前见过的问题联系起来。'],
+      ['ability', 'Regular reading and speaking practice can improve language ability.', '规律的阅读和口语练习可以提高语言能力。'],
+      ['absence', 'The school contacted parents when student absence became frequent.', '学生缺勤变得频繁时，学校联系了家长。'],
+      ['budget', 'The team chose free online tools because it had a limited budget.', '由于预算有限，团队选择了免费的在线工具。'],
+      ['component', 'Clear feedback is a key component of effective language practice.', '清晰反馈是有效语言练习的关键组成部分。'],
+      ['convenient', 'The library app offers a convenient service for reserving study rooms.', '图书馆应用提供便捷服务，方便预约自习室。'],
+      ['aside', 'The study group set aside time to review difficult words.', '学习小组留出时间复习难词。'],
+      ['psychology', 'Students study psychology to understand how people learn and behave.', '学生学习心理学，以理解人们如何学习和表现。'],
+      ['pollution', 'Air pollution can affect children’s health in busy cities.', '在繁忙城市中，空气污染可能影响儿童健康。'],
+      ['management', 'Good time management helps students finish review tasks before work.', '良好的时间管理能帮助学生在工作前完成复习任务。'],
+      ['commercial', 'Clear user feedback can increase the commercial value of a service.', '清晰的用户反馈可以提升一项服务的商业价值。'],
     ] as const;
 
     for (const [word, example, chineseMeaning] of expectedExamples) {
