@@ -151,6 +151,39 @@ describe('practice sentence and vocabulary Chinese support', () => {
     expect(support.chunks.every((chunk) => chunk.sourceText && chunk.chineseMeaning)).toBe(true);
   });
 
+  it('keeps most vocabulary examples split into visible sentence chunks', () => {
+    const supports = CET4_VOCABULARY_BANK.map((item) => ({
+      word: item.word,
+      example: item.example,
+      support: getVocabularySentenceSupport(item),
+    }));
+    const singleChunkItems = supports.filter(({ support }) => support.chunks.length < 2);
+    const invalidChunks = supports.filter(({ support }) =>
+      support.chunks.some((chunk) => !chunk.sourceText.trim() || !chunk.chineseMeaning.trim()),
+    );
+
+    expect(singleChunkItems.length).toBeLessThanOrEqual(90);
+    expect(invalidChunks).toEqual([]);
+  });
+
+  it('keeps Chinese sentence chunks from stranding modal cues', () => {
+    const hasStrandedCue = (value: string) => {
+      if (/(?:可以|可能会|应该|应当|必须|需要|能够|通过|会把|会|将|让|使)$/u.test(value)) return true;
+      if (value.endsWith('应') && !/(?:反应|适应|回应|响应)$/u.test(value)) return true;
+      if (value.endsWith('能') && !/(?:技能|功能|性能|能力)$/u.test(value)) return true;
+      return false;
+    };
+    const awkwardChunks = CET4_VOCABULARY_BANK.map((item) => ({
+      word: item.word,
+      example: item.example,
+      chunks: getVocabularySentenceSupport(item).chunks,
+    })).filter(({ chunks }) =>
+      chunks.slice(0, -1).some((chunk) => hasStrandedCue(chunk.chineseMeaning)),
+    );
+
+    expect(awkwardChunks).toEqual([]);
+  });
+
   it('uses core collocations inside natural example sentences with aligned chunks', () => {
     const afford = CET4_VOCABULARY_BANK.find((item) => item.word === 'afford');
     expect(afford).toBeTruthy();
@@ -317,6 +350,36 @@ describe('practice sentence and vocabulary Chinese support', () => {
     expect(invalidTranslations).toEqual([]);
   });
 
+  it('keeps generated vocabulary examples suitable as natural example sentences', () => {
+    const forbiddenExamplePatterns = [
+      /was the detail that many students remembered after class/i,
+      /showed why the team changed its plan before Friday/i,
+      /after class (?:during|in|after|before)\b/i,
+      /\bwould study partner\b/i,
+      /\bA (?:plastic waste|surface water|personal freedom|continuous improvement|public safety|latest news)\b/i,
+      /\bA face reality\b/i,
+      /\bcan become clearer when students see it in a full sentence\b/i,
+      /\bchose to cheat in an exam\b/i,
+      /\bAfter the survey, the team chose to .+ in the next update\b/i,
+      /\bThe training session gave employees time to .+ with guidance\b/i,
+      /\bA (?:climate change|civil responsibility|main point)\b/i,
+      /\b(?:Service quality|Personal information|Learning behavior|Modern agriculture|Health insurance) helped\b/i,
+    ];
+    const invalidItems = CET4_VOCABULARY_BANK.map((item) => ({
+      word: item.word,
+      collocation: item.collocation,
+      example: item.example,
+    })).filter(({ example }) => forbiddenExamplePatterns.some((pattern) => pattern.test(example)));
+
+    expect(invalidItems).toEqual([]);
+
+    const decision = CET4_VOCABULARY_BANK.find((entry) => entry.word === 'decision');
+    expect(decision).toBeTruthy();
+    expect(decision!.example).toBe(
+      'Many students remembered the important decision made during the study-plan meeting.',
+    );
+  });
+
   it('keeps representative generated vocabulary examples natural and accurately translated', () => {
     const expectedExamples = [
       ['hesitate', 'Students should not hesitate to ask when they need help.', '学生需要帮助时不应犹豫提问。'],
@@ -342,6 +405,23 @@ describe('practice sentence and vocabulary Chinese support', () => {
       expect(item).toBeTruthy();
       expect(item!.example).toBe(example);
       expect(getVocabularySentenceSupport(item!).chineseMeaning).toBe(chineseMeaning);
+    }
+  });
+
+  it('keeps adjective-plus-person collocations translated with a clear head noun', () => {
+    const expectedTranslations = [
+      ['former', /往届学生/u],
+      ['active', /积极学习者/u],
+      ['female', /女学生/u],
+      ['junior', /低年级学生/u],
+    ] as const;
+
+    for (const [word, expectedChinese] of expectedTranslations) {
+      const item = CET4_VOCABULARY_BANK.find((entry) => entry.word === word);
+      expect(item).toBeTruthy();
+      const support = getVocabularySentenceSupport(item!);
+      expect(support.chineseMeaning).toMatch(expectedChinese);
+      expect(support.chineseMeaning).not.toMatch(/以前的用|积极的出|女性的用|年少的在/u);
     }
   });
 

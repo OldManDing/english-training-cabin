@@ -62,6 +62,10 @@ const KNOWN_SENTENCE_TRANSLATIONS: Record<string, string> = {
     '持续练习比一次性学习很多小时更有效。',
   'Active recall helps learners retrieve information from memory instead of only rereading it.':
     '主动回忆能帮助学习者从记忆中提取信息，而不是只反复阅读。',
+  'The counselor helped families understand an account record clearly.':
+    '顾问帮助家庭清楚理解账户记录。',
+  'New learners can become accustomed to the study schedule after two weeks.':
+    '两周后，新学习者能逐渐适应学习安排。',
   'Students acquire language skills more effectively when they use words in context.':
     '当学生在语境中使用词汇时，他们能更有效地习得语言技能。',
   'A good learner analyzes the reason for a mistake before reviewing it.':
@@ -100,6 +104,8 @@ const KNOWN_SENTENCE_TRANSLATIONS: Record<string, string> = {
     '公共交通在城市发展中发挥重要作用。',
   'A progress chart can make learning progress visible.':
     '进度图可以让学习进展变得可见。',
+  'A desert climate makes water management especially important.':
+    '沙漠气候使水资源管理格外重要。',
   'Too many notifications may lead to a decline in attention.':
     '太多通知可能会导致注意力下降。',
   'A report should provide accurate information rather than vague guesses.':
@@ -162,6 +168,10 @@ const KNOWN_SENTENCE_TRANSLATIONS: Record<string, string> = {
     '清晰的计划有助于学习者达到目标分数。',
   'Sleep can affect students’ performance in a long exam.':
     '睡眠会影响学生在长时间考试中的表现。',
+  'Social media can spread public information quickly during an emergency.':
+    '紧急情况下，社交媒体可以快速传播公共信息。',
+  'Last-minute changes can confuse students before an exam.':
+    '考前最后一刻的变化可能会让学生困惑。',
   'The team arranged a meeting to discuss the survey results.':
     '团队安排了一次会议来讨论调查结果。',
   'The report examines different aspects of online learning.':
@@ -248,6 +258,98 @@ const KNOWN_SENTENCE_TRANSLATIONS: Record<string, string> = {
     '学生核对了证据，而不是凭记忆猜测。',
   'The office should not change the deadline without a reason.':
     '办公室不应无故更改截止日期。',
+  'Many students remembered the important decision made during the study-plan meeting.':
+    '许多学生记住了学习计划会议上做出的重要决定。',
+  'Throughout history, people have used stories to share values.':
+    '纵观历史，人们一直用故事来传递价值观。',
+  'Students followed the latest news before the discussion.':
+    '学生在讨论前关注了最新消息。',
+  'Writers should identify the target audience before choosing examples.':
+    '写作者在选择例子前应明确目标读者。',
+  'Clear information can prevent people from delaying action during an emergency.':
+    '清楚的信息可以防止人们在紧急情况下拖延行动。',
+  'Doctors and volunteers work together to battle disease in rural areas.':
+    '医生和志愿者共同努力，在农村地区抗击疾病。',
+  'Students should never cheat in an exam, even under pressure.':
+    '学生即使在压力下也绝不应在考试中作弊。',
+  'When both choices seem possible, students may choose the latter after checking grammar.':
+    '当两个选项看似都可能时，学生可以核对语法后选择后者。',
+  'The lesson will cover a topic that often appears in exams.':
+    '这节课将覆盖一个考试中经常出现的话题。',
+  'Students should fill a form carefully before submitting it.':
+    '学生在提交表格前应仔细填写。',
+  'Students should focus attention on key details during reading practice.':
+    '学生在阅读练习中应把注意力集中在关键细节上。',
+  'A certificate can help graduates qualify for a job in a new field.':
+    '证书可以帮助毕业生获得新领域工作的资格。',
+  'Rescue workers arrived before the road was closed.':
+    '救援人员在道路关闭前赶到了。',
+  'The service plan should satisfy demand during busy hours.':
+    '服务计划应在繁忙时段满足需求。',
+  'Students should ask for clarification when a task requirement is unclear.':
+    '任务要求不清楚时，学生应请求说明。',
+  'Workers must read the safety guide before they operate a machine.':
+    '工人在操作机器前必须阅读安全指南。',
+  'Students can pay a bill online before the due date.':
+    '学生可以在到期日前在线支付账单。',
+  'Students should remain calm when a difficult question appears.':
+    '遇到难题时，学生应保持冷静。',
+  'Students study mathematics to build logical thinking.':
+    '学生学习数学以培养逻辑思维。',
+  'Students can take pride in steady progress after regular practice.':
+    '经过规律练习后，学生可以为稳定进步感到自豪。',
+  'A review plan should target a weakness that appears repeatedly.':
+    '复习计划应针对反复出现的薄弱点。',
+  'Learners may encounter difficulty when a passage contains unfamiliar words.':
+    '当文章包含生词时，学习者可能会遇到困难。',
+  'A clear checklist can increase efficiency during daily work.':
+    '清晰的清单可以提高日常工作的效率。',
+  'Residents should take action when a safety problem appears.':
+    '出现安全问题时，居民应采取行动。',
+  'The committee can approve a plan after reviewing its details.':
+    '委员会可以在审查细节后批准计划。',
+  'A clear title can attract attention without exaggeration.':
+    '清楚的标题可以在不夸张的情况下吸引注意。',
+  'Many public places ban smoking to protect health.':
+    '许多公共场所禁止吸烟以保护健康。',
+  'A lively story can delight readers of different ages.':
+    '生动的故事可以使不同年龄的读者感到愉快。',
+  'Visitors may need to pay a deposit before borrowing equipment.':
+    '访客在借用设备前可能需要支付押金。',
+  'Students who keep improving deserve praise for their effort.':
+    '持续进步的学生因其努力值得表扬。',
+  'A good leader can divide tasks according to each member’s strength.':
+    '好的负责人可以根据每名成员的优势分配任务。',
+  'Some learners fear failure before they try a difficult task.':
+    '一些学习者在尝试困难任务前害怕失败。',
+  'Volunteers greet guests at the entrance before the lecture.':
+    '讲座开始前，志愿者在入口处迎接来宾。',
+  'Regular checks can help guarantee quality in a service process.':
+    '定期检查可以帮助保证服务流程中的质量。',
+  'The company plans to hire staff for the new service desk.':
+    '公司计划为新的服务台招聘员工。',
+  'Students should label a file clearly before sharing it with the group.':
+    '学生在把文件分享给小组前应清楚标注。',
+  'Classmates can lend support when a learner loses confidence.':
+    '当学习者失去信心时，同学可以提供支持。',
+  'Students can order food before the evening review session starts.':
+    '学生可以在晚间复习课开始前点餐。',
+  'Students can recall details more accurately after reviewing notes.':
+    '学生复习笔记后可以更准确地回忆细节。',
+  'The club will recruit volunteers for the weekend activity.':
+    '俱乐部将为周末活动招募志愿者。',
+  'The technician will replace a part after checking the machine.':
+    '技术员检查机器后会更换一个零件。',
+  'The article clearly condemns violence in schools.':
+    '这篇文章明确谴责校园暴力。',
+  'Emergency training teaches people how to escape danger safely.':
+    '应急训练教人们如何安全脱险。',
+  'Targeted support can narrow the gap between strong and weak learners.':
+    '有针对性的支持可以缩小强弱学习者之间的差距。',
+  'Museums help communities preserve culture for future generations.':
+    '博物馆帮助社区为后代保存文化。',
+  'Children should wear a helmet when they ride a bicycle.':
+    '儿童骑自行车时应佩戴头盔。',
   'Under this circumstance, the library extended its evening hours.':
     '在这种情况下，图书馆延长了晚间开放时间。',
   'The reading group meets on a regular basis to discuss short articles.':
@@ -260,6 +362,8 @@ const KNOWN_SENTENCE_TRANSLATIONS: Record<string, string> = {
     '新的时间安排节省了时间，而且还提高了出勤率。',
   'A short message can provide comfort to a nervous student before the exam.':
     '考前，一条简短的信息可以安慰紧张的学生。',
+  'Student volunteers provide aid to new students during orientation.':
+    '迎新期间，学生志愿者为新生提供帮助。',
   'Students should be aware of the deadline before submitting the form.':
     '学生在提交表格前应注意截止日期。',
   'Drivers should avoid alcohol before getting behind the wheel.':
@@ -440,6 +544,8 @@ const KNOWN_SENTENCE_TRANSLATIONS: Record<string, string> = {
     '调查数据可以帮助研究者预测趋势。',
   'The student group will publish a report after the survey.':
     '学生小组将在调查后发布报告。',
+  'The two groups tried to negotiate an agreement before Friday.':
+    '两个小组试图在周五前协商达成协议。',
   'Many students purchase online when textbooks are discounted.':
     '教材打折时，许多学生会在线购买。',
   'Reading every day can accelerate growth in vocabulary.':
@@ -474,12 +580,22 @@ const KNOWN_SENTENCE_TRANSLATIONS: Record<string, string> = {
     '考生需要在截止日期前在线注册。',
   'The office will release information on the school website.':
     '办公室将在学校网站发布信息。',
+  'Students relax after class by walking around the campus.':
+    '学生课后通过在校园里散步来放松。',
   'The club teaches students how to repair a bike.':
     '俱乐部教学生如何修自行车。',
   'The secretary will reply quickly after checking the form.':
     '秘书查看表格后会迅速回复。',
   'Students can reserve a seat in the library app.':
     '学生可以在图书馆应用中预订座位。',
+  'Daily practice is easier to keep when each task takes only ten minutes.':
+    '当每项任务只需十分钟时，每日练习更容易坚持。',
+  'The first group checked the data; meanwhile, the second group continued the interview.':
+    '第一组核对数据；与此同时，第二组继续采访。',
+  'Students should check the source before sharing online content.':
+    '学生在分享网络内容前应核对来源。',
+  'Students repeat practice with new examples when a rule is still unclear.':
+    '当某条规则仍不清楚时，学生会用新例子重复练习。',
   'After the introduction, writers should shift focus to evidence.':
     '引言之后，写作者应把重点转向证据。',
   'Spaced review can strengthen memory over several weeks.':
@@ -592,6 +708,8 @@ const KNOWN_SENTENCE_TRANSLATIONS: Record<string, string> = {
     '公司会在引入新设备前培训工人。',
   'The notice explained how students could pay the tuition fee in two parts.':
     '通知说明了学生如何分两次缴纳学费。',
+  'The tuition fee covered access to online lessons and practice tests.':
+    '这笔学费包含在线课程和练习测试的使用权限。',
   'Respect for fairness is a universal value in public discussion.':
     '尊重公平是公共讨论中的普遍价值。',
   'Students may feel upset when feedback only points out mistakes without guidance.':
@@ -616,6 +734,80 @@ const KNOWN_SENTENCE_TRANSLATIONS: Record<string, string> = {
     '当公共服务回应反馈时，居民能够见证变化。',
   'Students can withdraw money from the campus ATM before the trip.':
     '学生可以在出行前从校园自动取款机取钱。',
+  'Readers may favor one choice when it is supported by clear evidence.':
+    '当某个选项有清楚证据支持时，读者可能会偏向这个选项。',
+  'A short story can amuse children during a long trip.':
+    '长途旅行中，一个短故事可以逗孩子开心。',
+  'Students must answer exactly what the question asks.':
+    '学生必须准确回答题目所问的内容。',
+  'Passengers should board a train only after the gate opens.':
+    '乘客应在检票口开放后再上火车。',
+  'Students can breathe deeply before answering a difficult question.':
+    '学生回答难题前可以深呼吸。',
+  'Group activities can build friendship among new classmates.':
+    '小组活动可以在新同学之间建立友谊。',
+  'A strong opening can capture attention in a speech.':
+    '有力的开头可以在演讲中吸引注意力。',
+  'The two reports differ greatly in how they explain the result.':
+    '这两份报告在解释结果的方式上差异很大。',
+  'Direct contact with teachers can help learners solve problems faster.':
+    '与老师直接接触能帮助学习者更快解决问题。',
+  'Interactive questions can engage students at the start of class.':
+    '互动问题可以在课堂开始时吸引学生参与。',
+  'A speaking task can help students exhibit ability beyond written tests.':
+    '口语任务能帮助学生展示笔试之外的能力。',
+  'Local companies export goods to several neighboring countries.':
+    '本地公司向几个邻近国家出口商品。',
+  'Loud alarms can frighten children during an emergency drill.':
+    '应急演练中，响亮的警报可能会吓到孩子。',
+  'Fresh air can help students feel more awake during a break.':
+    '休息时的新鲜空气能让学生更清醒。',
+  'Students should have faith in their ability to improve through practice.':
+    '学生应相信自己能通过练习提升能力。',
+  'Learners can imitate pronunciation after listening to the recording.':
+    '学习者听录音后可以模仿发音。',
+  'The software can import data from a spreadsheet before analysis.':
+    '这款软件可以在分析前从电子表格导入数据。',
+  'It is rude to interrupt a speaker during a presentation.':
+    '在演示中打断发言者是不礼貌的。',
+  'The teacher will introduce a method before students start practice.':
+    '老师会在学生开始练习前介绍一种方法。',
+  'Please knock on the door before entering the office.':
+    '进入办公室前请先敲门。',
+  'The report described changes in the labor market after graduation season.':
+    '报告描述了毕业季后劳动力市场的变化。',
+  'Online materials can lower the cost of exam preparation.':
+    '在线资料可以降低备考成本。',
+  'Some people marry young, while others wait until they finish their studies.':
+    '有些人很早结婚，而另一些人会等到完成学业后再结婚。',
+  'A student may nod in agreement when the speaker makes a fair point.':
+    '当发言者提出合理观点时，学生可能会点头表示同意。',
+  'Small errors occur frequently when instructions are unclear.':
+    '说明不清楚时，小错误会频繁出现。',
+  'Candidates need to pass an exam before receiving the certificate.':
+    '考生需要先通过考试，才能获得证书。',
+  'Speakers should pause briefly before answering a difficult question.':
+    '演讲者回答难题前应短暂停顿。',
+  'The lecture discussed racial equality in modern society.':
+    '讲座讨论了现代社会中的种族平等。',
+  'Drivers must react quickly when the traffic light changes.':
+    '交通灯变化时，司机必须迅速反应。',
+  'The volunteer received an award for community service.':
+    '这名志愿者因社区服务获得了奖项。',
+  'Patients recover quickly when they follow medical advice.':
+    '病人遵循医嘱时恢复得很快。',
+  'Clear rules can shape behavior over time.':
+    '清楚的规则可以随着时间塑造行为。',
+  'A lively question can stimulate interest at the start of class.':
+    '一个生动的问题可以在课堂开始时激发兴趣。',
+  'Students may succeed eventually if they review mistakes every week.':
+    '如果学生每周复习错误，他们最终可能会成功。',
+  'Writing scores tend to improve when students revise each draft.':
+    '学生修改每一稿时，写作分数往往会提高。',
+  'A stable water supply is essential for daily life.':
+    '稳定的供水对日常生活至关重要。',
+  'New employees often work with a colleague during training.':
+    '新员工在培训期间常常和同事一起工作。',
   'Some readers wonder why the writer changed his opinion in the final paragraph.':
     '有些读者想知道作者为什么在最后一段改变了观点。',
   'The nurse cleaned the serious wound before sending the patient to hospital.':
@@ -658,6 +850,8 @@ const KNOWN_SENTENCE_TRANSLATIONS: Record<string, string> = {
     '工整的书写能帮助老师清楚阅读答案。',
   'Knowing word origin can help students remember vocabulary.':
     '了解词源可以帮助学生记忆词汇。',
+  'Researchers measured brain activity while volunteers solved memory tasks.':
+    '研究者在志愿者完成记忆任务时测量了他们的大脑活动。',
   'The article discussed social justice in public education.':
     '文章讨论了公共教育中的社会公平。',
   'A research fund supported the student survey.':
@@ -712,6 +906,8 @@ const KNOWN_SENTENCE_TRANSLATIONS: Record<string, string> = {
     '这项听力任务对新学习者来说有些困难。',
   'The team reviewed feedback and therefore improved the service.':
     '团队复盘了反馈，因此改进了服务。',
+  'The second report was clearer; hence, the class accepted its conclusion.':
+    '第二份报告更清楚，因此全班接受了它的结论。',
   'The interview lasted approximately twenty minutes in the student center.':
     '这次采访在学生中心持续了大约二十分钟。',
   'The student spoke on behalf of the class at the meeting.':
@@ -790,6 +986,10 @@ const KNOWN_SENTENCE_TRANSLATIONS: Record<string, string> = {
     '写作者在修改第二稿前会收到反馈。',
   'Students feel relief when they finally understand a difficult rule.':
     '学生终于理解一条难规则时会感到轻松。',
+  'The study guide listed common grammar patterns and sample sentences.':
+    '这份学习指南列出了常见语法结构和例句。',
+  'An answer may lack evidence if it only repeats the writer’s opinion.':
+    '如果答案只是重复作者观点，就可能缺少证据。',
   'Better instructions can remove barriers for new users.':
     '更清楚的说明可以为新用户消除障碍。',
   'Students should make a reservation before using the study room.':
@@ -1477,7 +1677,11 @@ const COLLOCATION_USAGE_TRANSLATIONS: Record<string, string> = {
   'a crucial factor': '关键因素',
   'a flexible schedule': '灵活的安排',
   'a significant improvement': '显著提升',
+  'account record': '账户记录',
+  'active learner': '积极学习者',
   'available resources': '可用资源',
+  'become accustomed': '逐渐习惯',
+  'become accustomed to the new schedule': '适应新的安排',
   'build trust': '建立信任',
   'convenient service': '便捷服务',
   'commercial value': '商业价值',
@@ -1492,6 +1696,7 @@ const COLLOCATION_USAGE_TRANSLATIONS: Record<string, string> = {
   'imitate pronunciation': '模仿发音',
   'key component': '关键组成部分',
   'language ability': '语言能力',
+  'last minute': '最后一刻',
   'learning resources': '学习资源',
   'limited budget': '有限预算',
   'air pollution': '空气污染',
@@ -1502,7 +1707,10 @@ const COLLOCATION_USAGE_TRANSLATIONS: Record<string, string> = {
   'medical treatment': '医疗服务',
   'necessary step': '必要步骤',
   'ordinary people': '普通人',
+  'pass an exam': '通过考试',
   'practical wisdom': '实用智慧',
+  'provide aid': '提供帮助',
+  'provide aid to new students': '为新生提供帮助',
   'public debate': '公共辩论',
   'reduce waste': '减少浪费',
   'resolve a conflict': '解决冲突',
@@ -1510,6 +1718,7 @@ const COLLOCATION_USAGE_TRANSLATIONS: Record<string, string> = {
   'school violence': '校园暴力',
   'serious wound': '严重伤口',
   'similar meaning': '相似含义',
+  'social media': '社交媒体',
   'student absence': '学生缺勤',
   'support an argument': '支持论点',
   'time management': '时间管理',
@@ -1534,6 +1743,9 @@ const COLLOCATION_USAGE_TRANSLATIONS: Record<string, string> = {
   'adopt a method': '采用方法',
   'advertise a service': '宣传服务',
   'academic discipline': '学科',
+  'female student': '女学生',
+  'former student': '往届学生',
+  'junior student': '低年级学生',
   'advocate fair access': '倡导公平获取机会',
   'answer a question': '回答问题',
   'central idea': '中心思想',
@@ -1800,8 +2012,383 @@ function cleanChineseGloss(value: string) {
     .trim();
 }
 
+function splitSourceByClausePunctuation(value: string) {
+  return value
+    .split(/[,;:]/u)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean);
+}
+
+function splitChineseByClausePunctuation(value: string) {
+  return value
+    .split(/[，；：]/u)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean);
+}
+
+function alignSentenceChunks(sourceChunks: string[], chineseChunks: string[]): PracticeSentenceChunk[] | null {
+  if (sourceChunks.length < 2 || sourceChunks.length !== chineseChunks.length) return null;
+  return sourceChunks.map((sourceChunk, index) => ({
+    sourceText: sourceChunk,
+    chineseMeaning: chineseChunks[index],
+  }));
+}
+
+type SourceChunkSplit = {
+  chunks: string[];
+  connector?: string;
+};
+
+function splitSourceByTrailingContext(sourceText: string) {
+  const match = sourceText.match(/^(.+?)\s((?:during|after|in)\s+(?:a|an|the|this|that|weekly|mock|public-service|media-literacy|health-awareness|exam-planning|study-plan)[a-z'-]*(?:\s+[a-z'-]+){0,5})$/iu);
+  if (!match) return null;
+  const [, mainClause, contextClause] = match;
+  return {
+    chunks: [mainClause.trim(), contextClause.trim()].filter(Boolean),
+    connector: 'context',
+  };
+}
+
+function splitSourceByConnector(sourceText: string): SourceChunkSplit | null {
+  const connectorPatterns = [
+    /\s+(even when|when|while|because|although|unless|before|after|instead of|rather than|without|so that)\s+/iu,
+    /\s+(can|may|must|should|will|would|could|need to|needs to|is|are|was|were|has|have|remains|remain|helps|help|combines|combine|demonstrates|demonstrate|focuses|focus|creates|create|makes|make|plays|play|provides|provide|gives|give|gave|supports|support|improves|improve|uses|use|offers|offer|explains|explain|shows|show|includes|include|contains|contain|becomes|become|appears|appear|raises|raise|conducted|conduct|examines|examine|saves|save|encouraged|encourage|informed|inform|made|make)\s+/iu,
+    /\s+(that|which|who)\s+/iu,
+    /\s+(and|or|but)\s+/iu,
+  ];
+
+  for (const pattern of connectorPatterns) {
+    const match = sourceText.match(pattern);
+    if (!match?.index || match.index > sourceText.length - 8) continue;
+    const connector = match[1];
+    const connectorLower = connector.toLowerCase();
+    const before = sourceText.slice(0, match.index).trim();
+    const after = `${connector} ${sourceText.slice(match.index + match[0].length).trim()}`;
+    const beforeWordCount = before.split(/\s+/u).length;
+    const afterWordCount = after.split(/\s+/u).length;
+    if (['and', 'or', 'but'].includes(connectorLower)) {
+      if (afterWordCount < 3 || /\bbetween\s+\S+$/iu.test(before)) continue;
+    }
+    const canUseSingleWordSubject = /^(?:can|may|must|should|will|would|could|need to|needs to|is|are|was|were|has|have|remains?|helps?|combines?|demonstrates?|focuses?|creates?|makes?|plays?|provides?|gives?|gave|supports?|improves?|uses?|offers?|explains?|shows?|includes?|contains?|becomes?|appears?|raises?|conducted|conduct|examines?|saves?|encouraged|encourage|informed|inform|made|make)$/iu.test(connectorLower);
+    if (match.index < (canUseSingleWordSubject ? 3 : 8)) continue;
+    if (beforeWordCount >= (canUseSingleWordSubject ? 1 : 2) && afterWordCount >= 2) {
+      return { chunks: [before, after], connector: connectorLower };
+    }
+  }
+
+  return null;
+}
+
+function splitSourceAtBalancedBoundary(sourceText: string): SourceChunkSplit | null {
+  const words = sourceText.split(/\s+/u).filter(Boolean);
+  if (words.length < 5) return null;
+
+  const preferredBoundaryWords = new Set([
+    'is',
+    'are',
+    'was',
+    'were',
+    'has',
+    'have',
+    'gave',
+    'seems',
+    'seem',
+    'remains',
+    'remain',
+    'needs',
+    'need',
+    'helps',
+    'help',
+    'can',
+    'may',
+    'must',
+    'should',
+    'combines',
+    'combine',
+    'demonstrates',
+    'demonstrate',
+    'focuses',
+    'focus',
+    'creates',
+    'create',
+    'makes',
+    'make',
+    'made',
+    'plays',
+    'play',
+    'provides',
+    'provide',
+    'gives',
+    'give',
+    'supports',
+    'support',
+    'improves',
+    'improve',
+    'uses',
+    'use',
+    'offers',
+    'offer',
+    'explains',
+    'explain',
+    'shows',
+    'show',
+    'includes',
+    'include',
+    'contains',
+    'contain',
+    'becomes',
+    'become',
+    'appears',
+    'appear',
+    'raises',
+    'raise',
+    'conducted',
+    'conduct',
+    'examines',
+    'examine',
+    'saves',
+    'save',
+    'encouraged',
+    'encourage',
+    'informed',
+    'inform',
+    'to',
+    'when',
+    'while',
+    'before',
+    'after',
+    'because',
+    'and',
+    'or',
+    'but',
+    'without',
+    'that',
+    'which',
+    'who',
+  ]);
+  const midpoint = Math.floor(words.length / 2);
+  let bestBoundary = -1;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (let index = 2; index < words.length - 1; index += 1) {
+    const normalized = words[index].toLowerCase().replace(/[^a-z-]/giu, '');
+    if (!preferredBoundaryWords.has(normalized)) continue;
+    const beforeWordCount = index;
+    const afterWordCount = words.length - index;
+    if (beforeWordCount < 2 || afterWordCount < 2) continue;
+    const distance = Math.abs(index - midpoint);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestBoundary = index;
+    }
+  }
+  if (bestBoundary === -1) return null;
+
+  const connector = words[bestBoundary].toLowerCase().replace(/[^a-z-]/giu, '');
+  return {
+    chunks: [
+      words.slice(0, bestBoundary).join(' '),
+      words.slice(bestBoundary).join(' '),
+    ].filter(Boolean),
+    connector,
+  };
+}
+
+function splitChineseAtBalancedBoundary(chineseMeaning: string, targetCount: number) {
+  const punctuationChunks = splitChineseByClausePunctuation(chineseMeaning);
+  if (punctuationChunks.length === targetCount) return punctuationChunks;
+  if (targetCount !== 2 || chineseMeaning.length < 8) return [chineseMeaning];
+
+  const preferredBoundaries: Array<{ value: string; side: 'before' | 'after' }> = [
+    { value: '，', side: 'after' },
+    { value: '；', side: 'after' },
+    { value: '而不是', side: 'before' },
+    { value: '同时', side: 'before' },
+    { value: '因为', side: 'before' },
+    { value: '所以', side: 'before' },
+    { value: '当', side: 'before' },
+    { value: '时', side: 'after' },
+    { value: '前', side: 'after' },
+    { value: '后', side: 'after' },
+    { value: '通过', side: 'before' },
+    { value: '为了', side: 'before' },
+    { value: '常被视为', side: 'before' },
+    { value: '可以', side: 'before' },
+    { value: '能帮助', side: 'before' },
+    { value: '帮助', side: 'before' },
+    { value: '需要', side: 'before' },
+    { value: '应该', side: 'before' },
+    { value: '应', side: 'before' },
+    { value: '可能会', side: 'before' },
+    { value: '似乎', side: 'before' },
+    { value: '仍然', side: 'before' },
+    { value: '会把', side: 'before' },
+    { value: '会', side: 'before' },
+    { value: '能显示', side: 'before' },
+    { value: '能', side: 'before' },
+    { value: '是', side: 'before' },
+    { value: '让', side: 'before' },
+    { value: '使', side: 'before' },
+    { value: '提供', side: 'before' },
+    { value: '说明', side: 'before' },
+    { value: '解释', side: 'before' },
+    { value: '展示', side: 'before' },
+    { value: '支持', side: 'before' },
+    { value: '改善', side: 'before' },
+    { value: '提升', side: 'before' },
+    { value: '形成', side: 'before' },
+    { value: '发挥', side: 'before' },
+    { value: '被视为', side: 'after' },
+    { value: '比', side: 'before' },
+  ];
+  const midpoint = Math.floor(chineseMeaning.length / 2);
+  let bestBoundary = -1;
+  let bestScore = Number.POSITIVE_INFINITY;
+
+  for (const boundary of preferredBoundaries) {
+    let searchFrom = 0;
+    while (searchFrom < chineseMeaning.length) {
+      const index = chineseMeaning.indexOf(boundary.value, searchFrom);
+      if (index === -1) break;
+      const splitIndex = boundary.side === 'after' ? index + boundary.value.length : index;
+      if (splitIndex >= 2 && splitIndex < chineseMeaning.length - 3) {
+        const distance = Math.abs(splitIndex - midpoint);
+        const score = distance - Math.min(boundary.value.length, 3);
+        if (score < bestScore) {
+          bestScore = score;
+          bestBoundary = splitIndex;
+        }
+      }
+      searchFrom = index + boundary.value.length;
+    }
+  }
+
+  if (bestBoundary === -1) return [chineseMeaning];
+  const splitIndex = bestBoundary;
+  return [
+    chineseMeaning.slice(0, splitIndex).trim(),
+    chineseMeaning.slice(splitIndex).trim(),
+  ].filter(Boolean);
+}
+
+const CONNECTOR_CHINESE_BOUNDARIES: Record<string, readonly string[]> = {
+  can: ['可以', '能够', '能'],
+  may: ['可能会', '可能', '可以'],
+  must: ['必须'],
+  should: ['应当', '应该', '应'],
+  will: ['将会', '将', '会'],
+  would: ['会', '将'],
+  could: ['可以', '能够'],
+  'need to': ['需要'],
+  'needs to': ['需要'],
+  is: ['是', '被', '很', '成为'],
+  are: ['是', '被', '很', '成为'],
+  was: ['是', '被'],
+  were: ['是', '被'],
+  helps: ['能帮助', '帮助', '有助于'],
+  help: ['能帮助', '帮助', '有助于'],
+  makes: ['让', '使'],
+  make: ['让', '使'],
+  made: ['让', '使'],
+  supports: ['支持'],
+  support: ['支持'],
+  improves: ['改善', '提升'],
+  improve: ['改善', '提升'],
+  provides: ['提供'],
+  provide: ['提供'],
+  explains: ['解释', '说明'],
+  explain: ['解释', '说明'],
+  shows: ['显示', '展示', '说明'],
+  show: ['显示', '展示', '说明'],
+  creates: ['创造', '形成'],
+  create: ['创造', '形成'],
+  becomes: ['成为'],
+  become: ['成为'],
+  remains: ['仍然'],
+  remain: ['仍然'],
+};
+
+function splitChineseByPreferredBoundary(chineseMeaning: string, boundaries: readonly string[]) {
+  for (const boundary of boundaries) {
+    const index = chineseMeaning.indexOf(boundary);
+    if (index >= 2 && index < chineseMeaning.length - 3) {
+      return [
+        chineseMeaning.slice(0, index).trim(),
+        chineseMeaning.slice(index).trim(),
+      ].filter(Boolean);
+    }
+  }
+  return null;
+}
+
+function hasStrandedChineseChunkCue(chineseMeaning: string) {
+  if (/(?:可以|可能会|应该|应当|必须|需要|能够|通过|会把|会|将|让|使)$/u.test(chineseMeaning)) {
+    return true;
+  }
+  if (chineseMeaning.endsWith('应') && !/(?:反应|适应|回应|响应)$/u.test(chineseMeaning)) return true;
+  if (chineseMeaning.endsWith('能') && !/(?:技能|功能|性能|能力)$/u.test(chineseMeaning)) return true;
+  return false;
+}
+
+function hasAwkwardChineseChunkBoundary(chunks: PracticeSentenceChunk[]) {
+  return chunks.slice(0, -1).some((chunk) => hasStrandedChineseChunkCue(chunk.chineseMeaning));
+}
+
+function alignChineseChunksForSourceSplit(sourceSplit: SourceChunkSplit, chineseMeaning: string) {
+  const punctuationChunks = splitChineseByClausePunctuation(chineseMeaning);
+  const connector = sourceSplit.connector;
+
+  if (punctuationChunks.length === sourceSplit.chunks.length) {
+    if (connector === 'while') {
+      const simultaneousMatch = punctuationChunks[0].match(/^(.+?)在(.+?)的同时$/u);
+      if (simultaneousMatch) {
+        return [
+          `${simultaneousMatch[1]}${punctuationChunks[1]}`,
+          `同时${simultaneousMatch[2]}`,
+        ];
+      }
+    }
+    if (
+      connector
+      && ['when', 'even when', 'although', 'unless', 'because'].includes(connector)
+      && (/^(当|即使|虽然|如果|只有|因为)/u.test(punctuationChunks[0]) || punctuationChunks[0].endsWith('时'))
+    ) {
+      return [...punctuationChunks].reverse();
+    }
+    return punctuationChunks;
+  }
+
+  const connectorBoundaries = connector ? CONNECTOR_CHINESE_BOUNDARIES[connector] : undefined;
+  const connectorChunks = connectorBoundaries
+    ? splitChineseByPreferredBoundary(chineseMeaning, connectorBoundaries)
+    : null;
+  if (connectorChunks?.length === sourceSplit.chunks.length) return connectorChunks;
+
+  return splitChineseAtBalancedBoundary(chineseMeaning, sourceSplit.chunks.length);
+}
+
 function buildSingleSentenceChunk(sourceText: string, chineseMeaning: string): PracticeSentenceChunk[] {
-  return [{ sourceText, chineseMeaning }];
+  const normalizedSource = stripTrailingPunctuation(normalizeText(sourceText));
+  const normalizedChinese = stripTrailingPunctuation(normalizeText(chineseMeaning));
+  if (!normalizedSource || !normalizedChinese) return [{ sourceText, chineseMeaning }];
+
+  const punctuationAligned = alignSentenceChunks(
+    splitSourceByClausePunctuation(normalizedSource),
+    splitChineseByClausePunctuation(normalizedChinese),
+  );
+  if (punctuationAligned) return punctuationAligned;
+
+  const sourceSplit = splitSourceByTrailingContext(normalizedSource)
+    ?? splitSourceByConnector(normalizedSource)
+    ?? splitSourceAtBalancedBoundary(normalizedSource);
+  if (!sourceSplit || sourceSplit.chunks.length < 2) {
+    return [{ sourceText: normalizedSource, chineseMeaning: normalizedChinese }];
+  }
+
+  const chineseChunks = alignChineseChunksForSourceSplit(sourceSplit, normalizedChinese);
+  const alignedChunks = alignSentenceChunks(sourceSplit.chunks, chineseChunks);
+  if (alignedChunks && !hasAwkwardChineseChunkBoundary(alignedChunks)) return alignedChunks;
+  return [{ sourceText: normalizedSource, chineseMeaning: normalizedChinese }];
 }
 
 function extractQuotedEnglishSentence(value?: string) {
@@ -1857,16 +2444,376 @@ function translateCapturedCollocation(
   return translateCollocationText(match[1], item, fallback);
 }
 
+function translateExampleSubject(match: RegExpMatchArray, item: VocabularySentenceInput, fallback: string) {
+  return translateCollocationText(match[1], item, fallback);
+}
+
 function buildVocabularyFallback(item: VocabularySentenceInput): Pick<PracticeSentenceSupport, 'chineseMeaning' | 'chunks'> {
   const sourceText = normalizeText(item.example);
   const meaning = stripTrailingPunctuation(normalizeText(item.meaning));
   const collocationUse = translateCollocationUse(item);
+  const exampleContextSuffixTranslations: Array<[RegExp, string]> = [
+    [/ during a class review\.$/u, '在课堂复盘中'],
+    [/ in a campus workshop\.$/u, '在校园工作坊中'],
+    [/ after a short reading task\.$/u, '在完成简短阅读任务后'],
+    [/ during an online lesson\.$/u, '在线上课程中'],
+    [/ in a group discussion\.$/u, '在小组讨论中'],
+    [/ after the teacher's feedback\.$/u, '在教师反馈后'],
+    [/ during a mock exam review\.$/u, '在模拟考试复盘中'],
+    [/ in a student survey\.$/u, '在学生调查中'],
+    [/ after a listening exercise\.$/u, '在听力练习后'],
+    [/ during a writing clinic\.$/u, '在写作辅导中'],
+    [/ in a library project\.$/u, '在图书馆项目中'],
+    [/ after the weekly quiz\.$/u, '在每周小测后'],
+    [/ during a community meeting\.$/u, '在社区会议中'],
+    [/ in a school notice\.$/u, '在学校通知中'],
+    [/ after a peer review task\.$/u, '在同伴互评任务后'],
+    [/ during a vocabulary check\.$/u, '在词汇检查中'],
+    [/ in a reading report\.$/u, '在阅读报告中'],
+    [/ after a classroom debate\.$/u, '在课堂辩论后'],
+    [/ during a study-plan meeting\.$/u, '在学习计划会议中'],
+    [/ in a public-service example\.$/u, '在公共服务例子中'],
+    [/ after the practice session\.$/u, '在练习环节后'],
+    [/ during a project presentation\.$/u, '在项目展示中'],
+    [/ in a training handout\.$/u, '在培训讲义中'],
+    [/ after a teacher conference\.$/u, '在教师面谈后'],
+    [/ during a culture lesson\.$/u, '在文化课中'],
+    [/ in a science discussion\.$/u, '在科学讨论中'],
+    [/ after an interview task\.$/u, '在采访任务后'],
+    [/ during a career workshop\.$/u, '在职业工作坊中'],
+    [/ in a media-literacy class\.$/u, '在媒介素养课中'],
+    [/ after a grammar correction task\.$/u, '在语法纠错任务后'],
+    [/ during a pronunciation drill\.$/u, '在发音训练中'],
+    [/ in a transport survey\.$/u, '在交通调查中'],
+    [/ after an exam-planning talk\.$/u, '在考试规划讲座后'],
+    [/ during a volunteer briefing\.$/u, '在志愿者说明会中'],
+    [/ in a health-awareness activity\.$/u, '在健康意识活动中'],
+    [/ after a finance lesson\.$/u, '在金融课程后'],
+  ];
+  const exampleContextMatch = exampleContextSuffixTranslations.find(([pattern]) => pattern.test(sourceText));
+  const patternSourceText = exampleContextMatch ? sourceText.replace(exampleContextMatch[0], '.') : sourceText;
+  const appendExampleContext = (chineseMeaning: string) => {
+    if (!exampleContextMatch) return chineseMeaning;
+    return `${stripTrailingPunctuation(chineseMeaning)}，${exampleContextMatch[1]}。`;
+  };
 
   const productivePatterns: Array<[RegExp, (match: RegExpMatchArray) => Pick<PracticeSentenceSupport, 'chineseMeaning' | 'chunks'>]> = [
-    [/^During a campus project, students learned to (.+) in a practical way\.$/u,
+    [/^Students discussed (.+)\.$/u,
       (match) => {
         const use = translateCapturedCollocation(match, item, collocationUse);
-        const chineseMeaning = `在校园项目中，学生学习了如何以实际方式${use}。`;
+        const chineseMeaning = `学生讨论了${use}。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            { sourceText: 'Students discussed', chineseMeaning: '学生讨论了' },
+            { sourceText: match[1], chineseMeaning: use },
+          ],
+        };
+      }],
+    [/^The class reviewed (.+)\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `全班复习了${use}。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            { sourceText: 'The class reviewed', chineseMeaning: '全班复习了' },
+            { sourceText: match[1], chineseMeaning: use },
+          ],
+        };
+      }],
+    [/^The report explained (.+)\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `报告解释了${use}。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            { sourceText: 'The report explained', chineseMeaning: '报告解释了' },
+            { sourceText: match[1], chineseMeaning: use },
+          ],
+        };
+      }],
+    [/^A short passage described (.+)\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `一篇短文描述了${use}。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            { sourceText: 'A short passage described', chineseMeaning: '一篇短文描述了' },
+            { sourceText: match[1], chineseMeaning: use },
+          ],
+        };
+      }],
+    [/^The teacher introduced (.+)\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `老师介绍了${use}。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            { sourceText: 'The teacher introduced', chineseMeaning: '老师介绍了' },
+            { sourceText: match[1], chineseMeaning: use },
+          ],
+        };
+      }],
+    [/^The group compared (.+) with another example\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `小组把${use}和另一个例子作了比较。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            { sourceText: `The group compared ${match[1]}`, chineseMeaning: `小组把${use}` },
+            { sourceText: 'with another example', chineseMeaning: '和另一个例子作了比较' },
+          ],
+        };
+      }],
+    [/^The chart showed (.+) clearly\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `图表清楚显示了${use}。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            { sourceText: 'The chart showed', chineseMeaning: '图表显示了' },
+            { sourceText: `${match[1]} clearly`, chineseMeaning: `${use}，很清楚` },
+          ],
+        };
+      }],
+    [/^The article connected (.+) with a real problem\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `文章把${use}和一个现实问题联系起来。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            { sourceText: `The article connected ${match[1]}`, chineseMeaning: `文章把${use}` },
+            { sourceText: 'with a real problem', chineseMeaning: '和一个现实问题联系起来' },
+          ],
+        };
+      }],
+    [/^The notice included (.+) for readers\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `通知为读者包含了${use}。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            { sourceText: `The notice included ${match[1]}`, chineseMeaning: `通知包含了${use}` },
+            { sourceText: 'for readers', chineseMeaning: '供读者参考' },
+          ],
+        };
+      }],
+    [/^Students used (.+) to support their answer\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `学生用${use}来支持自己的答案。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            { sourceText: `Students used ${match[1]}`, chineseMeaning: `学生使用${use}` },
+            { sourceText: 'to support their answer', chineseMeaning: '来支持自己的答案' },
+          ],
+        };
+      }],
+    [/^The presentation focused on (.+)\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `展示重点讲了${use}。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            { sourceText: 'The presentation focused on', chineseMeaning: '展示重点讲了' },
+            { sourceText: match[1], chineseMeaning: use },
+          ],
+        };
+      }],
+    [/^The reading task asked about (.+)\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `阅读任务问到了${use}。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            { sourceText: 'The reading task asked about', chineseMeaning: '阅读任务问到了' },
+            { sourceText: match[1], chineseMeaning: use },
+          ],
+        };
+      }],
+    [/^A student example referred to (.+)\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `一个学生例句提到了${use}。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            { sourceText: 'A student example referred to', chineseMeaning: '一个学生例句提到了' },
+            { sourceText: match[1], chineseMeaning: use },
+          ],
+        };
+      }],
+    [/^The paragraph gave a clear description of (.+)\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `段落清楚描述了${use}。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            { sourceText: 'The paragraph gave a clear description of', chineseMeaning: '段落清楚描述了' },
+            { sourceText: match[1], chineseMeaning: use },
+          ],
+        };
+      }],
+    [/^The survey asked students about (.+)\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `调查询问了学生关于${use}的看法。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            { sourceText: 'The survey asked students about', chineseMeaning: '调查询问了学生关于' },
+            { sourceText: match[1], chineseMeaning: `${use}的看法` },
+          ],
+        };
+      }],
+    [/^The lesson used (.+) as its discussion topic\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `这节课把${use}作为讨论主题。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            { sourceText: `The lesson used ${match[1]}`, chineseMeaning: `这节课使用${use}` },
+            { sourceText: 'as its discussion topic', chineseMeaning: '作为讨论主题' },
+          ],
+        };
+      }],
+    [/^The class treated (.+) as a useful topic for discussion\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `全班把${use}当作有用的讨论主题。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            { sourceText: `The class treated ${match[1]}`, chineseMeaning: `全班把${use}` },
+            { sourceText: 'as a useful topic for discussion', chineseMeaning: '当作有用的讨论主题' },
+          ],
+        };
+      }],
+    [/^The group chose (.+) for a short presentation\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `小组选了${use}做简短展示。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            { sourceText: `The group chose ${match[1]}`, chineseMeaning: `小组选了${use}` },
+            { sourceText: 'for a short presentation', chineseMeaning: '做简短展示' },
+          ],
+        };
+      }],
+    [/^The report compared (.+) with the survey result\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `报告把${use}和调查结果作了比较。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            { sourceText: `The report compared ${match[1]}`, chineseMeaning: `报告把${use}` },
+            { sourceText: 'with the survey result', chineseMeaning: '和调查结果作了比较' },
+          ],
+        };
+      }],
+    [/^The passage used (.+) to explain the main idea\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `文章用${use}来解释主旨。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            { sourceText: `The passage used ${match[1]}`, chineseMeaning: `文章使用${use}` },
+            { sourceText: 'to explain the main idea', chineseMeaning: '来解释主旨' },
+          ],
+        };
+      }],
+    [/^Students wrote one sentence about (.+)\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `学生围绕${use}写了一个句子。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            { sourceText: 'Students wrote one sentence about', chineseMeaning: '学生围绕' },
+            { sourceText: match[1], chineseMeaning: `${use}写了一个句子` },
+          ],
+        };
+      }],
+    [/^The teacher asked students to define (.+) carefully\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `老师要求学生仔细定义${use}。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            { sourceText: 'The teacher asked students to define', chineseMeaning: '老师要求学生定义' },
+            { sourceText: `${match[1]} carefully`, chineseMeaning: `${use}，要仔细` },
+          ],
+        };
+      }],
+    [/^The task connected (.+) to a familiar situation\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `任务把${use}和熟悉情境联系起来。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            { sourceText: `The task connected ${match[1]}`, chineseMeaning: `任务把${use}` },
+            { sourceText: 'to a familiar situation', chineseMeaning: '和熟悉情境联系起来' },
+          ],
+        };
+      }],
+    [/^The passage mentioned (.+) as a useful example\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `文章把${use}作为一个有用例子提到。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            {
+              sourceText: `The passage mentioned ${match[1]}`,
+              chineseMeaning: `文章提到了${use}`,
+            },
+            {
+              sourceText: 'as a useful example',
+              chineseMeaning: '作为一个有用例子',
+            },
+          ],
+        };
+      }],
+    [/^A careful plan can help students (.+)\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `周密计划可以帮助学生${use}。`;
+        return {
+          chineseMeaning,
+          chunks: [
+            {
+              sourceText: 'A careful plan',
+              chineseMeaning: '周密计划',
+            },
+            {
+              sourceText: `can help students ${match[1]}`,
+              chineseMeaning: `可以帮助学生${use}`,
+            },
+          ],
+        };
+      }],
+    [/^The student team practiced how to (.+) while solving a campus problem\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `学生团队在解决校园问题时练习了如何${use}。`;
         return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
       }],
     [/^After comparing two drafts, the writer decided to (.+) in the final version\.$/u,
@@ -1923,10 +2870,22 @@ function buildVocabularyFallback(item: VocabularySentenceInput): Pick<PracticeSe
         const chineseMeaning = `项目负责人要求每名成员在会前${use}。`;
         return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
       }],
+    [/^Each team member needed to (.+)\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `每名团队成员都需要${use}。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
     [/^The school office created a simple form so families could (.+) more easily\.$/u,
       (match) => {
         const use = translateCapturedCollocation(match, item, collocationUse);
         const chineseMeaning = `学校办公室制作了一份简表，让家庭能更方便地${use}。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^Families could (.+) more easily after the school office created a simple form\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `学校办公室制作简表后，家庭能更方便地${use}。`;
         return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
       }],
     [/^During peer review, classmates practiced how to (.+) with clear evidence\.$/u,
@@ -1947,10 +2906,22 @@ function buildVocabularyFallback(item: VocabularySentenceInput): Pick<PracticeSe
         const chineseMeaning = `一名当地志愿者向新成员示范如何安全地${use}。`;
         return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
       }],
+    [/^To (.+) safely, new members followed a local volunteer's example\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `为了安全地${use}，新成员按照一名当地志愿者的示范来做。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
     [/^The study group agreed to (.+) after checking the requirements\.$/u,
       (match) => {
         const use = translateCapturedCollocation(match, item, collocationUse);
         const chineseMeaning = `学习小组核对要求后同意${use}。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^To (.+), the study group first checked the requirements\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `为了${use}，学习小组先核对了要求。`;
         return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
       }],
     [/^The committee needed to (.+) before announcing the decision\.$/u,
@@ -1965,10 +2936,16 @@ function buildVocabularyFallback(item: VocabularySentenceInput): Pick<PracticeSe
         const chineseMeaning = `校园团队利用上周的数据来${use}。`;
         return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
       }],
-    [/^At the workshop, participants learned how to (.+) step by step\.$/u,
+    [/^A trainer showed participants how to (.+) during a short exercise\.$/u,
       (match) => {
         const use = translateCapturedCollocation(match, item, collocationUse);
-        const chineseMeaning = `在工作坊中，参与者一步步学习如何${use}。`;
+        const chineseMeaning = `培训者在简短练习中向参与者示范如何${use}。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^To (.+), participants followed a short exercise with a trainer\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `为了${use}，参与者跟随培训者完成了一项简短练习。`;
         return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
       }],
     [/^The librarian helped first-year students (.+) during orientation\.$/u,
@@ -1981,6 +2958,18 @@ function buildVocabularyFallback(item: VocabularySentenceInput): Pick<PracticeSe
       (match) => {
         const use = translateCapturedCollocation(match, item, collocationUse);
         const chineseMeaning = `截止日期前，小组必须${use}并记录结果。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^The passage described a situation in which people may (.+)\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `文章描述了一种人们可能会${use}的情境。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^A short example showed when people might (.+)\.$/u,
+      (match) => {
+        const use = translateCapturedCollocation(match, item, collocationUse);
+        const chineseMeaning = `一个简短例子说明了人们可能在什么时候${use}。`;
         return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
       }],
     [/^The training session gave employees time to (.+) with guidance\.$/u,
@@ -2205,10 +3194,10 @@ function buildVocabularyFallback(item: VocabularySentenceInput): Pick<PracticeSe
         const chineseMeaning = `学生会把${use}纳入校园服务计划。`;
         return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
       }],
-    [/^The evening workshop used (.+) to start a group discussion\.$/u,
+    [/^A seminar discussion used (.+) to start a group discussion\.$/u,
       (match) => {
         const use = translateCapturedCollocation(match, item, collocationUse);
-        const chineseMeaning = `晚间工作坊用${use}开启小组讨论。`;
+        const chineseMeaning = `研讨课上的讨论用${use}开启了小组讨论。`;
         return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
       }],
     [/^The library notice explained (.+) before the new rule took effect\.$/u,
@@ -2703,10 +3692,10 @@ function buildVocabularyFallback(item: VocabularySentenceInput): Pick<PracticeSe
         const chineseMeaning = `阅读文章通过真实例子描述了${use}。`;
         return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
       }],
-    [/^During the workshop, students compared (.+) with another case\.$/u,
+    [/^A seminar task asked students to compare (.+) with another case\.$/u,
       (match) => {
         const use = translateCapturedCollocation(match, item, collocationUse);
-        const chineseMeaning = `工作坊中，学生把${use}与另一个案例进行比较。`;
+        const chineseMeaning = `一项研讨任务要求学生把${use}与另一个案例进行比较。`;
         return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
       }],
     [/^The notice mentioned (.+) because many residents had questions\.$/u,
@@ -2725,6 +3714,270 @@ function buildVocabularyFallback(item: VocabularySentenceInput): Pick<PracticeSe
       (match) => {
         const use = translateCapturedCollocation(match, item, collocationUse);
         const chineseMeaning = `小组展示把${use}和调查证据联系起来。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) asked for help at the service desk during registration\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}在登记时到服务台求助。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) shared a learning experience during the workshop\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}在工作坊中分享了一段学习经历。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) chose a realistic study plan with a counselor's help\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}在辅导员帮助下选择了一个现实可行的学习计划。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) used campus services more often after the notice changed\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `通知调整后，${subject}更频繁地使用校园服务。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) appeared in the report on campus services\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}出现在关于校园服务的报告中。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) checked the deadline before submitting the form\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}在提交表格前核对了截止日期。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) needed better support during the first month of study\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}在学习第一个月需要更好的支持。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) affected daily study in the school survey\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `学校调查显示，${subject}影响了日常学习。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) answered the interviewer's question with a clear example\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}用清楚的例子回答了采访者的问题。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) compared two learning plans before choosing one\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}先比较了两个学习计划，再作出选择。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) gave the class a practical example to discuss\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}给全班提供了一个可讨论的实际例子。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) returned to the library after receiving feedback\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}收到反馈后回到了图书馆。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) explained why the new rule was difficult to follow\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}解释了为什么新规则难以执行。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) helped the group understand the problem from another view\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}帮助小组从另一个角度理解问题。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) helped students understand the article's main point\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}帮助学生理解文章主旨。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) became a useful clue in the listening passage\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}成为听力短文中的有用线索。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) appeared in a notice about campus services\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}出现在一则关于校园服务的通知中。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) gave the writer a clearer reason to revise the paragraph\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}给作者提供了更清楚的理由来修改段落。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) made the survey result easier to explain\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}让调查结果更容易解释。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) connected the case study with everyday experience\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}把案例研究和日常经验联系起来。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) guided a group discussion after the short reading\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}在短文阅读后引导了一场小组讨论。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) helped the class compare two possible answers\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}帮助全班比较两个可能答案。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) changed how residents understood the new rule\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}改变了居民对新规则的理解方式。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) supported the speaker's final opinion in the dialogue\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}支持了对话中说话人的最终观点。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) was the detail that many students remembered after class\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}是许多学生课后记住的细节。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) turned an abstract topic into a practical example\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}把抽象话题变成了实际例子。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) gave the report a concrete focus\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}给报告提供了具体焦点。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) helped readers notice the contrast in the paragraph\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}帮助读者注意到段落中的对比。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) appeared in the first chart of the report\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}出现在报告的第一张图表中。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) became the main example in the student presentation\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}成为学生展示中的主要例子。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) made the public-service notice easier to understand\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}让公共服务通知更容易理解。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) linked the classroom discussion to a real local issue\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}把课堂讨论和一个真实的本地问题联系起来。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) helped learners explain their answer with evidence\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}帮助学习者用证据解释答案。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) showed why the team changed its plan before Friday\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}说明了团队为什么在周五前改变计划。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) gave the interview a clear topic\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}给采访提供了清楚话题。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) helped the writer move from opinion to evidence\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}帮助作者从观点转向证据。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) made the reading task feel closer to daily life\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}让阅读任务更贴近日常生活。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) appeared again when the class reviewed the passage\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `全班复习文章时，${subject}再次出现。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) helped the group identify the writer's attitude\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}帮助小组判断作者态度。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) gave students a concrete example for comparison\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}给学生提供了一个可比较的具体例子。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) made the problem in the case study more specific\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}让案例研究中的问题更加具体。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) helped the teacher introduce the next activity\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}帮助老师引入下一个活动。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) turned a short paragraph into a useful discussion\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}把一个短段落变成了有用的讨论。`;
+        return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
+      }],
+    [/^(.+) helped students connect vocabulary with real use\.$/u,
+      (match) => {
+        const subject = translateExampleSubject(match, item, collocationUse);
+        const chineseMeaning = `${subject}帮助学生把词汇和真实用法联系起来。`;
         return { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) };
       }],
     [/^A clear (.+) strategy helps learners choose the next task instead of reviewing blindly\.$/u,
@@ -2799,8 +4052,14 @@ function buildVocabularyFallback(item: VocabularySentenceInput): Pick<PracticeSe
       }],
   ];
 
-  const matched = productivePatterns.find(([pattern]) => pattern.test(sourceText));
-  if (matched) return matched[1](sourceText.match(matched[0])!);
+  const matched = productivePatterns.find(([pattern]) => pattern.test(patternSourceText));
+  if (matched) {
+    const result = matched[1](patternSourceText.match(matched[0])!);
+    const chineseMeaning = appendExampleContext(result.chineseMeaning);
+    return exampleContextMatch
+      ? { chineseMeaning, chunks: buildSingleSentenceChunk(sourceText, chineseMeaning) }
+      : result;
+  }
 
   const curatedExamplePatterns: Array<[RegExp, (match: RegExpMatchArray) => Pick<PracticeSentenceSupport, 'chineseMeaning' | 'chunks'>]> = [
     [/^With a scholarship, more learners can afford the cost of an online course\.$/u,
