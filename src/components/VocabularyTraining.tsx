@@ -576,7 +576,6 @@ export default function VocabularyTraining({
             <div className="mt-3 flex flex-wrap items-center gap-2 text-sm font-bold text-slate-500">
               {currentPhonetic ? <span>{currentPhonetic}</span> : null}
               <span className="rounded-full bg-slate-100 px-2 py-1 text-xs">{currentItem.partOfSpeech}</span>
-              <span className="rounded-full bg-amber-50 px-2 py-1 text-xs text-amber-700">{currentItem.meaning}</span>
             </div>
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
@@ -658,13 +657,6 @@ export default function VocabularyTraining({
                 <p className="mt-1">{questionSupport.prompt.chineseMeaning}</p>
               </div>
             ) : null}
-            <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50/70 p-3 text-sm font-bold leading-6 text-amber-900">
-              <div className="mb-1 text-[10px] font-black uppercase tracking-widest text-amber-700">
-                中文辅助
-              </div>
-              <p>单词中文义：{currentItem.meaning}</p>
-              <p className="mt-1 text-xs text-amber-800">提交后显示正确答案、选项中文和例句翻译。</p>
-            </div>
 
             <div className="mt-6 grid gap-3">
               {(Object.keys(currentItem.options) as Choice[]).map((optionKey) => {
@@ -767,6 +759,9 @@ export default function VocabularyTraining({
                     <XCircle className="h-5 w-5 text-rose-600" />
                   )}
                   正确答案：{currentItem.correctAnswer}. {currentItem.options[currentItem.correctAnswer]}
+                </div>
+                <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-black leading-5 text-amber-800">
+                  核心词义：{currentItem.meaning}
                 </div>
                 {recordStatus !== 'idle' ? (
                   <div

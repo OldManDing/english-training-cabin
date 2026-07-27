@@ -290,7 +290,7 @@ test('primary workspaces keep controls usable and reset scroll on navigation', a
   await expectVisibleControlsHealthy(page, 'review');
 
   await page.getByRole('button', { name: '口语重说', exact: true }).click();
-  await expect(page.getByRole('heading', { name: /口语重说/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /口语重说 - 准备开始/ })).toBeVisible();
   await expectVisibleControlsHealthy(page, 'speaking');
 
   await page.getByRole('button', { name: '能力进展', exact: true }).click();

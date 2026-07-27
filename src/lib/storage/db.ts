@@ -1,6 +1,6 @@
 import Dexie, { Table } from 'dexie';
 import { repairLegacyVocabularyStatusAttempts } from '../../domain/practice/practicedQuestions';
-import { buildReviewCompletionRecords } from '../../domain/review/reviewCompletion';
+import { buildReviewCompletionRecords, type ReviewCompletionRecords } from '../../domain/review/reviewCompletion';
 import { sortReviewItems } from '../../domain/review/reviewQueue';
 import { Attempt, PracticeSession, ReviewCompletionEvidence, ReviewItem, SkillProfile, StudyGoal } from '../../types';
 
@@ -41,7 +41,8 @@ export const db = new EnglishTrainingDb();
 export const DEFAULT_GOAL_ID = 'goal-cet4-primary';
 
 export async function getOrCreateActiveGoal(): Promise<StudyGoal> {
-  const existing = await db.studyGoals.where('status').equals('active').first();
+  const activeGoals = await db.studyGoals.where('status').equals('active').toArray();
+  const existing = activeGoals.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
   if (existing) return existing;
 
   const now = new Date().toISOString();
@@ -162,8 +163,8 @@ function buildFallbackReviewEvidence(item: ReviewItem, now: string): ReviewCompl
 export async function completeReviewItem(
   itemId: string,
   evidence?: ReviewCompletionEvidence,
-): Promise<ReviewItem | undefined> {
-  let updatedItem: ReviewItem | undefined;
+): Promise<ReviewCompletionRecords | undefined> {
+  let completionRecords: ReviewCompletionRecords | undefined;
 
   await db.transaction('rw', db.practiceSessions, db.attempts, db.reviewItems, db.skillProfiles, async () => {
     const current = await db.reviewItems.get(itemId);
@@ -176,7 +177,7 @@ export async function completeReviewItem(
       now,
     });
 
-    updatedItem = records.reviewItem;
+    completionRecords = records;
     await db.reviewItems.put(records.reviewItem);
     await db.practiceSessions.put(records.session);
     await db.attempts.put(records.attempt);
@@ -187,7 +188,7 @@ export async function completeReviewItem(
     }
   });
 
-  return updatedItem;
+  return completionRecords;
 }
 
 function assertBackupArray(value: unknown, label: string): Record<string, unknown>[] {
@@ -256,6 +257,69 @@ export async function importLearningData(value: unknown): Promise<{
       attempts.length > 0 ? db.attempts.bulkPut(attempts) : Promise.resolve(),
       reviewItems.length > 0 ? db.reviewItems.bulkPut(reviewItems) : Promise.resolve(),
       skillProfiles.length > 0 ? db.skillProfiles.bulkPut(skillProfiles) : Promise.resolve(),
+    ]);
+  });
+
+  return {
+    studyGoals: studyGoals.length,
+    practiceSessions: practiceSessions.length,
+    attempts: attempts.length,
+    reviewItems: reviewItems.length,
+    skillProfiles: skillProfiles.length,
+  };
+}
+
+export async function mergeLearningData(value: unknown): Promise<{
+  studyGoals: number;
+  practiceSessions: number;
+  attempts: number;
+  reviewItems: number;
+  skillProfiles: number;
+}> {
+  const backup = value && typeof value === 'object' ? value as Partial<LearningDataBackup> : null;
+  if (!backup || backup.app !== 'english-training-cabin' || backup.schemaVersion !== 1 || !backup.data) {
+    throw new Error('备份文件格式不正确。');
+  }
+
+  const studyGoals = assertBackupArray(backup.data.studyGoals, 'studyGoals') as unknown as StudyGoal[];
+  const practiceSessions = assertBackupArray(backup.data.practiceSessions, 'practiceSessions') as unknown as PracticeSession[];
+  const attempts = assertBackupArray(backup.data.attempts, 'attempts') as unknown as Attempt[];
+  const reviewItems = assertBackupArray(backup.data.reviewItems, 'reviewItems') as unknown as ReviewItem[];
+  const skillProfiles = assertBackupArray(backup.data.skillProfiles, 'skillProfiles') as unknown as SkillProfile[];
+
+  await db.transaction('rw', [db.studyGoals, db.practiceSessions, db.attempts, db.reviewItems, db.skillProfiles], async () => {
+    const [currentGoals, currentSessions, currentReviewItems, currentSkillProfiles] = await Promise.all([
+      db.studyGoals.bulkGet(studyGoals.map((item) => item.id)),
+      db.practiceSessions.bulkGet(practiceSessions.map((item) => item.id)),
+      db.reviewItems.bulkGet(reviewItems.map((item) => item.id)),
+      db.skillProfiles.bulkGet(skillProfiles.map((item) => item.id)),
+    ]);
+    const newerOrMissing = <T>(incoming: T[], current: Array<T | undefined>, updatedAt: (item: T) => string) => {
+      return incoming.filter((item, index) => !current[index] || updatedAt(item) >= updatedAt(current[index]));
+    };
+    const goalsToPut = newerOrMissing(studyGoals, currentGoals, (item) => item.updatedAt);
+    const sessionsToPut = newerOrMissing(
+      practiceSessions,
+      currentSessions,
+      (item) => item.finishedAt ?? item.startedAt,
+    );
+    const reviewItemsToPut = newerOrMissing(
+      reviewItems,
+      currentReviewItems,
+      (item) => item.lastReviewedAt ?? item.createdAt,
+    );
+    const skillProfilesToPut = newerOrMissing(
+      skillProfiles,
+      currentSkillProfiles,
+      (item) => item.lastUpdatedAt,
+    );
+
+    await Promise.all([
+      goalsToPut.length > 0 ? db.studyGoals.bulkPut(goalsToPut) : Promise.resolve(),
+      sessionsToPut.length > 0 ? db.practiceSessions.bulkPut(sessionsToPut) : Promise.resolve(),
+      attempts.length > 0 ? db.attempts.bulkPut(attempts) : Promise.resolve(),
+      reviewItemsToPut.length > 0 ? db.reviewItems.bulkPut(reviewItemsToPut) : Promise.resolve(),
+      skillProfilesToPut.length > 0 ? db.skillProfiles.bulkPut(skillProfilesToPut) : Promise.resolve(),
     ]);
   });
 

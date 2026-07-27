@@ -52,7 +52,7 @@ describe('CET-4 syllabus-aligned question bank coverage', () => {
     expect(CET4_LISTENING_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(150);
     expect(CET4_WORD_BANK_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(500);
     expect(CET4_LONG_MATCHING_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(250);
-    expect(CET4_GRAMMAR_PRACTICE_QUESTIONS).toHaveLength(500);
+    expect(CET4_GRAMMAR_PRACTICE_QUESTIONS).toHaveLength(1_000);
     expect(CET4_CLOZE_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(750);
     expect(CET4_READING_BANK.length).toBeGreaterThanOrEqual(60);
     expect(CET4_READING_PRACTICE_QUESTIONS.length).toBeGreaterThanOrEqual(1_000);
@@ -133,6 +133,53 @@ describe('CET-4 syllabus-aligned question bank coverage', () => {
     expect(malformedGeneratedExamples).toEqual([]);
   });
 
+  it('keeps generated vocabulary examples varied and grammatically natural', () => {
+    const repeatedExampleOpenings = Object.entries(countBy(CET4_VOCABULARY_BANK, (item) =>
+      item.example.split(/[,.;]/u)[0],
+    )).filter(([, count]) => count > 8);
+    const duplicateExamples = Object.entries(countBy(CET4_VOCABULARY_BANK, (item) => item.example))
+      .filter(([, count]) => count > 1);
+    const nearTemplateFrames = Object.entries(countBy(CET4_VOCABULARY_BANK, (item) =>
+      normalizeVocabularyExampleFrame(item.example, item.collocation),
+    )).filter(([, count]) => count > 8);
+    const unnaturalGeneratedExamples = CET4_VOCABULARY_BANK
+      .filter((item) => [
+        /\b(?:a|an) (?:approve|anticipate|ban|board|breathe|broadcast|capture|clarify|compete|condemn|confuse|congratulate|construct|cover|decorate|define|delight|deserve|detect|differ|divide|embarrass|engage|ensure|escape|fasten|favor|fear|fill|frighten|gather|greet|guarantee|hire|honor|hunt|include|inquire|install|interrupt|introduce|knock|label|lend|locate|marry|master|negotiate|observe|occur|operate|order|pass|persuade|press|pronounce|punish|qualify|react|recall|recover|recycle|remain|replace|resist|retain|satisfy|settle|simplify|stimulate|succeed|tend|tolerate)\b/iu,
+        /\b(?:a|an) (?:have faith|fresh air|personal information|racial equality|water supply)\b/iu,
+        /\bquickly quickly\b/iu,
+        /\bFamilies could account record\b/iu,
+        /\bbecome accustomed(?:\.| (?:after|before|during|in)\b)/iu,
+        /\bFamilies could (?:account record|desert climate)\b/iu,
+        /\bpass an exam before the meeting after\b/iu,
+        /\bprovide aid during orientation during\b/iu,
+        /\bduring [^.]+\bduring\b/iu,
+        /\bafter [^.]+\bafter\b/iu,
+        /\bbefore [^.]+\bbefore\b/iu,
+        /\bin [^.]+\bin (?:a|an|the|orientation|vocabulary|career|weekly|grammar|practice|reading|training|library|health|public-service|transport|culture|science|media-literacy|student|school|group)\b/iu,
+        /\bA social media\b/iu,
+        /\bA last minute\b/iu,
+        /received clear instructions/iu,
+        /parents raised concerns|new students asked practical questions/iu,
+        /learned to (?:lack|daily|study guide|meanwhile|repeat practice)/iu,
+        /\ban online content\b/iu,
+        /\ba brain activity\b/iu,
+        /^During the workshop,/iu,
+        /^At the workshop,/iu,
+        /^During a campus project,/iu,
+      ].some((pattern) => pattern.test(item.example)))
+      .map((item) => ({
+        word: item.word,
+        partOfSpeech: item.partOfSpeech,
+        collocation: item.collocation,
+        example: item.example,
+      }));
+
+    expect(repeatedExampleOpenings).toEqual([]);
+    expect(duplicateExamples).toEqual([]);
+    expect(nearTemplateFrames).toEqual([]);
+    expect(unnaturalGeneratedExamples).toEqual([]);
+  });
+
   it('keeps CET-4 output phrases sourced from natural vocabulary collocations', () => {
     const vocabularyCollocations = new Set(CET4_VOCABULARY_BANK.map((item) => item.collocation));
     const nonVocabularyPhrases = CET4_OUTPUT_PHRASE_BANK
@@ -155,11 +202,17 @@ describe('CET-4 syllabus-aligned question bank coverage', () => {
         /^.+ output turns recognition into writing, speaking, or translation ability\.$/i,
       ].some((pattern) => pattern.test(item.example)))
       .map((item) => ({ word: item.word, example: item.example }));
+    const placeholderPhraseMetadata = CET4_OUTPUT_PHRASE_BANK
+      .filter((item) => item.phonetic.trim() === '/phrase/'
+        || item.partOfSpeech === 'phrase'
+        || /^发音提示/u.test(item.phonetic.trim()))
+      .map((item) => ({ word: item.word, phonetic: item.phonetic, partOfSpeech: item.partOfSpeech }));
 
     expect(CET4_OUTPUT_PHRASE_BANK.length).toBeGreaterThanOrEqual(1_000);
     expect(nonVocabularyPhrases).toEqual([]);
     expect(artificialPhrases).toEqual([]);
     expect(oldTemplateExamples).toEqual([]);
+    expect(placeholderPhraseMetadata).toEqual([]);
   });
 
   it('keeps CET-4 vocabulary correct answers distributed across A-D', () => {
@@ -203,9 +256,62 @@ describe('CET-4 syllabus-aligned question bank coverage', () => {
     const answerCounts = countBy(CET4_GRAMMAR_PRACTICE_QUESTIONS, (item) => item.correctAnswer);
     const counts = ['A', 'B', 'C', 'D'].map((choice) => answerCounts[choice] ?? 0);
 
-    expect(CET4_GRAMMAR_PRACTICE_QUESTIONS).toHaveLength(500);
+    expect(CET4_GRAMMAR_PRACTICE_QUESTIONS).toHaveLength(1_000);
     expect(counts.every((count) => count > 0)).toBe(true);
     expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(10);
+  });
+
+  it('keeps expanded CET-4 grammar-structure prompts varied, natural, and traceable by number', () => {
+    const duplicatePrompts = Object.entries(countBy(CET4_GRAMMAR_PRACTICE_QUESTIONS, (item) => item.prompt))
+      .filter(([, count]) => count > 1);
+    const generatedFrameCounts = Object.entries(countBy(
+      CET4_GRAMMAR_PRACTICE_QUESTIONS.filter((item) => item.trapType.split('|').length >= 4),
+      (item) => item.trapType.split('|').at(-2) ?? '',
+    ));
+    const overusedGeneratedFrames = generatedFrameCounts
+      .filter(([, count]) => count > 6)
+      .map(([frame, count]) => ({ frame, count }));
+    const blanklessGrammarPrompts = CET4_GRAMMAR_PRACTICE_QUESTIONS
+      .filter((item) => !item.prompt.includes('___'))
+      .map((item) => ({ id: item.id, prompt: item.prompt }));
+    const grammarTopics = new Set(CET4_GRAMMAR_PRACTICE_QUESTIONS.map((item) =>
+      item.trapType.split('|').at(-1) ?? '',
+    ));
+    const grammarSubFocuses = new Set(CET4_GRAMMAR_PRACTICE_QUESTIONS.map((item) =>
+      item.trapType.split('|').slice(0, 2).join('|'),
+    ));
+    const titleNumberProblems = CET4_GRAMMAR_PRACTICE_QUESTIONS
+      .map((item, index) => ({
+        expected: index + 1,
+        actual: Number(item.title.match(/(\d+)$/u)?.[1] ?? Number.NaN),
+        title: item.title,
+      }))
+      .filter((item) => item.actual !== item.expected);
+    const unstableGrammarFocuses = CET4_GRAMMAR_PRACTICE_QUESTIONS
+      .filter((item) => [
+        /^情态动词被动语态\|(?:campus|career|environmental|cultural|public|peer|academic|digital|personal|local|community|workplace|urban)/u,
+      ].some((pattern) => pattern.test(item.trapType)))
+      .map((item) => ({ id: item.id, trapType: item.trapType }));
+    const weakGeneratedPrompts = CET4_GRAMMAR_PRACTICE_QUESTIONS
+      .filter((item) => [
+        /\bThe the\b/u,
+        /\bfor (?:project form|audio worksheet|reading checklist|grammar handout)\b/u,
+        /A detail not supported by/u,
+      ].some((pattern) => pattern.test(item.prompt)))
+      .map((item) => ({ id: item.id, prompt: item.prompt }));
+
+    expect(CET4_GRAMMAR_PRACTICE_QUESTIONS).toHaveLength(1_000);
+    expect(new Set(CET4_GRAMMAR_PRACTICE_QUESTIONS.map((item) => item.trapType)).size)
+      .toBeGreaterThanOrEqual(180);
+    expect(grammarSubFocuses.size).toBeGreaterThanOrEqual(110);
+    expect(grammarTopics.size).toBeGreaterThanOrEqual(45);
+    expect(generatedFrameCounts.length).toBeGreaterThanOrEqual(190);
+    expect(overusedGeneratedFrames).toEqual([]);
+    expect(blanklessGrammarPrompts).toEqual([]);
+    expect(titleNumberProblems).toEqual([]);
+    expect(unstableGrammarFocuses).toEqual([]);
+    expect(duplicatePrompts).toEqual([]);
+    expect(weakGeneratedPrompts).toEqual([]);
   });
 
   it('adds a 2025 degree-English outline bank without incorrectly adding listening', () => {
@@ -271,4 +377,18 @@ function countBy<T>(items: T[], getKey: (item: T) => string) {
     accumulator[key] = (accumulator[key] ?? 0) + 1;
     return accumulator;
   }, {});
+}
+
+function normalizeVocabularyExampleFrame(example: string, collocation: string) {
+  const escapedCollocation = escapeRegExp(collocation.trim());
+  return example
+    .toLowerCase()
+    .replace(new RegExp(`\\b${escapedCollocation}\\b`, 'giu'), '[phrase]')
+    .replace(/\b(?:a|an|the)\s+\[phrase\]/giu, '[phrase]')
+    .replace(/\s+/gu, ' ')
+    .trim();
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

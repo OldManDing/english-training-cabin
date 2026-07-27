@@ -97,6 +97,7 @@ export interface Question {
   chineseSupport?: QuestionChineseSupport;
   tags?: string[];
   difficulty?: 1 | 2 | 3 | 4 | 5;
+  displayNumber?: number;
   sourceType?: 'original' | 'user-imported' | 'licensed' | 'ai-generated';
   highlightTextIndices?: {
     correct: [number, number]; // index range in passage

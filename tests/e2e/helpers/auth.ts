@@ -13,8 +13,9 @@ export async function registerAndEnterApp(page: Page, label = 'e2e') {
   await page.getByTestId('saas-invite-code-input').fill(REGISTRATION_INVITE_CODE);
   await page.getByTestId('saas-email-input').fill(email);
   await page.getByTestId('saas-password-input').fill('secure-password-1');
+  await expect(page.getByTestId('saas-auth-submit')).toBeEnabled();
   await page.getByTestId('saas-auth-submit').click();
-  await expect(page.getByTestId('saas-recovery-code')).toBeVisible();
+  await expect(page.getByTestId('saas-recovery-code')).toBeVisible({ timeout: 15_000 });
   await page.getByTestId('saas-enter-app').click();
   await expect(page.getByRole('heading', { name: '今日训练' })).toBeVisible();
 

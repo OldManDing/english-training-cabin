@@ -11,10 +11,7 @@ import {
   CET4_TRANSLATION_PROMPT_BANK,
   CET4_WRITING_PROMPT_BANK,
 } from '../../src/questionBank';
-import { orderGrammarStructureQuestions } from '../../src/domain/practice/grammarStructureGuides';
 import { registerAndEnterApp, registerApiAccount } from './helpers/auth';
-
-const ORDERED_GRAMMAR_STRUCTURE_QUESTIONS = orderGrammarStructureQuestions(CET4_GRAMMAR_PRACTICE_QUESTIONS);
 
 const universalDiagnosticTextAnswer =
   'With the development of online learning, more college students can arrange their study time flexibly. To reduce exam pressure, students should divide review tasks into several small steps. In my opinion, regular review and AI tools are useful because students can get feedback. For example, I often make grammar mistakes in English practice, so next time I will correct them carefully and explain my answer more naturally.';
@@ -801,6 +798,7 @@ test('practice question status numbers open the selected module question', async
   await page.getByTestId('practice-module-select-vocabulary').click();
   await page.getByTestId('practice-question-status-vocabulary-2').click();
   await expect(page.getByRole('heading', { name: CET4_VOCABULARY_BANK[1].word })).toBeVisible();
+  await expect(page.getByText(CET4_VOCABULARY_BANK[1].meaning, { exact: true })).toHaveCount(0);
   await page.getByTestId('vocabulary-back-to-practice').click();
 
   const accompanyIndex = CET4_VOCABULARY_BANK.findIndex((item) => item.word === 'accompany');
@@ -826,24 +824,28 @@ test('practice question status numbers open the selected module question', async
   await expect(page.getByTestId('practice-question-status-group-grammar-tense')).toContainText('时态题');
   await expect(page.getByTestId('practice-question-status-group-grammar-voice')).toContainText('语态题');
   await page.getByTestId('practice-question-status-grammar-2').click();
-  await expect(page.getByText(ORDERED_GRAMMAR_STRUCTURE_QUESTIONS[1].prompt)).toBeVisible();
+  await expect(page.getByText(CET4_GRAMMAR_PRACTICE_QUESTIONS[1].prompt)).toBeVisible();
   await expect(page.getByText('核心考向：时态|现在完成时')).toBeVisible();
   await expect(page.getByTestId('practice-method-guide-topic-grammar-tense')).toContainText('当前考点');
   await page.getByTestId('reading-back-to-practice').click();
 
-  const grammarCheckpointNumbers = [21, 22, 50, 250, 500];
+  const grammarCheckpointNumbers = [21, 22, 50, 250, 500, 1000];
   for (const questionNumber of grammarCheckpointNumbers) {
-    const expectedQuestion = ORDERED_GRAMMAR_STRUCTURE_QUESTIONS[questionNumber - 1];
+    const expectedQuestion = CET4_GRAMMAR_PRACTICE_QUESTIONS[questionNumber - 1];
     await page.getByTestId('practice-module-select-grammar').click();
     const statusButton = page.getByTestId(`practice-question-status-grammar-${questionNumber}`);
     if (questionNumber > 120) {
-      const expandButton = page.getByRole('button', { name: /展开当前筛选/ });
-      if (await expandButton.count()) await expandButton.click();
+      await page.getByTestId('practice-question-jump-input-grammar').fill(String(questionNumber));
+      await page.getByTestId('practice-question-jump-submit-grammar').click();
+      await expect(page.getByText(expectedQuestion.prompt)).toBeVisible();
+      await expect(page.getByText(`第 ${questionNumber} 题 / 共 ${CET4_GRAMMAR_PRACTICE_QUESTIONS.length} 题`)).toBeVisible();
+      await page.getByTestId('reading-back-to-practice').click();
+      continue;
     }
     await expect(statusButton).toHaveAttribute('title', new RegExp(escapeRegexText(expectedQuestion.title)));
     await statusButton.click();
     await expect(page.getByText(expectedQuestion.prompt)).toBeVisible();
-    await expect(page.getByText(`第 ${questionNumber} 题 / 共 ${ORDERED_GRAMMAR_STRUCTURE_QUESTIONS.length} 题`)).toBeVisible();
+    await expect(page.getByText(`第 ${questionNumber} 题 / 共 ${CET4_GRAMMAR_PRACTICE_QUESTIONS.length} 题`)).toBeVisible();
     await page.getByTestId('reading-back-to-practice').click();
   }
 
@@ -862,8 +864,8 @@ test('grammar and cloze specialty questions submit and mark answered immediately
 
   await page.getByTestId('practice-module-select-grammar').click();
   await page.getByTestId('practice-question-status-grammar-1').click();
-  await expect(page.getByText(ORDERED_GRAMMAR_STRUCTURE_QUESTIONS[0].prompt)).toBeVisible();
-  await submitVisibleChoiceQuestionByOptionText(page, ORDERED_GRAMMAR_STRUCTURE_QUESTIONS[0].options.A);
+  await expect(page.getByText(CET4_GRAMMAR_PRACTICE_QUESTIONS[0].prompt)).toBeVisible();
+  await submitVisibleChoiceQuestionByOptionText(page, CET4_GRAMMAR_PRACTICE_QUESTIONS[0].options.A);
   await page.getByTestId('reading-back-to-practice').click();
   await page.getByTestId('practice-module-select-grammar').click();
   await page.getByTestId('practice-question-filter-grammar-answered').click();
@@ -888,15 +890,15 @@ test('grammar status number jump opens the selected unanswered question after a 
   await page.getByRole('button', { name: '专项练习' }).click();
   await page.getByTestId('practice-module-select-grammar').click();
   await page.getByTestId('practice-question-status-grammar-1').click();
-  await expect(page.getByText(ORDERED_GRAMMAR_STRUCTURE_QUESTIONS[0].prompt)).toBeVisible();
-  await submitVisibleChoiceQuestionByOptionText(page, ORDERED_GRAMMAR_STRUCTURE_QUESTIONS[0].options.A);
+  await expect(page.getByText(CET4_GRAMMAR_PRACTICE_QUESTIONS[0].prompt)).toBeVisible();
+  await submitVisibleChoiceQuestionByOptionText(page, CET4_GRAMMAR_PRACTICE_QUESTIONS[0].options.A);
   await expect(page.getByTestId('reading-next')).toBeVisible();
 
   await page.getByTestId('reading-back-to-practice').click();
   await page.getByTestId('practice-module-select-grammar').click();
   await page.getByTestId('practice-question-status-grammar-2').click();
 
-  await expect(page.getByText(ORDERED_GRAMMAR_STRUCTURE_QUESTIONS[1].prompt)).toBeVisible();
+  await expect(page.getByText(CET4_GRAMMAR_PRACTICE_QUESTIONS[1].prompt)).toBeVisible();
   await expect(page.getByTestId('reading-submit')).toBeVisible();
   await expect(page.getByTestId('reading-submit')).toBeDisabled();
   await expect(page.getByTestId('reading-next')).toHaveCount(0);
@@ -929,14 +931,14 @@ test('grammar status jump ignores mismatched legacy draft answer slots', async (
       answers,
       updatedAt: now,
     }));
-  }, { firstQuestionId: String(ORDERED_GRAMMAR_STRUCTURE_QUESTIONS[0].id) });
+  }, { firstQuestionId: String(CET4_GRAMMAR_PRACTICE_QUESTIONS[0].id) });
 
   await page.getByRole('button', { name: '专项练习' }).click();
   await page.getByTestId('practice-module-select-grammar').click();
   await page.getByTestId('practice-question-status-grammar-22').click();
 
-  await expect(page.getByText(ORDERED_GRAMMAR_STRUCTURE_QUESTIONS[21].prompt)).toBeVisible();
-  await expect(page.getByText(`第 22 题 / 共 ${ORDERED_GRAMMAR_STRUCTURE_QUESTIONS.length} 题`)).toBeVisible();
+  await expect(page.getByText(CET4_GRAMMAR_PRACTICE_QUESTIONS[21].prompt)).toBeVisible();
+  await expect(page.getByText(`第 22 题 / 共 ${CET4_GRAMMAR_PRACTICE_QUESTIONS.length} 题`)).toBeVisible();
   await expect(page.getByTestId('reading-submit')).toBeVisible();
   await expect(page.getByTestId('reading-submit')).toBeDisabled();
   await expect(page.getByTestId('reading-next')).toHaveCount(0);
@@ -1752,6 +1754,8 @@ test('curated vocabulary choices stay English before submission', async ({ page 
 
   await expect(page.getByRole('heading', { name: targetItem.word })).toBeVisible();
   await expect(page.getByText(targetItem.phonetic, { exact: true })).toBeVisible();
+  await expect(page.getByText(targetItem.meaning, { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/单词中文义/)).toHaveCount(0);
   await expect(page.getByTestId('vocabulary-question-translation')).toHaveCount(0);
   await expect(page.getByTestId(`vocabulary-option-translation-${targetItem.correctAnswer}`)).toHaveCount(0);
 
@@ -1784,6 +1788,19 @@ test('generated vocabulary example shows sentence-use chunk translations after s
   await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('有了奖学金支持');
   await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('more learners can afford the cost of an online course');
   await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('更多学习者能够负担得起一门在线课程的费用');
+
+  await page.getByTestId('vocabulary-back-to-practice').click();
+  const generatedItem = await openVocabularyItem(page, 'adapt');
+  await page.getByRole('button', { name: new RegExp(`^${generatedItem.correctAnswer}\\. `) }).click();
+  await page.getByRole('button', { name: '有把握' }).click();
+  await page.getByRole('button', { name: '提交词汇答案' }).click();
+  await expect(page.getByTestId('vocabulary-sentence-translation')).toContainText(
+    '当课程转到数字平台时，学生需要适应在线学习。',
+  );
+  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('Students need to adapt to online learning');
+  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('学生需要适应在线学习');
+  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('when classes move to digital platforms');
+  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('当课程转到数字平台时');
 });
 
 test('vocabulary translations render natural collocation examples in the browser', async ({ page }) => {

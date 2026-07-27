@@ -130,8 +130,8 @@ test('narrow phone reaches every primary workspace without horizontal clipping',
   await expect(page.getByRole('heading', { name: '目标与计划设置' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '账户' })).toBeVisible();
   await expect(page.getByText('同步与团队')).toBeVisible();
-  await expect(page.getByRole('button', { name: '同步到云端' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '从云端恢复' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '立即服务器对账' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '从服务器重建' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 

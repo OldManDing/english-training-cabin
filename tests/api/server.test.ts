@@ -781,6 +781,39 @@ describe('server API', () => {
       })
       .expect(200);
 
+    await request(saasApp)
+      .put('/api/cloud/learning-entities')
+      .set('Authorization', `Bearer ${first.body.token}`)
+      .send({
+        entities: [{
+          entityType: 'studyGoal',
+          entityId: 'goal-cet4-primary',
+          updatedAt: new Date(Date.now() - 60_000).toISOString(),
+          payload: { id: 'goal-cet4-primary', targetScore: 400 },
+        }],
+      })
+      .expect(200);
+
+    const staleGuarded = await request(saasApp)
+      .get('/api/cloud/learning-entities')
+      .set('Authorization', `Bearer ${first.body.token}`)
+      .expect(200);
+    expect(staleGuarded.body.entities.find((entity: { entityId: string }) => entity.entityId === 'goal-cet4-primary').payload.targetScore).toBe(580);
+
+    const futureTimestamp = await request(saasApp)
+      .put('/api/cloud/learning-entities')
+      .set('Authorization', `Bearer ${first.body.token}`)
+      .send({
+        entities: [{
+          entityType: 'studyGoal',
+          entityId: 'goal-future',
+          updatedAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          payload: { id: 'goal-future', targetScore: 700 },
+        }],
+      })
+      .expect(400);
+    expect(futureTimestamp.body.error).toBe('invalid_learning_entity_timestamp');
+
     const firstEntities = await request(saasApp)
       .get('/api/cloud/learning-entities')
       .set('Authorization', `Bearer ${first.body.token}`)

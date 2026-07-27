@@ -819,24 +819,31 @@ function createStoreFromDatabase(options: {
     },
     upsertLearningEntities(input) {
       return mutate((db) => {
-        const nextEntities = input.entities.map((entity) => ({
-          ...entity,
-          organizationId: input.organizationId,
-          userId: input.userId,
-        }));
+        const savedEntities: CloudLearningEntityRecord[] = [];
 
-        nextEntities.forEach((entity) => {
+        input.entities.forEach((entity) => {
+          const nextEntity = {
+            ...entity,
+            organizationId: input.organizationId,
+            userId: input.userId,
+          };
           const currentIndex = db.learningEntities.findIndex((item) =>
             item.organizationId === input.organizationId &&
             item.userId === input.userId &&
-            item.entityType === entity.entityType &&
-            item.entityId === entity.entityId,
+            item.entityType === nextEntity.entityType &&
+            item.entityId === nextEntity.entityId,
           );
-          if (currentIndex >= 0) db.learningEntities[currentIndex] = entity;
-          else db.learningEntities.push(entity);
+          const current = currentIndex >= 0 ? db.learningEntities[currentIndex] : undefined;
+          if (current && current.updatedAt > nextEntity.updatedAt) {
+            savedEntities.push(current);
+            return;
+          }
+          if (currentIndex >= 0) db.learningEntities[currentIndex] = nextEntity;
+          else db.learningEntities.push(nextEntity);
+          savedEntities.push(nextEntity);
         });
 
-        return nextEntities;
+        return savedEntities;
       });
     },
     listLearningEntities(input) {
@@ -1476,6 +1483,15 @@ function validateIsoDate(value: unknown, fallback = new Date().toISOString()): s
   return date.toISOString();
 }
 
+function validateLearningEntityUpdatedAt(value: unknown): string {
+  const updatedAt = validateIsoDate(value);
+  const maximumAllowed = Date.now() + 5 * 60 * 1000;
+  if (new Date(updatedAt).getTime() > maximumAllowed) {
+    throw new SaasApiError(400, 'invalid_learning_entity_timestamp', '学习数据时间戳超出允许范围。');
+  }
+  return updatedAt;
+}
+
 export function validateLearningEntities(value: unknown, organizationId: string, userId: string): CloudLearningEntityRecord[] {
   const input = value && typeof value === 'object' ? value as Record<string, unknown> : {};
   const rawEntities = Array.isArray(input.entities) ? input.entities : [];
@@ -1489,13 +1505,16 @@ export function validateLearningEntities(value: unknown, organizationId: string,
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
       throw new SaasApiError(400, 'invalid_learning_entity', `entities[${index}].payload 必须是对象。`);
     }
+    if ((payload as Record<string, unknown>).id !== entity.entityId) {
+      throw new SaasApiError(400, 'invalid_learning_entity', `entities[${index}].payload.id 必须与 entityId 一致。`);
+    }
     return {
       organizationId,
       userId,
       entityType: validateLearningEntityType(entity.entityType),
       entityId: validateEntityId(entity.entityId),
       payload,
-      updatedAt: validateIsoDate(entity.updatedAt),
+      updatedAt: validateLearningEntityUpdatedAt(entity.updatedAt),
       deletedAt: typeof entity.deletedAt === 'string' ? validateIsoDate(entity.deletedAt) : undefined,
     };
   });

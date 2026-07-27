@@ -99,7 +99,7 @@
   .ui-page-header {
     border: 1px solid #dde5ee;
     background: rgba(255, 255, 255, 0.96);
-    border-radius: 2rem;
+    border-radius: 0.75rem;
     padding: 1.25rem;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   }
@@ -125,7 +125,7 @@
   .ui-panel {
     border: 1px solid #dde5ee;
     background: #ffffff;
-    border-radius: 1.75rem;
+    border-radius: 0.75rem;
     padding: 1.25rem;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   }
@@ -138,14 +138,14 @@
   .ui-panel-soft {
     border: 1px solid #dde5ee;
     background: #f8fafc;
-    border-radius: 1.75rem;
+    border-radius: 0.75rem;
     padding: 1.25rem;
   }
 
   .ui-empty-state {
     border: 1px dashed #cbd5e1;
     background: #f8fafc;
-    border-radius: 1.5rem;
+    border-radius: 0.75rem;
     padding: 1rem;
     color: #64748b;
   }
@@ -153,7 +153,7 @@
   .ui-metric {
     border: 1px solid #e2e8f0;
     background: #f8fafc;
-    border-radius: 1rem;
+    border-radius: 0.5rem;
     padding: 0.75rem;
     text-align: center;
   }
@@ -184,7 +184,7 @@
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    border-radius: 1rem;
+    border-radius: 0.5rem;
     padding: 0.75rem 1rem;
     font-size: 0.75rem;
     font-weight: 900;
@@ -315,7 +315,7 @@
   .ui-button-compact {
     min-height: 3rem;
     min-width: 3rem;
-    border-radius: 0.875rem;
+    border-radius: 0.5rem;
     padding: 0.625rem 0.875rem;
     font-size: 0.75rem;
     white-space: nowrap;

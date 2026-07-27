@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { createSmokeLearningBackup } from '../../scripts/smoke-learning-backup.mjs';
+import { learningBackupToEntities } from '../../src/lib/storage/authoritativeLearningSync';
+import type { LearningDataBackup } from '../../src/lib/storage/db';
 import { registerApiAccount } from './helpers/auth';
 
 const REGISTRATION_INVITE_CODE = process.env.E2E_REGISTRATION_INVITE_CODE || 'ETC-LOCAL-2026';
@@ -143,18 +145,18 @@ test('SaaS account trial can sync and restore local learning data', async ({ pag
   await expect(page.getByRole('heading', { name: '今日训练' })).toBeVisible();
   await page.getByRole('button', { name: '设置' }).click();
   await expect(page.getByText(email, { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('云同步 已开通')).toBeVisible();
+  await expect(page.getByText('学习记录已由服务器保存')).toBeVisible();
 
   await page.getByRole('button', { name: '隐私协议' }).click();
   await expect(page.getByRole('heading', { name: '隐私协议' })).toBeVisible();
-  await expect(page.getByText('用户可以在设置页导出本地学习数据、从云端恢复学习数据，并通过反馈入口提交问题。')).toBeVisible();
+  await expect(page.getByText('用户可以在设置页导出本地学习数据、从服务器重建学习数据，并通过反馈入口提交问题。')).toBeVisible();
   await page.getByRole('button', { name: '我知道了' }).click();
 
-  await page.getByRole('button', { name: '同步到云端' }).click();
-  await expect(page.getByText(/已同步：练习/)).toBeVisible();
+  await page.getByRole('button', { name: '立即服务器对账' }).click();
+  await expect(page.getByText(/服务器对账完成：已确认/)).toBeVisible();
 
-  await page.getByRole('button', { name: '从云端恢复' }).click();
-  await expect(page.getByText('云端学习数据恢复完成', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '从服务器重建' }).click();
+  await expect(page.getByText('服务器学习数据重建完成', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '我知道了' }).click();
 
   await expect(page.getByText('团队与数据管理（高级）')).toBeVisible();
@@ -222,6 +224,33 @@ test('SaaS login on a new device automatically restores existing cloud learning 
   });
 });
 
+test('SaaS login restores entity-only learning data after browser storage is cleared', async ({ page, request }) => {
+  const account = await registerApiAccount(request, 'entity-only-restore');
+  const backup = createSmokeLearningBackup('entity-only-restore');
+  const response = await request.put('/api/cloud/learning-entities', {
+    headers: { Authorization: `Bearer ${account.token}` },
+    data: {
+      entities: learningBackupToEntities(backup as LearningDataBackup),
+    },
+  });
+  expect(response.ok()).toBe(true);
+
+  await page.goto('/');
+  await page.getByTestId('saas-email-input').fill(account.email);
+  await page.getByTestId('saas-password-input').fill(account.password);
+  await page.getByTestId('saas-auth-submit').click();
+  await expect(page.getByText('已同步云端学习数据', { exact: true })).toBeVisible();
+
+  const counts = await countLocalLearningData(page);
+  expect(counts).toMatchObject({
+    studyGoals: 1,
+    practiceSessions: 1,
+    attempts: 1,
+    reviewItems: 1,
+    skillProfiles: 1,
+  });
+});
+
 test('SaaS login restores cloud learning data when the device only has local profiles', async ({ page, request }) => {
   const account = await registerApiAccount(request, 'profile-only-auto-cloud-restore');
   const backup = createSmokeLearningBackup('profile-only-auto-cloud-restore');
@@ -244,10 +273,10 @@ test('SaaS login restores cloud learning data when the device only has local pro
 
   const counts = await countLocalLearningData(page);
   expect(counts).toMatchObject({
-    studyGoals: 1,
+    studyGoals: 2,
     practiceSessions: 1,
     attempts: 1,
     reviewItems: 1,
-    skillProfiles: 1,
+    skillProfiles: 2,
   });
 });

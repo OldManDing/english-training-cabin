@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Cloud, Copy, DownloadCloud, KeyRound, LogIn, LogOut, RefreshCw, ShieldCheck, UploadCloud, UserPlus } from 'lucide-react';
-import { exportLearningData, importLearningData } from '../lib/storage/db';
-import { getLearningBackupCounts, shouldBlockEmptyCloudRestore } from '../lib/storage/learningDataSummary';
 import { apiRequest, clearStoredAuthToken, getStoredAuthToken, setStoredAuthToken } from '../lib/api';
+import { syncAllLocalLearningData, synchronizeAuthoritativeLearningData } from '../lib/storage/authoritativeLearningSync';
 import SaasOperationsPanel from './SaasOperationsPanel';
 import LegalLinks from './LegalLinks';
 
@@ -35,12 +34,12 @@ export interface PublicSaasAccountContext {
 
 interface SaasAccountPanelProps {
   onTriggerModal?: (title: string, body: string) => void;
-  onDataRestored?: () => Promise<void>;
+  onServerDataRestored?: () => Promise<void>;
   onAuthenticated?: () => void;
   onLogout?: () => void;
 }
 
-const INITIAL_CLOUD_STATUS = '登录后可同步。';
+const INITIAL_CLOUD_STATUS = '登录后自动保存学习记录。';
 type AuthMode = 'login' | 'register' | 'invitation' | 'reset';
 
 function getInitialAuthAction(): { mode?: AuthMode; token?: string } {
@@ -63,8 +62,7 @@ function formatAccountState(account: PublicSaasAccountContext) {
     past_due: '需处理',
     canceled: '已停用',
   };
-  const syncState = account.entitlements.cloudSync ? '云同步已开通' : '仅本地可用';
-  return `${syncState} · ${statusMap[account.subscription.status]}`;
+  return `服务器存储已启用 · ${statusMap[account.subscription.status]}`;
 }
 
 type AuthPayload = {
@@ -74,7 +72,7 @@ type AuthPayload = {
   recoveryCodeExpiresAt?: string;
 };
 
-export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAuthenticated, onLogout }: SaasAccountPanelProps) {
+export default function SaasAccountPanel({ onTriggerModal, onServerDataRestored, onAuthenticated, onLogout }: SaasAccountPanelProps) {
   const [initialAction] = useState(getInitialAuthAction);
   const [mode, setMode] = useState<AuthMode>(initialAction.mode ?? 'login');
   const [name, setName] = useState('学习者');
@@ -281,16 +279,8 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
     if (!token) return;
     setIsBusy(true);
     try {
-      const backup = await exportLearningData();
-      const response = await apiRequest<{ snapshot: { updatedAt: string; counts: Record<string, number> } }>(
-        '/api/cloud/learning-data',
-        {
-          method: 'PUT',
-          body: JSON.stringify({ backup }),
-        },
-        token,
-      );
-      setStatusText(`已同步：练习 ${response.snapshot.counts.practiceSessions} 组，复习 ${response.snapshot.counts.reviewItems} 项。`);
+      const syncedEntities = await syncAllLocalLearningData(token);
+      setStatusText(`服务器对账完成：已确认 ${syncedEntities} 项学习记录。`);
     } catch (error) {
       setStatusText(getApiMessage(error));
     } finally {
@@ -302,34 +292,10 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
     if (!token) return;
     setIsBusy(true);
     try {
-      const response = await apiRequest<{
-        snapshot: null | {
-          updatedAt: string;
-          exportedAt: string;
-          backup: unknown;
-          counts: Record<string, number>;
-        };
-      }>('/api/cloud/learning-data', {}, token);
-
-      if (!response.snapshot) {
-        setStatusText('云端暂无数据。');
-        return;
-      }
-
-      const localBackup = await exportLearningData();
-      const localCounts = getLearningBackupCounts(localBackup);
-      const cloudCounts = getLearningBackupCounts(response.snapshot.backup);
-      if (shouldBlockEmptyCloudRestore(localCounts, cloudCounts)) {
-        const warning = '云端备份没有练习、答题或复习记录，当前浏览器里仍有本地答题数据。本次已停止恢复，避免空云端快照覆盖本地答题记录。请先同步到云端，或导出本地学习数据后再恢复。';
-        onTriggerModal?.('已停止空云端恢复', warning);
-        setStatusText('已停止恢复：云端没有学习记录，未覆盖本地数据。');
-        return;
-      }
-
-      const restored = await importLearningData(response.snapshot.backup);
-      await onDataRestored?.();
-      const summary = `已恢复：目标 ${restored.studyGoals} 项、练习 ${restored.practiceSessions} 组、复习 ${restored.reviewItems} 项、画像 ${restored.skillProfiles} 项。`;
-      onTriggerModal?.('云端学习数据恢复完成', summary);
+      const restored = await synchronizeAuthoritativeLearningData(token);
+      await onServerDataRestored?.();
+      const summary = `服务器重建完成：目标 ${restored.mergedCounts.studyGoals} 项、练习 ${restored.mergedCounts.practiceSessions} 组、答题 ${restored.mergedCounts.attempts} 条、复习 ${restored.mergedCounts.reviewItems} 项、画像 ${restored.mergedCounts.skillProfiles} 项。`;
+      onTriggerModal?.('服务器学习数据重建完成', summary);
       setStatusText(summary);
     } catch (error) {
       setStatusText(getApiMessage(error));
@@ -555,7 +521,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
             </div>
             <div className="flex flex-wrap gap-2 text-[10px] font-black">
               <span className="rounded-full bg-white px-3 py-1 text-[#003178] border border-[#dbeafe]">{account.organization.name}</span>
-              <span className="rounded-full bg-white px-3 py-1 text-[#1b6d24] border border-emerald-100">云同步 {account.entitlements.cloudSync ? '已开通' : '未开通'}</span>
+              <span className="rounded-full bg-white px-3 py-1 text-[#1b6d24] border border-emerald-100">学习记录已由服务器保存</span>
               <span className="rounded-full bg-white px-3 py-1 text-[#003178] border border-[#dbeafe]">团队席位 {account.entitlements.teamSeats} 人</span>
             </div>
             <button
@@ -573,11 +539,11 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
             <button
               type="button"
               onClick={handleCloudBackup}
-              disabled={isBusy || !account.entitlements.cloudSync}
+              disabled={isBusy}
               className="ui-button ui-button-primary ui-button-full"
             >
               <UploadCloud className="h-4 w-4" />
-              同步到云端
+              立即服务器对账
             </button>
             <button
               type="button"
@@ -586,7 +552,7 @@ export default function SaasAccountPanel({ onTriggerModal, onDataRestored, onAut
               className="ui-button ui-button-secondary ui-button-full"
             >
               <DownloadCloud className="h-4 w-4" />
-              从云端恢复
+              从服务器重建
             </button>
           </div>
 

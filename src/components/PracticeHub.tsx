@@ -41,7 +41,7 @@ import {
   GRAMMAR_STRUCTURE_TOPIC_GUIDES,
   getGrammarStructureTopicByFocus,
   getGrammarStructureTopicByLabel,
-  orderGrammarStructureQuestions,
+  type GrammarStructureTopicId,
 } from '../domain/practice/grammarStructureGuides';
 import PracticeMethodGuide from './PracticeMethodGuide';
 
@@ -53,7 +53,7 @@ interface PracticeHubProps {
   examName: string;
   onStartOnboarding: () => void;
   onStartVocabulary: (questionId?: string) => void;
-  onStartGrammar: (questionId?: string) => void;
+  onStartGrammar: (questionId?: string, topicId?: GrammarStructureTopicId) => void;
   onStartCloze: (questionId?: string) => void;
   onStartReading: (passage: Passage, questionId?: string) => void;
   onStartListening: (questionId?: string) => void;
@@ -146,10 +146,11 @@ function buildPracticeQuestionBank(): Record<PracticeModuleId, PracticeQuestionD
       questionTypeId: question.questionTypeId,
       label: question.title,
     })),
-    grammar: orderGrammarStructureQuestions(CET4_GRAMMAR_PRACTICE_QUESTIONS).map((question) => {
+    grammar: CET4_GRAMMAR_PRACTICE_QUESTIONS.map((question, index) => {
       const topic = getGrammarStructureTopicByFocus(question.trapType);
       return {
         id: question.id,
+        number: index + 1,
         moduleId: question.moduleId,
         questionTypeId: question.questionTypeId,
         label: `${question.title} · ${topic.shortLabel}`,
@@ -216,6 +217,7 @@ export default function PracticeHub({
   const [visibleReadingCount, setVisibleReadingCount] = useState(8);
   const [expandedStatusModuleIds, setExpandedStatusModuleIds] = useState<PracticeModuleId[]>([]);
   const [statusFilter, setStatusFilter] = useState<PracticeStatusFilter>('all');
+  const [questionJumpValue, setQuestionJumpValue] = useState('');
   const isCet4 = examId === 'cet4';
   const practiceQuestionBank = useMemo(() => buildPracticeQuestionBank(), []);
   const mergedPracticeAttempts = useMemo(() => {
@@ -442,6 +444,22 @@ export default function PracticeHub({
     : filteredQuestionStatuses.slice(0, QUESTION_STATUS_PREVIEW_LIMIT);
   const selectedStatusPracticedCount = selectedQuestionStatuses.filter((item) => item.practiced).length;
   const selectedStatusRemainingCount = Math.max(0, selectedQuestionStatuses.length - selectedStatusPracticedCount);
+  const grammarTopicSummaries = useMemo(() => {
+    if (selectedModule.id !== 'grammar') return [];
+
+    return GRAMMAR_STRUCTURE_TOPIC_GUIDES.map((topic) => {
+      const topicStatuses = selectedQuestionStatuses.filter((item) => item.groupLabel === topic.label);
+      const practicedCount = topicStatuses.filter((item) => item.practiced).length;
+      return {
+        topicId: topic.id,
+        label: topic.label,
+        cue: topic.cue,
+        totalCount: topicStatuses.length,
+        practicedCount,
+        remainingCount: Math.max(0, topicStatuses.length - practicedCount),
+      };
+    }).filter((item) => item.totalCount > 0);
+  }, [selectedModule.id, selectedQuestionStatuses]);
   const selectedTrainingCamps = buildTrainingCamps(selectedModule.id, skillProfiles);
   const visibleReadingPassages = readingPassages.slice(0, visibleReadingCount);
   const toggleStatusExpanded = () => {
@@ -489,6 +507,14 @@ export default function PracticeHub({
 
     selectedModule.onStart();
   };
+  const handleJumpToQuestionNumber = () => {
+    const questionNumber = Number.parseInt(questionJumpValue.trim(), 10);
+    if (!Number.isFinite(questionNumber)) return;
+    const targetStatus = selectedQuestionStatuses.find((item) => item.number === questionNumber);
+    if (targetStatus) {
+      handleStartStatusQuestion(targetStatus);
+    }
+  };
 
   useEffect(() => {
     if (!hasManualSelection) setSelectedModuleId(recommendedModuleId);
@@ -497,7 +523,7 @@ export default function PracticeHub({
   useEffect(() => {
     if (!hasManualSelection) return;
     const target = document.getElementById(`practice-question-status-${selectedModule.id}`);
-    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    target?.scrollIntoView({ behavior: 'auto', block: 'start' });
   }, [hasManualSelection, selectedModule.id]);
 
   return (
@@ -538,7 +564,7 @@ export default function PracticeHub({
                 </div>
                 <button
                   type="button"
-                  onClick={recommendedModule.onStart}
+                  onClick={() => recommendedModule.onStart()}
                   className="ui-button ui-button-primary shrink-0"
                 >
                   开始推荐专项
@@ -581,6 +607,7 @@ export default function PracticeHub({
                     setHasManualSelection(true);
                     setSelectedModuleId(module.id);
                     setStatusFilter('all');
+                    setQuestionJumpValue('');
                   }}
                   aria-pressed={isActive}
                   className="flex flex-1 flex-col text-left focus:outline-none focus:ring-2 focus:ring-[#003178]/20"
@@ -647,6 +674,62 @@ export default function PracticeHub({
           <PracticeMethodGuide moduleId={selectedModule.id} compact />
         )}
 
+        {isCet4 && selectedModule.id === 'grammar' && grammarTopicSummaries.length > 0 && (
+          <section data-testid="grammar-topic-practice" className="ui-panel">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <span className="ui-chip ui-chip-accent">
+                  <ListChecks className="h-3.5 w-3.5" />
+                  按考点练
+                </span>
+                <h3 className="mt-3 text-lg font-black text-[#101828]">
+                  先完成一类题，再进入下一类
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => onStartGrammar()}
+                className="ui-button ui-button-secondary shrink-0"
+              >
+                混合训练
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {grammarTopicSummaries.map((item) => (
+                <article
+                  key={item.topicId}
+                  data-testid={`grammar-topic-card-${item.topicId}`}
+                  className="flex min-h-40 flex-col rounded-2xl border border-[#dde5ee] bg-[#f8fafc] p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h4 className="text-base font-black text-[#101828]">{item.label}</h4>
+                      <p className="mt-2 line-clamp-2 text-xs font-bold leading-5 text-slate-600">{item.cue}</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[11px] font-black text-[#003178] ring-1 ring-[#cfe6f2]">
+                      {item.totalCount} 题
+                    </span>
+                  </div>
+                  <div className="mt-auto flex items-center justify-between gap-3 pt-4">
+                    <span className="text-xs font-black text-slate-500">
+                      已答 {item.practicedCount} / {item.totalCount}
+                    </span>
+                    <button
+                      type="button"
+                      data-testid={`grammar-topic-start-${item.topicId}`}
+                      onClick={() => onStartGrammar(undefined, item.topicId)}
+                      className="ui-button ui-button-primary ui-button-compact"
+                    >
+                      练这一组
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
         {isCet4 && selectedTrainingCamps.length > 0 && (
           <section data-testid={`practice-training-camps-${selectedModule.id}`} className="ui-panel">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -658,7 +741,7 @@ export default function PracticeHub({
               </div>
               <button
                 type="button"
-                onClick={selectedModule.onStart}
+                onClick={() => selectedModule.onStart()}
                 className="ui-button ui-button-primary shrink-0"
               >
                 开始训练
@@ -690,6 +773,9 @@ export default function PracticeHub({
             onStatusFilterChange={setStatusFilter}
             onToggleExpanded={toggleStatusExpanded}
             onSelectQuestion={handleStartStatusQuestion}
+            jumpValue={questionJumpValue}
+            onJumpValueChange={setQuestionJumpValue}
+            onJumpToQuestion={handleJumpToQuestionNumber}
           />
         )}
 
@@ -800,6 +886,9 @@ function QuestionStatusPanel({
   onStatusFilterChange,
   onToggleExpanded,
   onSelectQuestion,
+  jumpValue,
+  onJumpValueChange,
+  onJumpToQuestion,
 }: {
   moduleId: PracticeModuleId;
   moduleLabel: string;
@@ -813,6 +902,9 @@ function QuestionStatusPanel({
   onStatusFilterChange: (filter: PracticeStatusFilter) => void;
   onToggleExpanded: () => void;
   onSelectQuestion: (item: PracticeQuestionStatusItem) => void;
+  jumpValue: string;
+  onJumpValueChange: (value: string) => void;
+  onJumpToQuestion: () => void;
 }) {
   const canToggle = displayedCount > QUESTION_STATUS_PREVIEW_LIMIT;
   const filters: Array<{ id: PracticeStatusFilter; label: string; count: number }> = [
@@ -843,7 +935,7 @@ function QuestionStatusPanel({
         title={`${item.groupLabel ? `${item.groupLabel} · ` : ''}${item.label} · ${item.practiced ? '已答' : '未答'} · 点击进入本题`}
         aria-label={`${moduleLabel} 第 ${item.number} 题 ${item.practiced ? '已答' : '未答'}，点击进入本题`}
         onClick={() => onSelectQuestion(item)}
-        className={`flex h-11 w-full min-w-11 items-center justify-center rounded-xl border text-xs font-black transition hover:-translate-y-0.5 hover:border-[#003178]/45 focus:outline-none focus:ring-2 focus:ring-[#003178]/25 ${
+        className={`flex h-11 w-full min-w-11 items-center justify-center rounded-xl border text-xs font-black transition-colors hover:border-[#003178]/45 focus:outline-none focus:ring-2 focus:ring-[#003178]/25 ${
           item.practiced
             ? 'border-[#cfe6f2] bg-[#eef7fc] text-[#003178]'
             : 'border-slate-200 bg-white text-slate-500'
@@ -888,6 +980,38 @@ function QuestionStatusPanel({
           })}
         </div>
       </div>
+      {totalCount > QUESTION_STATUS_PREVIEW_LIMIT ? (
+        <form
+          className="mt-4 flex flex-col gap-2 rounded-2xl border border-[#dde5ee] bg-[#f8fafc] p-3 sm:flex-row sm:items-center"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onJumpToQuestion();
+          }}
+        >
+          <label htmlFor={`practice-question-jump-${moduleId}`} className="text-xs font-black text-slate-500">
+            跳到题号
+          </label>
+          <input
+            id={`practice-question-jump-${moduleId}`}
+            data-testid={`practice-question-jump-input-${moduleId}`}
+            type="number"
+            min={1}
+            max={totalCount}
+            inputMode="numeric"
+            value={jumpValue}
+            onChange={(event) => onJumpValueChange(event.target.value)}
+            placeholder={`1-${totalCount}`}
+            className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none transition focus:border-[#003178]"
+          />
+          <button
+            type="submit"
+            data-testid={`practice-question-jump-submit-${moduleId}`}
+            className="ui-button ui-button-secondary ui-button-compact"
+          >
+            进入
+          </button>
+        </form>
+      ) : null}
 
       {statuses.length === 0 ? (
         <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm font-bold text-slate-500">

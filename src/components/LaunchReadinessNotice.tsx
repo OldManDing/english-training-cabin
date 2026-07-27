@@ -30,11 +30,11 @@ type AiFallbackReason =
   | 'invalid_response'
   | 'unknown';
 
-const privacyCopy = `本产品采用本地优先设计：目标、练习记录、错题复习队列和能力画像默认保存在当前浏览器 IndexedDB 中。
+const privacyCopy = `本产品以服务端学习记录为权威来源，当前浏览器 IndexedDB 仅保留离线副本和待同步记录。
 
 AI 阅读生成和口语分析会把必要的题目话题或口语文本发送给已配置的 AI 供应商处理。请不要输入身份证号、手机号、学校账号密码等敏感信息。
 
-如果更换浏览器、清空浏览器数据或更换设备，本地学习记录可能无法自动恢复。`;
+如果更换浏览器、清空浏览器数据或更换设备，登录后会从服务端自动恢复已确认的学习记录；断网期间尚未确认的记录会在本地保留并自动重试。`;
 
 const copyrightCopy = `内置内容仅用于演示和原创模拟训练，不声称来自官方真题。
 
@@ -185,7 +185,7 @@ export default function LaunchReadinessNotice({ onOpen }: LaunchReadinessNoticeP
             <ShieldCheck className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-xs font-black text-[#003178]">本地保存 · 原创模拟 · AI 可降级</h2>
+            <h2 className="text-xs font-black text-[#003178]">服务器保存 · 原创模拟 · AI 可降级</h2>
             <div
               className={`mt-2 inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border px-2.5 py-1.5 text-[11px] font-bold leading-4 ${aiStatusCopy.className}`}
               data-testid="ai-status-strip"

@@ -2548,11 +2548,6 @@ Return JSON only with this shape:
 
   app.put('/api/cloud/learning-entities', requireSaasAuth, asyncRoute(async (req, res) => {
     const { account } = getSaasContext(res);
-    const context = toPublicAccountContext(account);
-    if (!context.entitlements.cloudSync) {
-      throw new SaasApiError(403, 'cloud_sync_disabled', '当前订阅暂未开通云同步。');
-    }
-
     const entities = validateLearningEntities(req.body, account.organization.id, account.user.id);
     const saved = await saasStore.upsertLearningEntities({
       organizationId: account.organization.id,

@@ -28,6 +28,7 @@ interface SettingsSectionProps {
   onSetScoreLimit?: (score: number) => void;
   onTriggerModal?: (title: string, body: string) => void;
   onDataRestored?: () => Promise<void>;
+  onServerDataRestored?: () => Promise<void>;
 }
 
 const examOptions = listPublicExamProfiles();
@@ -39,7 +40,7 @@ function toSettingsExamType(examId?: string): string {
   return 'cet4';
 }
 
-export default function SettingsSection({ onSave, targetScoreLimit = 550, initialExamId, initialExamDate, initialDailyMinutes, onSetScoreLimit, onTriggerModal, onDataRestored }: SettingsSectionProps) {
+export default function SettingsSection({ onSave, targetScoreLimit = 550, initialExamId, initialExamDate, initialDailyMinutes, onSetScoreLimit, onTriggerModal, onDataRestored, onServerDataRestored }: SettingsSectionProps) {
   // Local Settings States matching the screenshot
   const [examType, setExamType] = useState<string>(toSettingsExamType(initialExamId));
   const [examDate, setExamDate] = useState<string>(initialExamDate ?? "2026-06-13");
@@ -109,10 +110,10 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
   const handleSaveSettings = async () => {
     try {
       await persistCurrentSettings();
-      triggerToast("训练目标已保存到当前浏览器，今日计划会随目标更新。");
+      triggerToast("训练目标已保存，今日计划会随目标更新。");
     } catch (error) {
       console.error('Failed to save study settings:', error);
-      triggerToast("保存失败：当前浏览器暂时无法写入学习目标。");
+      triggerToast("保存失败：服务器暂时未确认学习目标，请稍后重试。");
     }
   };
 
@@ -424,10 +425,10 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
             <div className="ui-panel space-y-4">
               <h3 className="text-sm font-black text-[#003178] flex items-center gap-2">
                 <Database className="h-4 w-4 text-[#003178]" />
-                本地数据保险箱
+                离线副本与导出
               </h3>
               <p className="text-[11px] leading-5 text-[#434652] font-semibold">
-                学习记录默认保存在当前浏览器；更换设备前可先导出。
+                学习记录由服务器持续保存；浏览器保留离线副本，也可导出独立备份。
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
@@ -454,7 +455,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
 
             <SaasAccountPanel
               onTriggerModal={onTriggerModal}
-              onDataRestored={onDataRestored}
+              onServerDataRestored={onServerDataRestored}
             />
 
             <UserFeedbackPanel pageContext="settings" />

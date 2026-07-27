@@ -19,6 +19,7 @@ export interface PracticeQuestionDescriptor {
   questionTypeId?: string;
   label?: string;
   groupLabel?: string;
+  number?: number;
 }
 
 export interface PracticeQuestionStatusItem {
@@ -334,7 +335,7 @@ export function buildPracticeQuestionStatusList(params: {
     const completedMockCount = completedMockPaperIds.size > 0 ? 0 : countCompletedMockSessions(params.sessions ?? []);
     return params.questions.map((question, index) => ({
       id: String(question.id),
-      number: index + 1,
+      number: question.number ?? index + 1,
       label: question.label ?? String(index + 1),
       groupLabel: question.groupLabel,
       practiced: completedMockPaperIds.size > 0
@@ -364,7 +365,7 @@ export function buildPracticeQuestionStatusList(params: {
 
     return {
       id: String(question.id),
-      number: index + 1,
+      number: question.number ?? index + 1,
       label: question.label ?? String(index + 1),
       groupLabel: question.groupLabel,
       practiced: exactPracticed || legacyPracticed,

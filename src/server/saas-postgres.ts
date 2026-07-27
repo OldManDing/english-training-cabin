@@ -622,10 +622,20 @@ export function createPostgresSaasStore(databaseUrl: string): SaasStore {
              VALUES ($1, $2, $3, $4, $5, $6, $7)
              ON CONFLICT (organization_id, user_id, entity_type, entity_id)
              DO UPDATE SET payload = EXCLUDED.payload, updated_at = EXCLUDED.updated_at, deleted_at = EXCLUDED.deleted_at
+             WHERE learning_entities.updated_at <= EXCLUDED.updated_at
              RETURNING *`,
             [input.organizationId, input.userId, entity.entityType, entity.entityId, entity.payload, entity.updatedAt, entity.deletedAt ?? null],
           );
-          results.push(mapEntity(result.rows[0]));
+          if (result.rows[0]) {
+            results.push(mapEntity(result.rows[0]));
+            continue;
+          }
+          const current = await client.query(
+            `SELECT * FROM learning_entities
+             WHERE organization_id = $1 AND user_id = $2 AND entity_type = $3 AND entity_id = $4`,
+            [input.organizationId, input.userId, entity.entityType, entity.entityId],
+          );
+          results.push(mapEntity(current.rows[0]));
         }
         return results;
       });

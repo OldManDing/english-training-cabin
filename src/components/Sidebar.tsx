@@ -29,7 +29,7 @@ export default function Sidebar({ activeTab, setActiveTab, examCountdown, onTrig
           </div>
           <div className="overflow-hidden">
             <h1 className="truncate text-sm font-bold tracking-tight text-[#003178]">英语训练舱</h1>
-            <p className="mt-0.5 hidden text-[11px] font-medium text-[#64748b] sm:block">本地学习中</p>
+            <p className="mt-0.5 hidden text-[11px] font-medium text-[#64748b] sm:block">学习记录自动保存</p>
           </div>
         </div>
 
@@ -77,7 +77,7 @@ export default function Sidebar({ activeTab, setActiveTab, examCountdown, onTrig
               if (onTriggerModal) {
                 onTriggerModal(
                   "使用帮助",
-                  "英语训练舱当前聚焦 CET-4 首发场景，并按多考试训练系统预留架构。\n\n1. 点击今日标题旁的“入门能力诊断”建立初始能力画像。\n\n2. 点击左侧导航在专项练习、阶段模考、复习队列、口语重说和能力进展间切换；已答题目可在专项练习中回看。\n\n学习记录默认保存在当前浏览器 IndexedDB 中；启用 AI 分析时会发送必要文本用于生成反馈。"
+                  "英语训练舱当前聚焦 CET-4 首发场景，并按多考试训练系统预留架构。\n\n1. 点击今日标题旁的“入门能力诊断”建立初始能力画像。\n\n2. 点击左侧导航在专项练习、阶段模考、复习队列、口语重说和能力进展间切换；已答题目可在专项练习中回看。\n\n学习记录会自动保存到服务端，当前浏览器 IndexedDB 只作为离线副本；启用 AI 分析时会发送必要文本用于生成反馈。"
                 );
               }
             }}

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Sidebar from './components/Sidebar';
 import TodayDashboard from './components/TodayDashboard';
 import AuthGate from './components/AuthGate';
@@ -16,8 +16,13 @@ import {
   CET4_READING_BANK,
   type Cet4MockChoiceQuestion,
 } from './questionBank';
-import { orderGrammarStructureQuestions } from './domain/practice/grammarStructureGuides';
-import { Sparkles, X } from 'lucide-react';
+import {
+  GRAMMAR_STRUCTURE_TOPIC_GUIDES,
+  getGrammarStructureTopicByFocus,
+  orderGrammarStructureQuestions,
+  type GrammarStructureTopicId,
+} from './domain/practice/grammarStructureGuides';
+import { Cloud, CloudOff, LoaderCircle, Sparkles, X } from 'lucide-react';
 import {
   completeReviewItem,
   getOrCreateActiveGoal,
@@ -29,7 +34,12 @@ import {
   persistSkillProfiles,
   upsertActiveGoal,
 } from './lib/storage/db';
-import { restoreCloudLearningDataWhenLocalEmpty } from './lib/storage/cloudLearningAutoRestore';
+import {
+  syncAllLocalLearningData,
+  synchronizeAuthoritativeLearningData,
+  syncLearningEntityIds,
+  type LearningEntityIds,
+} from './lib/storage/authoritativeLearningSync';
 import { buildDailyPlan } from './domain/planner/dailyPlan';
 import { buildReviewGateStatus } from './domain/review/reviewGate';
 import { getDueWrongQuestionReviewItemsOn } from './domain/review/reviewQueue';
@@ -153,7 +163,7 @@ function buildChoiceQuestionPassage(params: {
   id: string;
   title: string;
   content: string;
-  questions: Cet4MockChoiceQuestion[];
+  questions: Array<Cet4MockChoiceQuestion & { displayNumber?: number }>;
   questionLimit?: number;
 }): Passage {
   const selectedQuestions = params.questions.slice(0, params.questionLimit ?? params.questions.length);
@@ -177,20 +187,33 @@ function buildChoiceQuestionPassage(params: {
       trapType: question.trapType,
       tags: [question.trapType ?? question.questionTypeId],
       difficulty: 3,
+      displayNumber: question.displayNumber,
       sourceType: 'original',
       correctSentence: question.correctSentence,
     })),
   };
 }
 
+function takePassageQuestionBatch(passage: Passage, questionLimit: number): Passage {
+  return {
+    ...passage,
+    questions: passage.questions.slice(0, questionLimit),
+  };
+}
+
 const ORDERED_CET4_GRAMMAR_PRACTICE_QUESTIONS = orderGrammarStructureQuestions(CET4_GRAMMAR_PRACTICE_QUESTIONS);
+const NUMBERED_CET4_GRAMMAR_PRACTICE_QUESTIONS = CET4_GRAMMAR_PRACTICE_QUESTIONS.map((question, index) => ({
+  ...question,
+  displayNumber: index + 1,
+}));
+const GRAMMAR_STRUCTURE_BATCH_SIZE = 40;
 
 const CET4_GRAMMAR_STRUCTURE_PASSAGE = buildChoiceQuestionPassage({
   id: 'cet4-grammar-structure-practice',
   title: '语法结构与固定搭配专项',
   content: '本组题用于训练时态、语态、非谓语、从句、连接词和固定搭配。诊断显示语法薄弱时，系统会优先推荐这一组。',
   questions: ORDERED_CET4_GRAMMAR_PRACTICE_QUESTIONS,
-  questionLimit: 8,
+  questionLimit: 40,
 });
 
 const CET4_CLOZE_CONTEXT_PASSAGE = buildChoiceQuestionPassage({
@@ -206,15 +229,41 @@ const CET4_GRAMMAR_STRUCTURE_FULL_PASSAGE = buildChoiceQuestionPassage({
   questions: ORDERED_CET4_GRAMMAR_PRACTICE_QUESTIONS,
 });
 
+const CET4_GRAMMAR_STRUCTURE_NUMBERED_PASSAGE = buildChoiceQuestionPassage({
+  ...CET4_GRAMMAR_STRUCTURE_PASSAGE,
+  questions: NUMBERED_CET4_GRAMMAR_PRACTICE_QUESTIONS,
+});
+
 const CET4_CLOZE_CONTEXT_FULL_PASSAGE = buildChoiceQuestionPassage({
   ...CET4_CLOZE_CONTEXT_PASSAGE,
   questions: CET4_CLOZE_PRACTICE_QUESTIONS,
 });
 
+function buildGrammarTopicPassage(topicId: GrammarStructureTopicId, attempts: Attempt[]): Passage | null {
+  const topic = GRAMMAR_STRUCTURE_TOPIC_GUIDES.find((item) => item.id === topicId);
+  if (!topic) return null;
+
+  const topicQuestions = ORDERED_CET4_GRAMMAR_PRACTICE_QUESTIONS.filter(
+    (question) => getGrammarStructureTopicByFocus(question.trapType).id === topic.id,
+  );
+  if (topicQuestions.length === 0) return null;
+
+  const passage = buildChoiceQuestionPassage({
+    id: `cet4-grammar-structure-practice-${topic.id}`,
+    title: `语法结构 · ${topic.label}`,
+    content: `${topic.cue} ${topic.checkpoint}`,
+    questions: topicQuestions,
+  });
+
+  return filterPassageForUnpracticedQuestions(passage, attempts) ?? passage;
+}
+
 type PracticeJumpTarget = {
   moduleId: 'vocabulary' | 'cloze' | 'grammar' | 'reading' | 'listening' | 'writing' | 'translation';
   questionId: string;
 };
+
+type LearningSyncState = 'syncing' | 'synced' | 'pending';
 
 function WorkspaceLoadingFallback() {
   return (
@@ -248,6 +297,7 @@ function StudyApp() {
   const [dailyStrategy, setDailyStrategy] = useState<'efficient' | 'review'>('efficient');
   const [targetScoreLimit, setTargetScoreLimit] = useState<number | undefined>(undefined);
   const [modalContent, setModalContent] = useState<{ title: string; body: string } | null>(null);
+  const [learningSyncState, setLearningSyncState] = useState<LearningSyncState>('syncing');
 
   const handleTriggerModal = (title: string, body: string) => {
     setModalContent({ title, body });
@@ -276,10 +326,21 @@ function StudyApp() {
   );
   const preferredReadingPassage = unpracticedReadingPassages[0] ?? INITIAL_PASSAGE;
   const unpracticedGrammarPassage = useMemo(
-    () => filterPassageForUnpracticedQuestions(CET4_GRAMMAR_STRUCTURE_PASSAGE, persistedAttempts)
-      ?? CET4_GRAMMAR_STRUCTURE_PASSAGE,
+    () => takePassageQuestionBatch(
+      filterPassageForUnpracticedQuestions(CET4_GRAMMAR_STRUCTURE_FULL_PASSAGE, persistedAttempts)
+        ?? CET4_GRAMMAR_STRUCTURE_FULL_PASSAGE,
+      GRAMMAR_STRUCTURE_BATCH_SIZE,
+    ),
     [persistedAttempts],
   );
+  const grammarTopicPassages = useMemo(() => {
+    return new Map(
+      GRAMMAR_STRUCTURE_TOPIC_GUIDES.map((topic) => [
+        topic.id,
+        buildGrammarTopicPassage(topic.id, persistedAttempts),
+      ]),
+    );
+  }, [persistedAttempts]);
   const unpracticedClozePassage = useMemo(
     () => filterPassageForUnpracticedQuestions(CET4_CLOZE_CONTEXT_PASSAGE, persistedAttempts)
       ?? CET4_CLOZE_CONTEXT_PASSAGE,
@@ -364,7 +425,7 @@ function StudyApp() {
     setActiveTab(tab);
   };
 
-  const refreshStudyState = async () => {
+  const refreshStudyState = useCallback(async () => {
     const [goal, reviewItems, skillProfiles, practiceSessions, attempts] = await Promise.all([
       getOrCreateActiveGoal(),
       loadReviewItems(),
@@ -379,6 +440,20 @@ function StudyApp() {
     setPersistedSkillProfiles(skillProfiles);
     setPersistedPracticeSessions(practiceSessions);
     setPersistedAttempts(attempts);
+  }, []);
+
+  const confirmLearningEntities = async (ids: LearningEntityIds): Promise<boolean> => {
+    setLearningSyncState('syncing');
+    try {
+      await syncLearningEntityIds(ids);
+      setLearningSyncState('synced');
+      return true;
+    } catch (error) {
+      console.error('Failed to confirm learning data on server:', error);
+      trackTelemetry('client_error', { area: 'learning_entity_sync' });
+      setLearningSyncState('pending');
+      return false;
+    }
   };
 
   useEffect(() => {
@@ -401,18 +476,24 @@ function StudyApp() {
 
     async function loadStudyState() {
       const token = getStoredAuthToken();
+      let initialSyncFailed = false;
       if (token) {
         try {
-          const autoRestore = await restoreCloudLearningDataWhenLocalEmpty(token);
-          if (mounted && autoRestore.status === 'restored') {
+          const syncResult = await synchronizeAuthoritativeLearningData(token);
+          if (mounted) {
+            setLearningSyncState('synced');
+          }
+          if (mounted && syncResult.downloadedEntities > 0) {
             handleTriggerModal(
               '已同步云端学习数据',
-              `这台设备已自动恢复云端学习记录：练习 ${autoRestore.importedCounts.practiceSessions} 组、答题 ${autoRestore.importedCounts.attempts} 条、复习 ${autoRestore.importedCounts.reviewItems} 项、画像 ${autoRestore.importedCounts.skillProfiles} 项。`,
+              `这台设备已从服务端恢复学习记录：练习 ${syncResult.mergedCounts.practiceSessions} 组、答题 ${syncResult.mergedCounts.attempts} 条、复习 ${syncResult.mergedCounts.reviewItems} 项、画像 ${syncResult.mergedCounts.skillProfiles} 项。`,
             );
           }
         } catch (error) {
-          console.error('Failed to auto restore cloud learning data:', error);
-          trackTelemetry('client_error', { area: 'cloud_learning_auto_restore' });
+          initialSyncFailed = true;
+          console.error('Failed to synchronize authoritative learning data:', error);
+          if (mounted) setLearningSyncState('pending');
+          trackTelemetry('client_error', { area: 'authoritative_learning_sync' });
         }
       }
 
@@ -431,6 +512,21 @@ function StudyApp() {
       setPersistedSkillProfiles(skillProfiles);
       setPersistedPracticeSessions(practiceSessions);
       setPersistedAttempts(attempts);
+      if (token) {
+        try {
+          if (initialSyncFailed) {
+            await synchronizeAuthoritativeLearningData(token);
+          } else {
+            await syncLearningEntityIds({ studyGoalIds: [goal.id] }, token);
+          }
+          if (mounted) setLearningSyncState('synced');
+        } catch (error) {
+          console.error('Failed to persist default study goal:', error);
+          if (mounted) setLearningSyncState('pending');
+        }
+      } else if (mounted) {
+        setLearningSyncState('pending');
+      }
     }
 
     loadStudyState().catch((error) => {
@@ -444,8 +540,43 @@ function StudyApp() {
     };
   }, []);
 
+  useEffect(() => {
+    if (learningSyncState !== 'pending') return;
+
+    let retrying = false;
+    const retryPendingLearningData = async () => {
+      if (retrying || !navigator.onLine) return;
+      const token = getStoredAuthToken();
+      if (!token) return;
+      retrying = true;
+      setLearningSyncState('syncing');
+      try {
+        await synchronizeAuthoritativeLearningData(token);
+        setLearningSyncState('synced');
+      } catch (error) {
+        console.error('Failed to retry pending learning data:', error);
+        setLearningSyncState('pending');
+      } finally {
+        retrying = false;
+      }
+    };
+
+    window.addEventListener('online', retryPendingLearningData);
+    const retryTimer = window.setInterval(retryPendingLearningData, 30_000);
+    return () => {
+      window.removeEventListener('online', retryPendingLearningData);
+      window.clearInterval(retryTimer);
+    };
+  }, [learningSyncState]);
+
   const persistCompletionReport = async (report: PracticeCompletionReport) => {
     await persistPracticeCompletion(report);
+    await confirmLearningEntities({
+      practiceSessionIds: [report.session.id],
+      attemptIds: report.attempts.map((attempt) => attempt.id),
+      reviewItemIds: report.reviewItems.map((reviewItem) => reviewItem.id),
+      skillProfileIds: report.skillProfiles.map((profile) => profile.id),
+    });
     const [reviewItems, skillProfiles, practiceSessions, attempts] = await Promise.all([
       loadReviewItems(),
       loadSkillProfiles(),
@@ -460,7 +591,14 @@ function StudyApp() {
   };
 
   const handleCompleteReviewItem = async (reviewItemId: string, evidence: ReviewCompletionEvidence) => {
-    await completeReviewItem(reviewItemId, evidence);
+    const records = await completeReviewItem(reviewItemId, evidence);
+    if (!records) return;
+    await confirmLearningEntities({
+      practiceSessionIds: [records.session.id],
+      attemptIds: [records.attempt.id],
+      reviewItemIds: [records.reviewItem.id],
+      skillProfileIds: records.skillProfile ? [records.skillProfile.id] : [],
+    });
     await refreshStudyState();
     trackTelemetry('practice_completed', {
       mode: 'scheduled-review',
@@ -472,7 +610,10 @@ function StudyApp() {
   const handleSetGoalTarget = (score: number) => {
     setTargetScoreLimit(score);
     upsertActiveGoal({ targetScore: score })
-      .then(setActiveGoal)
+      .then(async (goal) => {
+        setActiveGoal(goal);
+        await confirmLearningEntities({ studyGoalIds: [goal.id] });
+      })
       .catch((error) => {
         console.error('Failed to save target score:', error);
         trackTelemetry('client_error', { area: 'target_score_save' });
@@ -506,6 +647,10 @@ function StudyApp() {
       });
       const settingsProfiles = buildSettingsSkillProfiles(settings);
       await persistSkillProfiles(settingsProfiles);
+      await confirmLearningEntities({
+        studyGoalIds: [goal.id],
+        skillProfileIds: settingsProfiles.map((profile) => profile.id),
+      });
       setActiveGoal(goal);
       setTargetScoreLimit(goal.targetScore);
       setPersistedSkillProfiles(settingsProfiles);
@@ -536,7 +681,7 @@ function StudyApp() {
         prioritySkills: result.prioritySkills,
       });
       if (result.diagnosticReport) {
-        await persistPracticeCompletion({
+        const report: PracticeCompletionReport = {
           session: {
             ...result.diagnosticReport.session,
             goalId: goal.id,
@@ -544,9 +689,21 @@ function StudyApp() {
           attempts: result.diagnosticReport.attempts,
           reviewItems: result.diagnosticReport.reviewItems,
           skillProfiles: result.diagnosticReport.skillProfiles,
+        };
+        await persistPracticeCompletion(report);
+        await confirmLearningEntities({
+          studyGoalIds: [goal.id],
+          practiceSessionIds: [report.session.id],
+          attemptIds: report.attempts.map((attempt) => attempt.id),
+          reviewItemIds: report.reviewItems.map((reviewItem) => reviewItem.id),
+          skillProfileIds: report.skillProfiles.map((profile) => profile.id),
         });
       } else {
         await persistSkillProfiles(result.skillProfiles);
+        await confirmLearningEntities({
+          studyGoalIds: [goal.id],
+          skillProfileIds: result.skillProfiles.map((profile) => profile.id),
+        });
       }
       setActiveGoal(goal);
       setTargetScoreLimit(goal.targetScore);
@@ -581,10 +738,12 @@ function StudyApp() {
     });
   };
 
-  const handleStartGrammarPractice = (questionId?: string) => {
+  const handleStartGrammarPractice = (questionId?: string, topicId?: GrammarStructureTopicId) => {
+    const topic = topicId ? GRAMMAR_STRUCTURE_TOPIC_GUIDES.find((item) => item.id === topicId) : undefined;
+    const topicPassage = topicId ? grammarTopicPassages.get(topicId) : undefined;
     setPracticeJumpTarget(questionId ? { moduleId: 'grammar', questionId } : null);
-    setCustomPassage(questionId ? CET4_GRAMMAR_STRUCTURE_FULL_PASSAGE : unpracticedGrammarPassage);
-    startLearningWithReviewReminder('语法结构训练', () => setIsPracticing(true));
+    setCustomPassage(questionId ? CET4_GRAMMAR_STRUCTURE_NUMBERED_PASSAGE : topicPassage ?? unpracticedGrammarPassage);
+    startLearningWithReviewReminder(topic ? `${topic.label}训练` : '语法结构训练', () => setIsPracticing(true));
   };
 
   const handleStartClozePractice = (questionId?: string) => {
@@ -742,6 +901,24 @@ function StudyApp() {
     await persistCompletionReport(report);
   };
 
+  const handleDataRestored = async () => {
+    setLearningSyncState('syncing');
+    try {
+      await syncAllLocalLearningData();
+      setLearningSyncState('synced');
+    } catch (error) {
+      console.error('Failed to persist restored learning data on server:', error);
+      trackTelemetry('client_error', { area: 'restored_learning_data_sync' });
+      setLearningSyncState('pending');
+    }
+    await refreshStudyState();
+  };
+
+  const handleServerDataRestored = async () => {
+    setLearningSyncState('synced');
+    await refreshStudyState();
+  };
+
   // Render proper subviews
   const renderTabContent = () => {
     switch (activeTab) {
@@ -856,7 +1033,8 @@ function StudyApp() {
             onSave={handleSaveSettings}
             onSetScoreLimit={handleSetGoalTarget}
             onTriggerModal={handleTriggerModal}
-            onDataRestored={refreshStudyState}
+            onDataRestored={handleDataRestored}
+            onServerDataRestored={handleServerDataRestored}
           />
         );
       default:
@@ -899,6 +1077,32 @@ function StudyApp() {
 
   return (
     <div className="app-page-surface min-h-screen bg-slate-50 flex flex-col lg:flex-row font-sans antialiased text-[#1e333c]">
+      <div
+        className={`pointer-events-none fixed bottom-3 right-3 z-40 flex min-h-9 max-w-[calc(100vw-1.5rem)] items-center gap-2 rounded-lg border bg-white px-3 py-2 text-xs font-bold shadow-sm ${
+          learningSyncState === 'pending'
+            ? 'border-amber-300 text-amber-800'
+            : learningSyncState === 'syncing'
+              ? 'border-slate-200 text-slate-600'
+              : 'border-emerald-200 text-emerald-700'
+        }`}
+        role="status"
+        aria-live="polite"
+      >
+        {learningSyncState === 'pending' ? (
+          <CloudOff className="h-4 w-4 shrink-0" aria-hidden="true" />
+        ) : learningSyncState === 'syncing' ? (
+          <LoaderCircle className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
+        ) : (
+          <Cloud className="h-4 w-4 shrink-0" aria-hidden="true" />
+        )}
+        <span className="min-w-0 leading-4">
+          {learningSyncState === 'pending'
+            ? '服务器未确认，正在自动重试'
+            : learningSyncState === 'syncing'
+              ? '正在保存到服务器'
+              : '学习记录已保存到服务器'}
+        </span>
+      </div>
       {showOnboarding ? (
         <Suspense fallback={<WorkspaceLoadingFallback />}>
           <OnboardingDiagnostic
