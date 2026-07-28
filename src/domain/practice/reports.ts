@@ -98,6 +98,11 @@ function makeId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function makeReviewItemId(attempt: Attempt, targetId: string): string {
+  const raw = `${attempt.examId}-${attempt.moduleId}-${targetId}`;
+  return `review-${raw.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 120)}`;
+}
+
 function confidenceToScore(confidence: ChoicePracticeAnswer['confidence']): 1 | 2 | 3 | 4 | 5 | undefined {
   if (confidence === 'sure' || confidence === 'High') return 5;
   if (confidence === 'not_sure' || confidence === 'Medium') return 3;
@@ -241,7 +246,7 @@ function buildReviewItem(params: {
   });
 
   return {
-    id: makeId('review'),
+    id: makeReviewItemId(params.attempt, String(params.question.id)),
     title: `${labels.prefix}：${params.reasons[0]}`,
     category: labels.category,
     detail: `题目：${params.question.question}\n你的答案：${String(params.attempt.answer || '未作答')}；正确答案：${params.question.correctAnswer}。\n复习重点：${params.reasons.join('、')}。`,

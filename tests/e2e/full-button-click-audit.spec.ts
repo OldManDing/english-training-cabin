@@ -238,17 +238,23 @@ async function tagVisibleButtons(page: Page, scopeSelector = 'main'): Promise<Bu
 }
 
 async function closeTransientUi(page: Page) {
-  const closeButtons = [
-    page.getByRole('button', { name: '关闭提示' }),
-    page.getByRole('button', { name: '我知道了' }),
-    page.getByRole('button', { name: '回到今日计划' }),
-  ];
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const closeButtons = [
+      page.getByRole('button', { name: '关闭提示' }),
+      page.getByRole('button', { name: '我知道了' }),
+      page.getByRole('button', { name: '回到今日计划' }),
+    ];
+    let closed = false;
 
-  for (const button of closeButtons) {
-    if ((await button.count()) > 0 && (await button.first().isVisible().catch(() => false))) {
-      await button.first().click();
-      await page.waitForTimeout(100);
+    for (const button of closeButtons) {
+      if ((await button.count()) > 0 && (await button.first().isVisible().catch(() => false))) {
+        await button.first().click({ timeout: 2_000 });
+        await page.waitForTimeout(150);
+        closed = true;
+        break;
+      }
     }
+    if (!closed) return;
   }
 }
 
@@ -294,11 +300,13 @@ async function auditVisibleButtonsForState(
   } = {},
 ) {
   await setup();
+  await page.waitForLoadState('networkidle');
   const initialButtons = await tagVisibleButtons(page, options.scope ?? 'main');
   const candidates = initialButtons.filter((button) => !button.disabled && !options.skip?.test(button.name));
 
   for (const candidate of candidates) {
     await setup();
+    await page.waitForLoadState('networkidle');
     const currentButtons = await tagVisibleButtons(page, options.scope ?? 'main');
     const descriptor = currentButtons[candidate.auditIndex];
     if (!descriptor || descriptor.disabled || options.skip?.test(descriptor.name)) continue;
@@ -313,17 +321,27 @@ async function auditVisibleButtonsForState(
 }
 
 async function goHome(page: Page) {
-  await page.goto('/');
+  await closeTransientUi(page);
+  const homeButton = page.getByRole('button', { name: '今日训练', exact: true }).first();
+  if (await homeButton.isVisible({ timeout: 1_000 }).catch(() => false)) {
+    await homeButton.click({ timeout: 5_000 });
+  } else {
+    await page.goto('/');
+  }
   const loginHeading = page.getByRole('heading', { name: '登录' });
   if (await loginHeading.isVisible({ timeout: 1_000 }).catch(() => false)) {
     await registerAndEnterApp(page, `full-button-audit-reentry-${Date.now()}`);
   }
   await expect(page.getByRole('heading', { name: '今日训练' })).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(250);
+  await closeTransientUi(page);
 }
 
 async function goTab(page: Page, buttonName: string, heading: string | RegExp) {
   await goHome(page);
-  await page.getByRole('button', { name: buttonName, exact: true }).click();
+  await closeTransientUi(page);
+  await page.getByRole('button', { name: buttonName, exact: true }).click({ timeout: 5_000 });
   await expect(page.getByRole('heading', { name: heading })).toBeVisible();
 }
 
@@ -380,7 +398,7 @@ test('real browser clicks visible buttons across primary states', async ({ page 
     process.env.FULL_BUTTON_AUDIT !== 'true',
     'Run with FULL_BUTTON_AUDIT=true for the exhaustive real-browser button crawl.',
   );
-  test.setTimeout(720_000);
+  test.setTimeout(1_800_000);
   const records: ClickRecord[] = [];
   const issues: BrowserIssue[] = [];
   installIssueCollectors(page, issues);
@@ -400,6 +418,7 @@ test('real browser clicks visible buttons across primary states', async ({ page 
   );
 
   await registerAndEnterApp(page, 'full-button-audit');
+  await page.waitForLoadState('networkidle');
 
   await auditVisibleButtonsForState(
     page,
@@ -539,7 +558,7 @@ test('real browser clicks visible buttons across primary states', async ({ page 
     page,
     'speaking-training-ready',
     async () => {
-      await goTab(page, '口语重说', /口语重说/);
+      await goTab(page, '口语重说', '口语重说 - 准备开始');
     },
     records,
     issues,

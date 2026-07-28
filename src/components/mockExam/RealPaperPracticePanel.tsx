@@ -8,6 +8,7 @@ import {
 import { apiRequest } from '../../lib/api';
 import { pausePracticeSpeech, playPracticeSpeech, resumePracticeSpeech, stopPracticeSpeech } from '../../lib/practiceSpeech';
 import { SelectField } from '../controls/FormControls';
+import { loadPracticeDraft, practiceDraftKeys, savePracticeDraft } from '../../domain/practice/draftProgress';
 
 export type LocalRealPaperLoadStatus = 'loading' | 'ready' | 'fallback' | 'empty' | 'error';
 
@@ -44,8 +45,6 @@ interface RealPaperPracticePanelProps {
 }
 
 const ALL_LOCAL_PAPER_FILTER = 'all';
-const LOCAL_REAL_PAPER_DRAFT_PREFIX = 'english-training-cabin:local-real-paper-draft:v1:';
-
 function countEnglishWords(value: string): number {
   return value
     .trim()
@@ -63,10 +62,6 @@ function createEmptyLocalRealPaperDraft(): LocalRealPaperDraft {
   };
 }
 
-function getLocalRealPaperDraftKey(paperId: string) {
-  return `${LOCAL_REAL_PAPER_DRAFT_PREFIX}${paperId}`;
-}
-
 function normalizeLocalRealPaperDraft(value: unknown): LocalRealPaperDraft {
   if (!value || typeof value !== 'object') return createEmptyLocalRealPaperDraft();
   const draft = value as Partial<LocalRealPaperDraft>;
@@ -79,18 +74,13 @@ function normalizeLocalRealPaperDraft(value: unknown): LocalRealPaperDraft {
 }
 
 function loadLocalRealPaperDraft(paperId: string): LocalRealPaperDraft {
-  if (!paperId || typeof window === 'undefined') return createEmptyLocalRealPaperDraft();
-  try {
-    const stored = window.localStorage.getItem(getLocalRealPaperDraftKey(paperId));
-    return stored ? normalizeLocalRealPaperDraft(JSON.parse(stored)) : createEmptyLocalRealPaperDraft();
-  } catch {
-    return createEmptyLocalRealPaperDraft();
-  }
+  if (!paperId) return createEmptyLocalRealPaperDraft();
+  return normalizeLocalRealPaperDraft(loadPracticeDraft(practiceDraftKeys.realPaper(paperId)));
 }
 
 function saveLocalRealPaperDraft(paperId: string, draft: LocalRealPaperDraft) {
-  if (!paperId || typeof window === 'undefined') return;
-  window.localStorage.setItem(getLocalRealPaperDraftKey(paperId), JSON.stringify(draft));
+  if (!paperId) return;
+  savePracticeDraft(practiceDraftKeys.realPaper(paperId), draft);
 }
 
 function formatFileSize(sizeBytes?: number): string | null {
@@ -852,7 +842,7 @@ function PaperSectionText({
             value={draft.writingAnswer}
             onChange={(event) => onSubjectiveChange('writingAnswer', event.target.value)}
             className="mt-3 min-h-64 w-full rounded-3xl border border-slate-200 bg-white p-4 text-sm font-semibold leading-7 text-slate-700 outline-none focus:ring-2 focus:ring-[#003178]/25"
-            placeholder="在这里完成本套真题写作。内容会自动保存在本机。"
+            placeholder="在这里完成本套真题写作。内容会自动保存到当前账号。"
           />
           <p className="mt-2 text-xs font-bold text-slate-500">
             当前约 {countEnglishWords(draft.writingAnswer)} 个英文词。
@@ -870,7 +860,7 @@ function PaperSectionText({
             value={draft.translationAnswer}
             onChange={(event) => onSubjectiveChange('translationAnswer', event.target.value)}
             className="mt-3 min-h-64 w-full rounded-3xl border border-slate-200 bg-white p-4 text-sm font-semibold leading-7 text-slate-700 outline-none focus:ring-2 focus:ring-[#003178]/25"
-            placeholder="在这里完成本套真题翻译。内容会自动保存在本机。"
+            placeholder="在这里完成本套真题翻译。内容会自动保存到当前账号。"
           />
           <p className="mt-2 text-xs font-bold text-slate-500">
             当前约 {countEnglishWords(draft.translationAnswer)} 个英文词。
@@ -924,7 +914,7 @@ function LocalRealPaperContentPanel({
         <div>
           <div className="text-sm font-black text-[#101828]">页面版真题</div>
           <p className="mt-1 text-xs font-bold leading-5 text-slate-500">
-            {message} 默认展示 PDF 提取后的页面文本，可直接作答并自动保存在本机。
+            {message} 默认展示 PDF 提取后的页面文本，可直接作答并自动保存到当前账号。
           </p>
           <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-black">
             <span className="rounded-full bg-white px-3 py-1 text-[#003178]" data-testid="local-real-paper-answer-progress">

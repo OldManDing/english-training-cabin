@@ -101,7 +101,7 @@ test('SaaS registration shows a visible error for invalid invite codes', async (
 
   await page.getByRole('button', { name: '隐私协议' }).click();
   await expect(page.getByRole('heading', { name: '隐私协议' })).toBeVisible();
-  await expect(page.getByText('IndexedDB')).toBeVisible();
+  await expect(page.getByText('以服务端账号数据为权威来源')).toBeVisible();
   await expect(page.getByText('AI 不可用时系统会切换到规则反馈兜底')).toBeVisible();
   await page.getByRole('button', { name: '我知道了' }).click();
 
@@ -237,7 +237,7 @@ test('SaaS login on a new device automatically restores existing cloud learning 
   await page.getByTestId('saas-password-input').fill(account.password);
   await page.getByTestId('saas-auth-submit').click();
 
-  await expect(page.getByText('已同步云端学习数据', { exact: true })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: '已从服务器恢复' })).toBeVisible();
 
   const counts = await countLocalLearningData(page);
   expect(counts).toMatchObject({
@@ -264,7 +264,7 @@ test('SaaS login restores entity-only learning data after browser storage is cle
   await page.getByTestId('saas-email-input').fill(account.email);
   await page.getByTestId('saas-password-input').fill(account.password);
   await page.getByTestId('saas-auth-submit').click();
-  await expect(page.getByText('已同步云端学习数据', { exact: true })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: '已从服务器恢复' })).toBeVisible();
 
   const counts = await countLocalLearningData(page);
   expect(counts).toMatchObject({
@@ -294,7 +294,7 @@ test('SaaS login restores cloud learning data when the device only has local pro
   await page.getByTestId('saas-password-input').fill(account.password);
   await page.getByTestId('saas-auth-submit').click();
 
-  await expect(page.getByText('已同步云端学习数据', { exact: true })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: '已从服务器恢复' })).toBeVisible();
 
   const counts = await countLocalLearningData(page);
   expect(counts).toMatchObject({

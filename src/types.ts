@@ -73,6 +73,7 @@ export interface StudyGoal {
   targetScore?: number;
   dailyMinutes: number;
   prioritySkills: SkillArea[];
+  recordingQualityReminder?: boolean;
   status: 'active' | 'paused' | 'completed';
   createdAt: string;
   updatedAt: string;

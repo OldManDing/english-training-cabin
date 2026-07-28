@@ -8,6 +8,7 @@ import UserFeedbackPanel from './UserFeedbackPanel';
 import LegalLinks from './LegalLinks';
 import { listPublicExamProfiles } from '../exams/registry';
 import { DateField, SelectField } from './controls/FormControls';
+import { getSuggestedExamDate } from '../domain/planner/defaultExamDate';
 
 interface SettingsSectionProps {
   onSave?: (settings: {
@@ -27,6 +28,9 @@ interface SettingsSectionProps {
   initialExamId?: string;
   initialExamDate?: string;
   initialDailyMinutes?: number;
+  initialPrepareSpeaking?: boolean;
+  initialSkillLevels?: Partial<Record<'reading' | 'listening' | 'translation' | 'writing' | 'speaking', number>>;
+  initialRecordingQualityReminder?: boolean;
   onSetScoreLimit?: (score: number) => void;
   onTriggerModal?: (title: string, body: string) => void;
   onDataRestored?: () => Promise<void>;
@@ -42,27 +46,30 @@ function toSettingsExamType(examId?: string): string {
   return 'cet4';
 }
 
-export default function SettingsSection({ onSave, targetScoreLimit = 550, initialExamId, initialExamDate, initialDailyMinutes, onSetScoreLimit, onTriggerModal, onDataRestored, onServerDataRestored }: SettingsSectionProps) {
+export default function SettingsSection({ onSave, targetScoreLimit = 550, initialExamId, initialExamDate, initialDailyMinutes, initialPrepareSpeaking = true, initialSkillLevels, initialRecordingQualityReminder = true, onSetScoreLimit, onTriggerModal, onDataRestored, onServerDataRestored }: SettingsSectionProps) {
   // Local Settings States matching the screenshot
   const [examType, setExamType] = useState<string>(toSettingsExamType(initialExamId));
-  const [examDate, setExamDate] = useState<string>(initialExamDate ?? "2026-06-13");
-  const [prepareSpeaking, setPrepareSpeaking] = useState<boolean>(true);
+  const [examDate, setExamDate] = useState<string>(initialExamDate ?? getSuggestedExamDate());
+  const [prepareSpeaking, setPrepareSpeaking] = useState<boolean>(initialPrepareSpeaking);
   
   // Base skill levels: 0 = 入门, 1 = 中级, 2 = 高级
-  const [readingLevel, setReadingLevel] = useState<number>(1); // default "中级"
-  const [listeningLevel, setListeningLevel] = useState<number>(1); // default "中级"
-  const [translationLevel, setTranslationLevel] = useState<number>(0); // default "入门"
-  const [writingLevel, setWritingLevel] = useState<number>(1); // default "中级"
-  const [speakingLevel, setSpeakingLevel] = useState<number>(0); // default "入门"
+  const [readingLevel, setReadingLevel] = useState<number>(initialSkillLevels?.reading ?? 1);
+  const [listeningLevel, setListeningLevel] = useState<number>(initialSkillLevels?.listening ?? 1);
+  const [translationLevel, setTranslationLevel] = useState<number>(initialSkillLevels?.translation ?? 0);
+  const [writingLevel, setWritingLevel] = useState<number>(initialSkillLevels?.writing ?? 1);
+  const [speakingLevel, setSpeakingLevel] = useState<number>(initialSkillLevels?.speaking ?? 0);
 
   const [targetScore, setTargetScore] = useState<number>(targetScoreLimit);
   const [dailyTargetMinutes, setDailyTargetMinutes] = useState<number>(initialDailyMinutes ?? 60); // 60 minutes as in screenshot
   
   // Extra settings
-  const [whisperNoiseReduction, setWhisperNoiseReduction] = useState<boolean>(true);
+  const [whisperNoiseReduction, setWhisperNoiseReduction] = useState<boolean>(initialRecordingQualityReminder);
   
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isGeneratingPlan, setIsGeneratingPlan] = useState<boolean>(false);
+  const [showAccountAndRecovery, setShowAccountAndRecovery] = useState(() => (
+    typeof window === 'undefined' || !window.matchMedia('(max-width: 767px)').matches
+  ));
 
   useEffect(() => {
     if (initialExamDate) setExamDate(initialExamDate);
@@ -79,6 +86,16 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
   useEffect(() => {
     setTargetScore(targetScoreLimit);
   }, [targetScoreLimit]);
+
+  useEffect(() => {
+    setPrepareSpeaking(initialPrepareSpeaking);
+    setReadingLevel(initialSkillLevels?.reading ?? 1);
+    setListeningLevel(initialSkillLevels?.listening ?? 1);
+    setTranslationLevel(initialSkillLevels?.translation ?? 0);
+    setWritingLevel(initialSkillLevels?.writing ?? 1);
+    setSpeakingLevel(initialSkillLevels?.speaking ?? 0);
+    setWhisperNoiseReduction(initialRecordingQualityReminder);
+  }, [initialPrepareSpeaking, initialRecordingQualityReminder, initialSkillLevels?.listening, initialSkillLevels?.reading, initialSkillLevels?.speaking, initialSkillLevels?.translation, initialSkillLevels?.writing]);
 
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
@@ -244,7 +261,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
               目标与计划设置
             </h2>
             <p className="text-sm font-semibold text-slate-500 sm:text-base mt-2">
-              调整目标、时间和本地数据。
+              调整目标、时间和数据安全。
             </p>
           </div>
           <button
@@ -452,43 +469,58 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
               </div>
             </div>
 
-            <SaasAccountPanel
-              onTriggerModal={onTriggerModal}
-              onServerDataRestored={onServerDataRestored}
-            />
+            <details
+              open={showAccountAndRecovery}
+              onToggle={(event) => setShowAccountAndRecovery(event.currentTarget.open)}
+              className="space-y-4"
+            >
+              <summary className="ui-panel flex cursor-pointer list-none items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-black text-[#003178]">账号、备份与反馈</h3>
+                  <p className="mt-1 text-[11px] font-semibold leading-5 text-[#434652]">查看同步状态、恢复点和低频管理工具。</p>
+                </div>
+                <ChevronDown className={`h-5 w-5 shrink-0 text-[#003178] transition-transform ${showAccountAndRecovery ? 'rotate-180' : ''}`} />
+              </summary>
+              <div className="space-y-4 pt-4">
+                <SaasAccountPanel
+                  onTriggerModal={onTriggerModal}
+                  onServerDataRestored={onServerDataRestored}
+                />
 
-            <div className="ui-panel space-y-4">
-              <h3 className="text-sm font-black text-[#003178] flex items-center gap-2">
-                <Database className="h-4 w-4 text-[#003178]" />
-                数据安全与恢复
-              </h3>
-              <p className="text-[11px] leading-5 text-[#434652] font-semibold">
-                服务器是主存储；浏览器是当前账号的离线工作副本。导入备份只合并，不会删除现有记录。
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={handleExportLearningData}
-                  className="ui-button ui-button-secondary ui-button-full"
-                >
-                  <Download className="h-4 w-4" />
-                  导出学习数据
-                </button>
-                <label className="ui-button ui-button-primary ui-button-full cursor-pointer">
-                  <Upload className="h-4 w-4" />
-                  合并本地备份
-                  <input
-                    data-testid="restore-learning-data-input"
-                    type="file"
-                    accept="application/json,.json"
-                    className="hidden"
-                    onChange={handleRestoreLearningData}
-                  />
-                </label>
+                <div className="ui-panel space-y-4">
+                  <h3 className="text-sm font-black text-[#003178] flex items-center gap-2">
+                    <Database className="h-4 w-4 text-[#003178]" />
+                    数据安全与恢复
+                  </h3>
+                  <p className="text-[11px] leading-5 text-[#434652] font-semibold">
+                    服务器是主存储；浏览器是当前账号的离线工作副本。导入备份只合并，不会删除现有记录。
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={handleExportLearningData}
+                      className="ui-button ui-button-secondary ui-button-full"
+                    >
+                      <Download className="h-4 w-4" />
+                      导出学习数据
+                    </button>
+                    <label className="ui-button ui-button-primary ui-button-full cursor-pointer">
+                      <Upload className="h-4 w-4" />
+                      合并本地备份
+                      <input
+                        data-testid="restore-learning-data-input"
+                        type="file"
+                        accept="application/json,.json"
+                        className="hidden"
+                        onChange={handleRestoreLearningData}
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                <UserFeedbackPanel pageContext="settings" />
               </div>
-            </div>
-
-            <UserFeedbackPanel pageContext="settings" />
+            </details>
 
           </div>
 
@@ -573,7 +605,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
 
                 <div className="flex items-center justify-center gap-1.5 text-[9.5px] text-[#434652] font-bold opacity-80">
                   <Lock className="h-3 w-3 text-[#003178]" />
-                  <span>根据本地目标和练习证据更新</span>
+                  <span>根据账号目标和练习证据更新</span>
                 </div>
               </div>
 

@@ -57,7 +57,14 @@ import {
   mergePracticeProgressAttempts,
 } from './domain/practice/practicedQuestions';
 import { buildDraftPracticeAttempts } from './domain/practice/draftAttempts';
-import { loadPracticeDraft, practiceDraftKeys, VocabularyPracticeDraft } from './domain/practice/draftProgress';
+import {
+  loadPracticeDraft,
+  practiceDraftKeys,
+  PRACTICE_DRAFT_SYNC_EVENT,
+  synchronizePracticeDrafts,
+  type PracticeDraftSyncState,
+  type VocabularyPracticeDraft,
+} from './domain/practice/draftProgress';
 
 const ReadingTraining = lazy(() => import('./components/ReadingTraining'));
 const PracticeHub = lazy(() => import('./components/PracticeHub'));
@@ -101,6 +108,19 @@ function levelToProfileScore(level: number): number {
   if (level <= 0) return 55;
   if (level >= 2) return 86;
   return 72;
+}
+
+function profileScoreToLevel(score: number): number {
+  if (score < 64) return 0;
+  if (score >= 80) return 2;
+  return 1;
+}
+
+function getSavedSettingsLevel(skillProfiles: SkillProfile[], skillArea: SkillProfile['skillArea']): number | undefined {
+  const profile = skillProfiles
+    .filter((item) => item.skillArea === skillArea && item.subSkillId === `settings-${skillArea}`)
+    .sort((left, right) => right.lastUpdatedAt.localeCompare(left.lastUpdatedAt))[0];
+  return profile ? profileScoreToLevel(profile.score) : undefined;
 }
 
 function estimateCetScore(skillProfiles: SkillProfile[]): number | undefined {
@@ -305,6 +325,8 @@ function StudyApp() {
   const [targetScoreLimit, setTargetScoreLimit] = useState<number | undefined>(undefined);
   const [modalContent, setModalContent] = useState<{ title: string; body: string } | null>(null);
   const [learningSyncState, setLearningSyncState] = useState<LearningSyncState>('syncing');
+  const [draftSyncState, setDraftSyncState] = useState<PracticeDraftSyncState>('syncing');
+  const [learningRecoveryNotice, setLearningRecoveryNotice] = useState<string | null>(null);
 
   const handleTriggerModal = (title: string, body: string) => {
     setModalContent({ title, body });
@@ -321,6 +343,18 @@ function StudyApp() {
   const estimatedScore = estimateCetScore(persistedSkillProfiles);
   const abilityEvidenceCount = persistedSkillProfiles.reduce((sum, profile) => sum + profile.evidenceCount, 0);
   const reviewGateStatus = buildReviewGateStatus(persistedReviewItems);
+  const savedSettingsLevels = useMemo(() => ({
+    reading: getSavedSettingsLevel(persistedSkillProfiles, 'reading'),
+    listening: getSavedSettingsLevel(persistedSkillProfiles, 'listening'),
+    translation: getSavedSettingsLevel(persistedSkillProfiles, 'translation'),
+    writing: getSavedSettingsLevel(persistedSkillProfiles, 'writing'),
+    speaking: getSavedSettingsLevel(persistedSkillProfiles, 'speaking'),
+  }), [persistedSkillProfiles]);
+  const effectiveLearningSyncState: LearningSyncState = learningSyncState === 'pending' || draftSyncState === 'pending'
+    ? 'pending'
+    : learningSyncState === 'syncing' || draftSyncState === 'syncing'
+      ? 'syncing'
+      : 'synced';
   const unpracticedVocabularyItems = useMemo(
     () => filterUnpracticedItems(CET4_VOCABULARY_BANK, persistedAttempts, 'vocabulary'),
     [persistedAttempts],
@@ -481,12 +515,34 @@ function StudyApp() {
   }, [activeTab]);
 
   useEffect(() => {
+    const handleDraftSyncState = (event: Event) => {
+      const state = (event as CustomEvent<{ state?: PracticeDraftSyncState }>).detail?.state;
+      if (state) setDraftSyncState(state);
+    };
+    window.addEventListener(PRACTICE_DRAFT_SYNC_EVENT, handleDraftSyncState);
+    return () => window.removeEventListener(PRACTICE_DRAFT_SYNC_EVENT, handleDraftSyncState);
+  }, []);
+
+  useEffect(() => {
+    if (!learningRecoveryNotice) return;
+    const timer = window.setTimeout(() => setLearningRecoveryNotice(null), 8_000);
+    return () => window.clearTimeout(timer);
+  }, [learningRecoveryNotice]);
+
+  useEffect(() => {
     let mounted = true;
 
     async function loadStudyState() {
       const token = getStoredAuthToken();
       let initialSyncFailed = false;
       if (token) {
+        try {
+          await synchronizePracticeDrafts(token);
+          if (mounted) setDraftSyncState('synced');
+        } catch (error) {
+          console.warn('Failed to synchronize active practice drafts:', error);
+          if (mounted) setDraftSyncState('pending');
+        }
         try {
           const syncResult = await synchronizeAuthoritativeLearningData(token);
           if (mounted) {
@@ -497,9 +553,8 @@ function StudyApp() {
             + syncResult.mergedCounts.reviewItems
             + syncResult.mergedCounts.skillProfiles;
           if (mounted && syncResult.downloadedEntities > 0 && recoveredEvidenceCount > 0) {
-            handleTriggerModal(
-              '已同步云端学习数据',
-              `这台设备已从服务端恢复学习记录：练习 ${syncResult.mergedCounts.practiceSessions} 组、答题 ${syncResult.mergedCounts.attempts} 条、复习 ${syncResult.mergedCounts.reviewItems} 项、画像 ${syncResult.mergedCounts.skillProfiles} 项。`,
+            setLearningRecoveryNotice(
+              `已从服务器恢复：练习 ${syncResult.mergedCounts.practiceSessions} 组、答题 ${syncResult.mergedCounts.attempts} 条、复习 ${syncResult.mergedCounts.reviewItems} 项、画像 ${syncResult.mergedCounts.skillProfiles} 项`,
             );
           }
         } catch (error) {
@@ -539,6 +594,7 @@ function StudyApp() {
         }
       } else if (mounted) {
         setLearningSyncState('pending');
+        setDraftSyncState('pending');
       }
     }
 
@@ -554,7 +610,7 @@ function StudyApp() {
   }, []);
 
   useEffect(() => {
-    if (learningSyncState !== 'pending') return;
+    if (learningSyncState !== 'pending' && draftSyncState !== 'pending') return;
 
     let retrying = false;
     const retryPendingLearningData = async () => {
@@ -563,12 +619,18 @@ function StudyApp() {
       if (!token) return;
       retrying = true;
       setLearningSyncState('syncing');
+      setDraftSyncState('syncing');
       try {
-        await synchronizeAuthoritativeLearningData(token);
+        await Promise.all([
+          synchronizeAuthoritativeLearningData(token),
+          synchronizePracticeDrafts(token),
+        ]);
         setLearningSyncState('synced');
+        setDraftSyncState('synced');
       } catch (error) {
         console.error('Failed to retry pending learning data:', error);
         setLearningSyncState('pending');
+        setDraftSyncState('pending');
       } finally {
         retrying = false;
       }
@@ -580,7 +642,7 @@ function StudyApp() {
       window.removeEventListener('online', retryPendingLearningData);
       window.clearInterval(retryTimer);
     };
-  }, [learningSyncState]);
+  }, [draftSyncState, learningSyncState]);
 
   const persistCompletionReport = async (report: PracticeCompletionReport) => {
     await persistPracticeCompletion(report);
@@ -645,6 +707,7 @@ function StudyApp() {
     speakingLevel: number;
     targetScore: number;
     dailyTargetMinutes: number;
+    whisperNoiseReduction: boolean;
   }) => {
     const prioritySkills: StudyGoal['prioritySkills'] = settings.prepareSpeaking
       ? ['reading', 'listening', 'writing', 'translation', 'speaking']
@@ -657,6 +720,7 @@ function StudyApp() {
         targetScore: settings.targetScore,
         dailyMinutes: settings.dailyTargetMinutes,
         prioritySkills,
+        recordingQualityReminder: settings.whisperNoiseReduction,
       });
       const settingsProfiles = buildSettingsSkillProfiles(settings);
       await persistSkillProfiles(settingsProfiles);
@@ -816,7 +880,7 @@ function StudyApp() {
     setSubjectivePracticeMode(null);
   };
 
-  const completeAndShowProgress = async (score: number, report: PracticeCompletionReport, closePractice: () => void, errorArea: string, errorTitle: string, errorBody: string) => {
+  const completeAndShowProgress = async (score: number, report: PracticeCompletionReport, closePractice: () => void, errorArea: string, errorTitle: string, errorBody: string): Promise<boolean> => {
     trackTelemetry('practice_completed', {
       mode: report.session.modeId,
       moduleId: report.session.moduleId,
@@ -830,10 +894,12 @@ function StudyApp() {
       setPracticeJumpTarget(null);
       setReadingProgress({ completed: true, score });
       setActiveTab('progress');
+      return true;
     } catch (error) {
       console.error(`Failed to persist ${errorArea}:`, error);
       trackTelemetry('client_error', { area: errorArea });
       handleTriggerModal(errorTitle, errorBody);
+      return false;
     }
   };
 
@@ -860,7 +926,7 @@ function StudyApp() {
   };
 
   const handleCompleteVocabularyPractice = (score: number, report: PracticeCompletionReport) => {
-    void completeAndShowProgress(
+    return completeAndShowProgress(
       score,
       report,
       () => setIsVocabularyPracticing(false),
@@ -1044,6 +1110,9 @@ function StudyApp() {
             initialExamId={activeExamId}
             initialExamDate={activeGoal?.examDate}
             initialDailyMinutes={activeGoal?.dailyMinutes}
+            initialPrepareSpeaking={activeGoal?.prioritySkills.includes('speaking') ?? true}
+            initialSkillLevels={savedSettingsLevels}
+            initialRecordingQualityReminder={activeGoal?.recordingQualityReminder ?? true}
             onSave={handleSaveSettings}
             onSetScoreLimit={handleSetGoalTarget}
             onTriggerModal={handleTriggerModal}
@@ -1094,28 +1163,28 @@ function StudyApp() {
     <div className="app-page-surface min-h-screen bg-slate-50 flex flex-col lg:flex-row font-sans antialiased text-[#1e333c]">
       <div
         className={`pointer-events-none order-last mx-4 mb-4 flex min-h-9 items-center gap-2 rounded-lg border bg-white px-3 py-2 text-xs font-bold shadow-sm sm:fixed sm:bottom-3 sm:right-3 sm:z-40 sm:m-0 sm:max-w-[calc(100vw-1.5rem)] ${
-          learningSyncState === 'pending'
+          effectiveLearningSyncState === 'pending'
             ? 'border-amber-300 text-amber-800'
-            : learningSyncState === 'syncing'
+            : effectiveLearningSyncState === 'syncing'
               ? 'border-slate-200 text-slate-600'
               : 'border-emerald-200 text-emerald-700'
         }`}
         role="status"
         aria-live="polite"
       >
-        {learningSyncState === 'pending' ? (
+        {effectiveLearningSyncState === 'pending' ? (
           <CloudOff className="h-4 w-4 shrink-0" aria-hidden="true" />
-        ) : learningSyncState === 'syncing' ? (
+        ) : effectiveLearningSyncState === 'syncing' ? (
           <LoaderCircle className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
         ) : (
           <Cloud className="h-4 w-4 shrink-0" aria-hidden="true" />
         )}
         <span className="min-w-0 leading-4">
-          {learningSyncState === 'pending'
+          {effectiveLearningSyncState === 'pending'
             ? '服务器未确认，正在自动重试'
-            : learningSyncState === 'syncing'
+            : effectiveLearningSyncState === 'syncing'
               ? '正在保存到服务器'
-              : '学习记录已保存到服务器'}
+              : learningRecoveryNotice ?? '学习记录与草稿已保存到服务器'}
         </span>
       </div>
       {showOnboarding ? (

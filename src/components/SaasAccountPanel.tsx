@@ -3,6 +3,7 @@ import { ChevronDown, Cloud, Copy, DownloadCloud, KeyRound, LogIn, LogOut, Refre
 import { apiRequest, clearStoredAuthToken, getStoredAuthToken, setStoredAuthToken } from '../lib/api';
 import { syncAllLocalLearningData, synchronizeAuthoritativeLearningData } from '../lib/storage/authoritativeLearningSync';
 import { prepareLearningWorkspaceForAccount, type LearningDataBackup } from '../lib/storage/db';
+import { preparePracticeDraftWorkspaceForAccount } from '../domain/practice/draftProgress';
 import SaasOperationsPanel from './SaasOperationsPanel';
 import LegalLinks from './LegalLinks';
 
@@ -240,6 +241,7 @@ export default function SaasAccountPanel({ onTriggerModal, onServerDataRestored,
         },
       );
       const workspace = await prepareLearningWorkspaceForAccount(payload.account.user.id);
+      preparePracticeDraftWorkspaceForAccount(payload.account.user.id);
       setStoredAuthToken(payload.token, !payload.recoveryCode);
       latestTokenRef.current = payload.token;
       setToken(payload.token);

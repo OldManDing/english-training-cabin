@@ -112,6 +112,12 @@ function getSimpleFocusText(item: ReviewItem, task: MemoryReviewTask): string {
   return firstReason || firstChunk || item.title;
 }
 
+function getReviewDisplayTitle(item: ReviewItem): string {
+  if (item.skillArea !== 'vocabulary' || !item.targetId?.startsWith('vocab-')) return item.title;
+  const target = item.targetId.slice('vocab-'.length).replace(/-/g, ' ');
+  return target ? `${item.title} · ${target}` : item.title;
+}
+
 function buildSimpleRecallAnswer(item: ReviewItem, task: MemoryReviewTask): string {
   const focus = getSimpleFocusText(item, task);
   return [
@@ -426,7 +432,7 @@ export default function ReviewSection({
                     <span className="ui-chip">{activeReview.category}</span>
                     {isReviewItemDueOn(activeReview, reviewDate) ? <span className="ui-chip bg-rose-50 text-rose-700">到期</span> : null}
                   </div>
-                  <h3 className="mt-3 text-2xl font-black text-[#101828]">{activeReview.title}</h3>
+                  <h3 className="mt-3 text-2xl font-black text-[#101828]">{getReviewDisplayTitle(activeReview)}</h3>
                   <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
                     掌握度 {activeReview.masteryScore ?? 35}% · 下次复习 {formatReviewDate(activeReview.nextReviewAt)}
                   </p>
@@ -730,7 +736,7 @@ export default function ReviewSection({
                           : 'border-slate-200 bg-slate-50 hover:border-[#003178] hover:bg-white'
                       }`}
                     >
-                      <span className="block truncate text-xs font-black text-slate-900">{item.title}</span>
+                      <span className="block truncate text-xs font-black text-slate-900">{getReviewDisplayTitle(item)}</span>
                       <span className="mt-1 block text-[11px] font-semibold text-slate-500">
                         {item.masteryScore ?? 35}% · {formatReviewDate(item.nextReviewAt)}
                       </span>

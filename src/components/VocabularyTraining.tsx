@@ -23,7 +23,7 @@ interface VocabularyTrainingProps {
   initialQuestionId?: string;
   replayAttempt?: Attempt;
   onBack: () => void;
-  onComplete: (score: number, report: PracticeCompletionReport) => void;
+  onComplete: (score: number, report: PracticeCompletionReport) => Promise<boolean | void> | boolean | void;
   onAnswerRecorded?: (report: PracticeCompletionReport) => Promise<void> | void;
 }
 
@@ -139,12 +139,14 @@ export default function VocabularyTraining({
   const submittedRevealRef = useRef<HTMLDivElement | null>(null);
   const shouldScrollToSubmittedSupportRef = useRef(false);
   const recordWriteRef = useRef<Promise<void>>(Promise.resolve());
+  const isFinishingRef = useRef(false);
   const [packIndex, setPackIndex] = useState(initialDraft.packIndex);
   const [currentIdx, setCurrentIdx] = useState(initialDraft.currentIdx);
   const [selectedOpt, setSelectedOpt] = useState<Choice | null>(initialDraft.selectedOpt);
   const [confidence, setConfidence] = useState<Confidence | null>(initialDraft.confidence);
   const [isSubmitted, setIsSubmitted] = useState(initialDraft.isSubmitted);
   const [recordStatus, setRecordStatus] = useState<AnswerRecordStatus>('idle');
+  const [isFinishing, setIsFinishing] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [activeSpeechTarget, setActiveSpeechTarget] = useState<SpeechTarget | null>(null);
   const [pausedSpeechTarget, setPausedSpeechTarget] = useState<SpeechTarget | null>(null);
@@ -470,6 +472,9 @@ export default function VocabularyTraining({
   };
 
   const finish = (finalAnswers: typeof answers) => {
+    if (isFinishingRef.current) return;
+    isFinishingRef.current = true;
+    setIsFinishing(true);
     const answeredCount = finalAnswers.filter(Boolean).length;
     const correctCount = finalAnswers.filter((answer) => answer?.correct).length;
     const score = answeredCount > 0 ? Math.round((correctCount / answeredCount) * 100) : 0;
@@ -478,10 +483,15 @@ export default function VocabularyTraining({
       includeEvidence: true,
       answeredOnly: true,
     });
-    clearPracticeDraft(draftKey);
-    void recordWriteRef.current.finally(() => {
-      onComplete(score, report);
-    });
+    void recordWriteRef.current
+      .then(async () => {
+        const completed = await onComplete(score, report);
+        if (completed !== false) clearPracticeDraft(draftKey);
+      })
+      .finally(() => {
+        isFinishingRef.current = false;
+        setIsFinishing(false);
+      });
   };
 
   const handleNext = () => {
@@ -821,11 +831,16 @@ export default function VocabularyTraining({
               ) : (
                 <button
                   type="button"
+                  disabled={isFinishing}
                   onClick={handleNext}
                   data-testid="vocabulary-next"
                   className="ui-button ui-button-primary"
                 >
-                  {currentIdx === sessionItems.length - 1 ? '完成词汇练习' : '进入下一个单词'}
+                  {isFinishing
+                    ? '正在保存练习记录'
+                    : currentIdx === sessionItems.length - 1
+                      ? '完成词汇练习'
+                      : '进入下一个单词'}
                   <ChevronRight className="h-4 w-4" />
                 </button>
               )}

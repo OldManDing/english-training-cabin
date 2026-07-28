@@ -79,9 +79,20 @@ function pickPracticeSpeechVoice(): PracticeSpeechVoiceChoice {
   };
 }
 
+export function isLoopbackHostname(hostname: string) {
+  const normalized = hostname.trim().toLowerCase();
+  if (normalized === 'localhost' || normalized.endsWith('.localhost')) return true;
+  if (normalized === '::1' || normalized === '[::1]') return true;
+
+  const octets = normalized.split('.');
+  return octets.length === 4
+    && octets[0] === '127'
+    && octets.every((octet) => /^\d{1,3}$/.test(octet) && Number(octet) <= 255);
+}
+
 function canUseServerPracticeTts() {
   if (typeof window === 'undefined') return false;
-  return window.location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(window.location.hostname);
+  return window.location.protocol === 'https:' || isLoopbackHostname(window.location.hostname);
 }
 
 function buildPracticeSpeechAudioCacheKey(text: string, rate?: number) {

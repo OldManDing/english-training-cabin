@@ -1,5 +1,6 @@
 import { ExamProfile } from '../types';
 import { CET4_EXAM_PROFILE } from './cet4';
+import { getSuggestedExamDate } from '../domain/planner/defaultExamDate';
 
 export type ExamRouteAvailability = 'trainable' | 'metadata-only';
 export type ExamTrainingStatus = 'active' | 'roadmap';
@@ -203,7 +204,7 @@ export const EXAM_REGISTRY: Record<string, ExamRegistryEntry> = {
       mockExam: true,
       cloudSync: true,
     },
-    defaultExamDate: '2026-06-13',
+    defaultExamDate: getSuggestedExamDate(),
   },
   [CET6_EXAM_PROFILE.id]: {
     profile: CET6_EXAM_PROFILE,

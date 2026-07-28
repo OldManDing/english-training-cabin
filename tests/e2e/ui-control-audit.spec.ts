@@ -259,6 +259,8 @@ test('primary workspaces keep controls usable and reset scroll on navigation', a
   expect(speechToggleBox?.height).toBeGreaterThanOrEqual(44);
   await page.getByRole('button', { name: '保存设置' }).click();
   await expect(page.getByText(/训练目标已保存，今日计划会随目标更新/)).toBeVisible();
+  await page.getByText('账号、备份与反馈', { exact: true }).click();
+  await expect(page.getByRole('heading', { name: '账户' })).toBeVisible();
   await page.getByTestId('saas-ops-toggle').click();
   await expectVisibleControlsHealthy(page, 'settings-ops');
   await page.getByTestId('saas-invite-email').fill(`ops-${Date.now()}@example.com`);

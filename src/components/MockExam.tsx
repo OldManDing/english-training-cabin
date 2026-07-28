@@ -30,6 +30,13 @@ import RealPaperPracticePanel, {
   type LocalRealPaperLoadStatus,
 } from './mockExam/RealPaperPracticePanel';
 import PracticeMethodGuide from './PracticeMethodGuide';
+import {
+  clearPracticeDraft,
+  loadPracticeDraft,
+  practiceDraftKeys,
+  savePracticeDraft,
+  type MockExamPracticeDraft,
+} from '../domain/practice/draftProgress';
 
 type MockExamPageMode = 'standard-mock' | 'real-paper';
 
@@ -102,17 +109,21 @@ export default function MockExam({ onComplete, skillProfiles = [], dailyPlan }: 
     () => buildMockRecommendation(skillProfiles, dailyPlan),
     [dailyPlan, skillProfiles],
   );
-  const [startedAt] = useState(() => new Date().toISOString());
-  const [activeSection, setActiveSection] = useState<MockSectionId>('writing');
-  const [choices, setChoices] = useState<Record<string, Choice | undefined>>({});
-  const [writingAnswer, setWritingAnswer] = useState('');
-  const [translationAnswer, setTranslationAnswer] = useState('');
+  const [restoredDraft] = useState(() => loadPracticeDraft<MockExamPracticeDraft>(practiceDraftKeys.mockExam));
+  const restoredPaperId = restoredDraft && CET4_MOCK_EXAM_BANK.some((item) => item.id === restoredDraft.paperId)
+    ? restoredDraft.paperId
+    : mockRecommendation.paper.id;
+  const [startedAt] = useState(() => restoredDraft?.startedAt ?? new Date().toISOString());
+  const [activeSection, setActiveSection] = useState<MockSectionId>(restoredDraft?.activeSection ?? 'writing');
+  const [choices, setChoices] = useState<Record<string, Choice | undefined>>(restoredDraft?.choices ?? {});
+  const [writingAnswer, setWritingAnswer] = useState(restoredDraft?.writingAnswer ?? '');
+  const [translationAnswer, setTranslationAnswer] = useState(restoredDraft?.translationAnswer ?? '');
   const [result, setResult] = useState<MockExamReportResult | null>(null);
   const mockRepairPlan = useMemo(() => result ? buildMockRepairPlan(result.sectionScores) : [], [result]);
   const [isCompleting, setIsCompleting] = useState(false);
   const [pageMode, setPageMode] = useState<MockExamPageMode>('standard-mock');
-  const [selectedPaperId, setSelectedPaperId] = useState(mockRecommendation.paper.id);
-  const [hasManualPaperSelection, setHasManualPaperSelection] = useState(false);
+  const [selectedPaperId, setSelectedPaperId] = useState(restoredPaperId);
+  const [hasManualPaperSelection, setHasManualPaperSelection] = useState(Boolean(restoredDraft));
   const [localRealPapers, setLocalRealPapers] = useState<LocalRealExamPaper[]>(CET4_LOCAL_REAL_PAPERS);
   const [localRealPaperStatus, setLocalRealPaperStatus] = useState<LocalRealPaperLoadStatus>('loading');
   const [localRealPaperMessage, setLocalRealPaperMessage] = useState('正在扫描本地真题目录...');
@@ -234,6 +245,20 @@ export default function MockExam({ onComplete, skillProfiles = [], dailyPlan }: 
   }, []);
 
   useEffect(() => {
+    if (pageMode !== 'standard-mock' || result) return;
+    savePracticeDraft<MockExamPracticeDraft>(practiceDraftKeys.mockExam, {
+      version: 1,
+      startedAt,
+      paperId: selectedPaperId,
+      activeSection,
+      choices,
+      writingAnswer,
+      translationAnswer,
+      updatedAt: new Date().toISOString(),
+    });
+  }, [activeSection, choices, pageMode, result, selectedPaperId, startedAt, translationAnswer, writingAnswer]);
+
+  useEffect(() => {
     if (hasManualPaperSelection || result) return;
     if (selectedPaperId !== mockRecommendation.paper.id) {
       resetPaperState(mockRecommendation.paper.id);
@@ -321,6 +346,7 @@ export default function MockExam({ onComplete, skillProfiles = [], dailyPlan }: 
     setIsCompleting(true);
     try {
       await Promise.resolve(onComplete(result.score, result.report));
+      clearPracticeDraft(practiceDraftKeys.mockExam);
     } finally {
       setIsCompleting(false);
     }
@@ -349,6 +375,11 @@ export default function MockExam({ onComplete, skillProfiles = [], dailyPlan }: 
                   ? '按 CET-4 真题笔试结构推进：写作 1、听力 25、阅读 30、翻译 1；不再混入语法/完形等非四级现行题型。'
                   : '本区只展示你提供的本地真题，按页面版题面自练；它不参与标准模拟考试自动评分。'}
               </p>
+              {pageMode === 'standard-mock' && restoredDraft ? (
+                <div data-testid="mock-draft-restored" className="mt-3 ui-chip ui-chip-accent">
+                  已恢复上次模考草稿
+                </div>
+              ) : null}
               {pageMode === 'standard-mock' && <details className="mt-2 text-xs font-bold leading-5 text-slate-500">
                 <summary className="cursor-pointer">组卷说明</summary>
                 <p className="mt-1">{paper.sourceNotice}</p>

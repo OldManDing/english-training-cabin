@@ -48,9 +48,32 @@ function reviewTime(value?: string): number {
   return Number.isFinite(time) ? time : 0;
 }
 
+function reviewIdentity(item: ReviewItem): string {
+  if (!item.targetId) return `id:${item.id}`;
+  return [item.examId ?? '', item.moduleId ?? '', item.targetType ?? '', item.targetId].join(':');
+}
+
+function reviewEvidenceTime(item: ReviewItem): number {
+  return Math.max(reviewTime(item.lastReviewedAt), reviewTime(item.createdAt));
+}
+
+export function coalesceReviewItems(reviewItems: ReviewItem[]): ReviewItem[] {
+  const latestByTarget = new Map<string, ReviewItem>();
+  reviewItems.filter(isActionableReviewItem).forEach((item) => {
+    const key = reviewIdentity(item);
+    const current = latestByTarget.get(key);
+    if (!current
+      || reviewEvidenceTime(item) > reviewEvidenceTime(current)
+      || (reviewEvidenceTime(item) === reviewEvidenceTime(current)
+        && (item.priorityScore ?? 0) > (current.priorityScore ?? 0))) {
+      latestByTarget.set(key, item);
+    }
+  });
+  return [...latestByTarget.values()];
+}
+
 export function sortReviewItems(reviewItems: ReviewItem[]): ReviewItem[] {
-  return reviewItems
-    .filter(isActionableReviewItem)
+  return coalesceReviewItems(reviewItems)
     .sort((left, right) => {
       const dueDiff = reviewTime(left.nextReviewAt) - reviewTime(right.nextReviewAt);
       if (dueDiff !== 0) return dueDiff;

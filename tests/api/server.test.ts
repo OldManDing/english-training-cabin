@@ -191,6 +191,11 @@ describe('server API', () => {
       })
       .expect(204);
 
+    await request(app)
+      .post('/api/telemetry/event')
+      .send({ eventName: 'review_gate_bypassed', payload: { requestedLabel: '阶段模考', dueCount: 3 } })
+      .expect(204);
+
     const response = await request(app)
       .get('/api/observability/summary')
       .set('Authorization', `Bearer ${token}`)
@@ -198,6 +203,7 @@ describe('server API', () => {
 
     expect(response.body.api.requestsTotal).toBeGreaterThan(0);
     expect(response.body.productEvents.practice_completed).toBeGreaterThanOrEqual(1);
+    expect(response.body.productEvents.review_gate_bypassed).toBeGreaterThanOrEqual(1);
     expect(response.body.ai).toHaveProperty('fallbackRate');
   });
 
@@ -858,6 +864,15 @@ describe('server API', () => {
               score: 76,
             },
           },
+          {
+            entityType: 'practiceDraft',
+            entityId: 'english-training-cabin:practice-draft:mock-exam',
+            updatedAt,
+            payload: {
+              id: 'english-training-cabin:practice-draft:mock-exam',
+              draft: { version: 1, paperId: 'mock-a', writingAnswer: 'saved draft', updatedAt },
+            },
+          },
         ],
       })
       .expect(200);
@@ -900,7 +915,8 @@ describe('server API', () => {
       .set('Authorization', `Bearer ${first.body.token}`)
       .expect(200);
 
-    expect(firstEntities.body.entities).toHaveLength(2);
+    expect(firstEntities.body.entities).toHaveLength(3);
+    expect(firstEntities.body.entities.find((entity: { entityType: string }) => entity.entityType === 'practiceDraft').payload.draft.writingAnswer).toBe('saved draft');
     expect(firstEntities.body.entities[0]).not.toHaveProperty('passwordHash');
 
     const secondEntities = await request(saasApp)

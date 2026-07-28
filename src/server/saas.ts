@@ -75,7 +75,7 @@ export interface CloudLearningSnapshotVersionRecord extends CloudLearningSnapsho
   createdAt: string;
 }
 
-export type LearningEntityType = 'studyGoal' | 'practiceSession' | 'attempt' | 'reviewItem' | 'skillProfile';
+export type LearningEntityType = 'studyGoal' | 'practiceSession' | 'attempt' | 'reviewItem' | 'skillProfile' | 'practiceDraft';
 
 export interface CloudLearningEntityRecord {
   organizationId: string;
@@ -1523,7 +1523,7 @@ export function toPublicAccountContext(account: SaasAccountRecord): PublicSaasAc
   };
 }
 
-const VALID_LEARNING_ENTITY_TYPES: LearningEntityType[] = ['studyGoal', 'practiceSession', 'attempt', 'reviewItem', 'skillProfile'];
+const VALID_LEARNING_ENTITY_TYPES: LearningEntityType[] = ['studyGoal', 'practiceSession', 'attempt', 'reviewItem', 'skillProfile', 'practiceDraft'];
 
 function validateLearningEntityType(value: unknown): LearningEntityType {
   if (typeof value === 'string' && VALID_LEARNING_ENTITY_TYPES.includes(value as LearningEntityType)) {

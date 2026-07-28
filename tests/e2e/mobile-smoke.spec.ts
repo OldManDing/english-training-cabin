@@ -129,6 +129,7 @@ test('narrow phone reaches every primary workspace without horizontal clipping',
 
   await page.getByRole('button', { name: '设置' }).click();
   await expect(page.getByRole('heading', { name: '目标与计划设置' })).toBeVisible();
+  await page.getByText('账号、备份与反馈', { exact: true }).click();
   await expect(page.getByRole('heading', { name: '账户' })).toBeVisible();
   await expect(page.getByText('同步与团队')).toBeVisible();
   await expect(page.getByRole('button', { name: '立即服务器对账' })).toBeVisible();

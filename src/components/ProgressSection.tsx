@@ -104,7 +104,7 @@ export default function ProgressSection({
       <header className="ui-page-header-compact mb-6">
         <h2 className="text-2xl font-black tracking-tight text-[#101828]">能力地图</h2>
         <p className="mt-2 text-sm font-semibold text-slate-500 sm:text-base">
-          基于本地学习证据生成，非官方成绩；每个结论都显示证据、弱因和下一步。
+          基于账号学习证据生成，非官方成绩；每个结论都显示证据、弱因和下一步。
         </p>
       </header>
 
@@ -332,7 +332,7 @@ export default function ProgressSection({
                 学习证据账本
               </h3>
               <p className="mt-2 max-w-3xl text-xs font-semibold leading-5 text-slate-500">
-                能力结论依赖这些本地证据。
+                能力结论依赖这些已保存的学习证据。
               </p>
             </div>
             <div className="grid grid-cols-2 gap-2 text-center text-[11px] font-black sm:min-w-96 sm:grid-cols-4">

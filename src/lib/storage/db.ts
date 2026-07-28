@@ -3,6 +3,7 @@ import { repairLegacyVocabularyStatusAttempts } from '../../domain/practice/prac
 import { buildReviewCompletionRecords, type ReviewCompletionRecords } from '../../domain/review/reviewCompletion';
 import { sortReviewItems } from '../../domain/review/reviewQueue';
 import { Attempt, PracticeSession, ReviewCompletionEvidence, ReviewItem, SkillProfile, StudyGoal } from '../../types';
+import { getSuggestedExamDate } from '../../domain/planner/defaultExamDate';
 
 export interface LearningDataBackup {
   app: 'english-training-cabin';
@@ -167,7 +168,7 @@ export async function getOrCreateActiveGoal(): Promise<StudyGoal> {
   const goal: StudyGoal = {
     id: DEFAULT_GOAL_ID,
     examId: 'cet4',
-    examDate: '2026-06-13',
+    examDate: getSuggestedExamDate(),
     targetScore: 550,
     dailyMinutes: 60,
     prioritySkills: ['reading', 'listening', 'vocabulary', 'speaking'],

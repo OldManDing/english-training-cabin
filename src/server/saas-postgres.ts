@@ -98,7 +98,7 @@ WHERE NOT EXISTS (
 CREATE TABLE IF NOT EXISTS learning_entities (
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  entity_type text NOT NULL CHECK (entity_type IN ('studyGoal', 'practiceSession', 'attempt', 'reviewItem', 'skillProfile')),
+  entity_type text NOT NULL CHECK (entity_type IN ('studyGoal', 'practiceSession', 'attempt', 'reviewItem', 'skillProfile', 'practiceDraft')),
   entity_id text NOT NULL,
   payload jsonb NOT NULL,
   updated_at timestamptz NOT NULL,
@@ -108,6 +108,27 @@ CREATE TABLE IF NOT EXISTS learning_entities (
 
 CREATE INDEX IF NOT EXISTS learning_entities_sync_idx
   ON learning_entities (organization_id, user_id, updated_at);
+
+DO $$
+DECLARE
+  entity_type_constraint text;
+BEGIN
+  SELECT pg_get_constraintdef(constraint_record.oid)
+    INTO entity_type_constraint
+    FROM pg_constraint AS constraint_record
+    JOIN pg_class AS table_record ON table_record.oid = constraint_record.conrelid
+    JOIN pg_namespace AS schema_record ON schema_record.oid = table_record.relnamespace
+   WHERE table_record.relname = 'learning_entities'
+     AND schema_record.nspname = current_schema()
+     AND constraint_record.conname = 'learning_entities_entity_type_check';
+
+  IF entity_type_constraint IS NULL OR position('practiceDraft' IN entity_type_constraint) = 0 THEN
+    ALTER TABLE learning_entities DROP CONSTRAINT IF EXISTS learning_entities_entity_type_check;
+    ALTER TABLE learning_entities
+      ADD CONSTRAINT learning_entities_entity_type_check
+      CHECK (entity_type IN ('studyGoal', 'practiceSession', 'attempt', 'reviewItem', 'skillProfile', 'practiceDraft'));
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS one_time_tokens (
   id uuid PRIMARY KEY,

@@ -195,6 +195,7 @@ const ALLOWED_TELEMETRY_EVENTS = new Set([
   'material_imported',
   'material_import_failed',
   'feedback_submitted',
+  'review_gate_bypassed',
   'client_error',
 ]);
 

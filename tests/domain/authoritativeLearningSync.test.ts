@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  filterAuthoritativeLearningEntities,
   learningBackupToEntities,
   learningEntitiesToBackup,
   mergeLearningEntities,
@@ -58,5 +59,17 @@ describe('authoritative learning sync', () => {
 
     expect(mergeLearningEntities([newer], [older])).toEqual([newer]);
     expect(mergeLearningEntities([older], [newer])).toEqual([newer]);
+  });
+
+  it('leaves practice drafts to the dedicated draft synchronizer', () => {
+    const goal = learningBackupToEntities(backup)[0];
+    const practiceDraft = {
+      entityType: 'practiceDraft',
+      entityId: 'english-training-cabin:practice-draft:mock-exam',
+      payload: { id: 'english-training-cabin:practice-draft:mock-exam', draft: { version: 1 } },
+      updatedAt: '2026-07-27T11:00:00.000Z',
+    };
+
+    expect(filterAuthoritativeLearningEntities([goal, practiceDraft])).toEqual([goal]);
   });
 });

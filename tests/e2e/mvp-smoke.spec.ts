@@ -964,6 +964,7 @@ test('answered question status numbers replay saved answer evidence across modul
   await page.getByTestId('practice-module-select-listening').click();
   await page.getByTestId('practice-question-filter-listening-answered').click();
   await page.getByTestId('practice-question-status-listening-1').click();
+  await expect(page.getByRole('heading', { name: '听力训练 - 长对话' })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId('listening-attempt-replayed')).toBeVisible();
   await expect(page.getByTestId('listening-post-answer-support')).toBeVisible();
   await expect(page.getByText('提交答案')).toHaveCount(0);
@@ -1118,34 +1119,30 @@ test('submitted draft answers count as today records before finishing the sessio
   await expect(page.getByTestId('motivation-weekly-attempts')).toHaveText('3');
 });
 
-/* test.skip('practice hub reflects in-progress draft counts before a module is fully completed', async ({ page }) => {
+test('practice hub reflects an in-progress listening draft before the module is completed', async ({ page }) => {
   await installSpeechSynthesisMock(page);
-  await registerAndEnterApp(page, 'mvp-practice-draft-progress');
+  await registerAndEnterApp(page, 'mvp-listening-draft-progress');
   await resetLocalLearningData(page);
   await page.reload();
+  await expect(page.getByRole('heading', { name: '今日训练' })).toBeVisible();
 
   const listeningQuestionTotal = CET4_LISTENING_PRACTICE_QUESTIONS
     .filter((question) => question.questionTypeId === 'long-conversation')
     .length;
 
-  await page.getByRole('button', { name: '涓撻項缁冧範' }).click();
-  await page.getByTestId('practice-module-action-vocabulary').click();
-  await page.locator('article.ui-panel button').filter({ hasText: /^A\.|^B\.|^C\.|^D\./ }).first().click();
-  await page.getByRole('button', { name: '鏈夋妸鎻? }).click();
-  await page.locator('article.ui-panel').getByRole('button', { name: /鎻愪氦/ }).click();
-  await page.locator('article.ui-panel').getByRole('button', { name: /涓嬩竴/ }).click();
-  await page.locator('header button').first().click();
-  await expect(page.getByTestId('practice-module-progress-vocabulary')).toContainText(`1/${CET4_VOCABULARY_BANK.length}`);
-
+  await page.getByRole('button', { name: '专项练习' }).click();
   await page.getByTestId('practice-module-action-listening').click();
   await page.getByRole('button', { name: /^A / }).first().click();
-  await page.locator('div.grid.w-full.grid-cols-3 button').last().click();
-  await page.getByRole('button', { name: /鎻愪氦/ }).click();
+  await page.getByTestId('listening-confidence-high').click();
+  await page.getByTestId('listening-submit').click();
   await expect(page.getByTestId('listening-sentence-translation')).toBeVisible();
-  await page.getByRole('button', { name: /涓嬩竴/ }).click();
-  await page.locator('header button').first().click();
+  await page.getByTestId('listening-next').click();
+  await page.getByTestId('listening-back-to-practice').click();
   await expect(page.getByTestId('practice-module-progress-listening')).toContainText(`1/${listeningQuestionTotal}`);
-}); */
+
+  await page.getByTestId('practice-module-action-listening').click();
+  await expect(page.getByTestId('listening-draft-restored')).toBeVisible();
+});
 
 test('due review gate blocks grammar practice until reviews are done', async ({ page }) => {
   await registerAndEnterApp(page, 'mvp-review-gate');
@@ -1685,7 +1682,8 @@ test('vocabulary practice plays audio controls, scores answers, and persists rev
     await page.getByRole('button', { name: item === vocabularySessionItems.at(-1) ? '完成词汇练习' : '进入下一个单词' }).click();
   }
 
-  await expect(page.getByRole('heading', { name: '能力地图' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '能力地图' })).toBeVisible({ timeout: 30_000 });
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('english-training-cabin:practice-draft:vocabulary'))).toBeNull();
 
   const counts = await page.evaluate(async () => {
     function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {

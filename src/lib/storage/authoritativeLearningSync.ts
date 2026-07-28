@@ -30,8 +30,16 @@ type CloudLearningResponse = {
   };
 };
 
+export type CloudLearningEntity = {
+  entityType: string;
+  entityId: string;
+  payload: Record<string, unknown>;
+  updatedAt: string;
+  deletedAt?: string;
+};
+
 type CloudLearningEntitiesResponse = {
-  entities: LearningEntity[];
+  entities: CloudLearningEntity[];
 };
 
 const ENTITY_BATCH_SIZE = 150;
@@ -86,6 +94,16 @@ function enqueueSynchronization<T>(operation: () => Promise<T>): Promise<T> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isAuthoritativeLearningEntity(entity: CloudLearningEntity): entity is LearningEntity {
+  return COLLECTIONS.some((collection) => collection.entityType === entity.entityType)
+    && Boolean(entity.entityId)
+    && isRecord(entity.payload);
+}
+
+export function filterAuthoritativeLearningEntities(entities: CloudLearningEntity[]): LearningEntity[] {
+  return entities.filter(isAuthoritativeLearningEntity);
 }
 
 export function learningBackupToEntities(
@@ -161,7 +179,7 @@ async function uploadLearningEntities(entities: LearningEntity[], token: string)
       },
       token,
     );
-    confirmed.push(...(response.entities ?? []));
+    confirmed.push(...filterAuthoritativeLearningEntities(response.entities ?? []));
   }
   return confirmed;
 }
@@ -259,8 +277,9 @@ async function performAuthoritativeLearningDataSync(token?: string): Promise<Aut
   const snapshotEntities = snapshotResponse.snapshot
     ? learningBackupToEntities(snapshotResponse.snapshot.backup, snapshotResponse.snapshot.updatedAt)
     : [];
-  const serverEntities = mergeLearningEntities(snapshotEntities, entityResponse.entities ?? []);
-  const persistedServerByKey = new Map((entityResponse.entities ?? []).map((entity) => [entityKey(entity), entity]));
+  const authoritativeServerEntities = filterAuthoritativeLearningEntities(entityResponse.entities ?? []);
+  const serverEntities = mergeLearningEntities(snapshotEntities, authoritativeServerEntities);
+  const persistedServerByKey = new Map(authoritativeServerEntities.map((entity) => [entityKey(entity), entity]));
   const serverByKey = new Map(serverEntities.map((entity) => [entityKey(entity), entity]));
   const snapshotMigrationCandidates = snapshotEntities.filter((entity) => {
     const persisted = persistedServerByKey.get(entityKey(entity));

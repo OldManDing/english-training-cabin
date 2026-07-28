@@ -32,6 +32,7 @@ import { getExamRegistryEntry, listPublicExamProfiles } from '../exams/registry'
 import { apiRequest } from '../lib/api';
 import { stopPracticeSpeech } from '../lib/practiceSpeech';
 import DiagnosticResultPanel from './diagnostic/DiagnosticResultPanel';
+import { getSuggestedExamDate } from '../domain/planner/defaultExamDate';
 
 interface OnboardingDiagnosticProps {
   onDismiss: () => void;
@@ -342,7 +343,7 @@ export default function OnboardingDiagnostic({
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [targetExamId, setTargetExamId] = useState<string>('cet4');
   const [targetScore, setTargetScore] = useState<number>(550);
-  const [countdownDate, setCountdownDate] = useState<string>('2026-06-13');
+  const [countdownDate, setCountdownDate] = useState<string>(() => getSuggestedExamDate());
   const [dailyMinutes, setDailyMinutes] = useState<number>(45);
   const [diagnosticItems, setDiagnosticItems] = useState<DiagnosticItem[]>([]);
   const [answers, setAnswers] = useState<DiagnosticAnswerMap>({});
