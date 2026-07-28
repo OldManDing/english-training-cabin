@@ -90,7 +90,7 @@ test('mobile viewport can reach the learning cockpit and launch disclosure', asy
   await expect(page).toHaveTitle(/英语训练舱/);
   await expect(page.getByRole('heading', { name: '今日训练' })).toBeVisible();
   await expectMobilePrimaryNavReadable(page);
-  await expect(page.getByText('本地保存 · 原创模拟 · AI 可降级')).toBeVisible();
+  await expect(page.getByText('服务器保存 · 原创模拟 · AI 可降级')).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
   await page.getByRole('button', { name: '本地' }).click();
@@ -109,6 +109,7 @@ test('narrow phone reaches every primary workspace without horizontal clipping',
   await page.getByRole('button', { name: '专项练习' }).click();
   await expect(page.getByRole('heading', { name: /专项练习/ })).toBeVisible();
   await expect(page.getByRole('button', { name: '开始单词练习' })).toBeVisible();
+  await page.getByTestId('practice-module-quick-select-listening').click();
   await expect(page.getByRole('button', { name: '开始听力训练' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
@@ -165,6 +166,7 @@ test('narrow phone uses listening feedback and translation workstations', async 
   await registerAndEnterApp(page, 'mobile-listening');
 
   await page.getByRole('button', { name: '专项练习' }).click();
+  await page.getByTestId('practice-module-quick-select-listening').click();
   await page.getByRole('button', { name: '开始听力训练' }).click();
   await expect(page.getByRole('heading', { name: /听力训练/ })).toBeVisible();
   await expectNoHorizontalOverflow(page);
@@ -176,6 +178,7 @@ test('narrow phone uses listening feedback and translation workstations', async 
 
   await page.goto('/');
   await page.getByRole('button', { name: '专项练习' }).click();
+  await page.getByTestId('practice-module-quick-select-translation').click();
   await page.getByRole('button', { name: '开始翻译训练' }).click();
   await expect(page.getByRole('heading', { name: '段落翻译训练' })).toBeVisible();
   await expectNoHorizontalOverflow(page);

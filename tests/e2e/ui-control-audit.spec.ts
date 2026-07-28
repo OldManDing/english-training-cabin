@@ -102,12 +102,16 @@ async function chooseComboboxOption(page: Page, label: string, optionName: strin
   await page.getByRole('option', { name: optionName }).click();
 }
 
-async function chooseCalendarDay(page: Page, label: string, dayLabel: string, expectedValue: string) {
+async function chooseCalendarDay(page: Page, label: string, expectedValue: string) {
   await expectComboboxHasVisibleChrome(page, label);
   const calendarButton = page.getByRole('combobox', { name: label });
   await calendarButton.click();
   await expect(page.getByRole('dialog', { name: `${label} 日历` })).toBeVisible();
-  await page.getByRole('button', { name: dayLabel, exact: true }).click();
+  const targetDay = page.locator(`button[title="${expectedValue}"]`);
+  for (let monthOffset = 0; monthOffset < 24 && !await targetDay.isVisible(); monthOffset += 1) {
+    await page.getByRole('button', { name: '下个月' }).click();
+  }
+  await targetDay.click();
   await expect(calendarButton).toContainText(expectedValue);
 }
 
@@ -240,7 +244,8 @@ test('primary workspaces keep controls usable and reset scroll on navigation', a
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   await expectVisibleControlsHealthy(page, 'settings');
 
-  await chooseCalendarDay(page, '考试日期', '20', '2026-06-20');
+  const futureExamDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  await chooseCalendarDay(page, '考试日期', futureExamDate);
   await page.getByLabel('目标分数').fill('560');
   await chooseComboboxOption(page, '每日投入时长', /60 分钟/);
   await page.getByRole('button', { name: '阅读能力 高级' }).click();
@@ -253,7 +258,7 @@ test('primary workspaces keep controls usable and reset scroll on navigation', a
   expect(speechToggleBox?.width).toBeGreaterThanOrEqual(60);
   expect(speechToggleBox?.height).toBeGreaterThanOrEqual(44);
   await page.getByRole('button', { name: '保存设置' }).click();
-  await expect(page.getByText(/训练目标已保存到当前浏览器/)).toBeVisible();
+  await expect(page.getByText(/训练目标已保存，今日计划会随目标更新/)).toBeVisible();
   await page.getByTestId('saas-ops-toggle').click();
   await expectVisibleControlsHealthy(page, 'settings-ops');
   await page.getByTestId('saas-invite-email').fill(`ops-${Date.now()}@example.com`);
@@ -274,7 +279,7 @@ test('primary workspaces keep controls usable and reset scroll on navigation', a
   await expect(page.getByRole('heading', { name: /专项练习/ })).toBeVisible();
   await expectVisibleControlsHealthy(page, 'practice-hub');
 
-  await page.getByRole('button', { name: '阶段模考', exact: true }).click();
+  await page.getByRole('navigation').getByRole('button', { name: '阶段模考', exact: true }).click();
   await expect(page.getByTestId('mock-section-listening')).toBeVisible();
   await page.getByTestId('mock-section-listening').click();
   await page.getByTestId('mock-section-reading').click();

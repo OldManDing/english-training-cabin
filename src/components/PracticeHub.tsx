@@ -30,6 +30,7 @@ import { buildTrainingCamps } from '../domain/productCoach';
 import {
   buildPracticeModuleProgress,
   buildPracticeQuestionStatusList,
+  findLatestPracticeAttempt,
   mergePracticeProgressAttempts,
   type PracticeQuestionDescriptor,
   type PracticeQuestionStatusItem,
@@ -52,7 +53,7 @@ interface PracticeHubProps {
   examId: string;
   examName: string;
   onStartOnboarding: () => void;
-  onStartVocabulary: (questionId?: string) => void;
+  onStartVocabulary: (questionId?: string, replayAttempt?: Attempt) => void;
   onStartGrammar: (questionId?: string, topicId?: GrammarStructureTopicId) => void;
   onStartCloze: (questionId?: string) => void;
   onStartReading: (passage: Passage, questionId?: string) => void;
@@ -131,6 +132,7 @@ const PRACTICE_MODULE_TOTALS: PracticeModuleTotals = {
 };
 
 const QUESTION_STATUS_PREVIEW_LIMIT = 120;
+const MOBILE_QUESTION_STATUS_PREVIEW_LIMIT = 36;
 
 function buildPracticeQuestionBank(): Record<PracticeModuleId, PracticeQuestionDescriptor[]> {
   return {
@@ -215,7 +217,6 @@ export default function PracticeHub({
   const [selectedModuleId, setSelectedModuleId] = useState<PracticeModuleId>('vocabulary');
   const [hasManualSelection, setHasManualSelection] = useState(false);
   const [visibleReadingCount, setVisibleReadingCount] = useState(8);
-  const [expandedStatusModuleIds, setExpandedStatusModuleIds] = useState<PracticeModuleId[]>([]);
   const [statusFilter, setStatusFilter] = useState<PracticeStatusFilter>('all');
   const [questionJumpValue, setQuestionJumpValue] = useState('');
   const isCet4 = examId === 'cet4';
@@ -438,10 +439,7 @@ export default function PracticeHub({
     if (statusFilter === 'unanswered') return selectedQuestionStatuses.filter((item) => !item.practiced);
     return selectedQuestionStatuses;
   }, [selectedQuestionStatuses, statusFilter]);
-  const statusExpanded = expandedStatusModuleIds.includes(selectedModule.id);
-  const visibleQuestionStatuses = statusExpanded || filteredQuestionStatuses.length <= QUESTION_STATUS_PREVIEW_LIMIT
-    ? filteredQuestionStatuses
-    : filteredQuestionStatuses.slice(0, QUESTION_STATUS_PREVIEW_LIMIT);
+  const visibleQuestionStatuses = filteredQuestionStatuses.slice(0, QUESTION_STATUS_PREVIEW_LIMIT);
   const selectedStatusPracticedCount = selectedQuestionStatuses.filter((item) => item.practiced).length;
   const selectedStatusRemainingCount = Math.max(0, selectedQuestionStatuses.length - selectedStatusPracticedCount);
   const grammarTopicSummaries = useMemo(() => {
@@ -462,13 +460,6 @@ export default function PracticeHub({
   }, [selectedModule.id, selectedQuestionStatuses]);
   const selectedTrainingCamps = buildTrainingCamps(selectedModule.id, skillProfiles);
   const visibleReadingPassages = readingPassages.slice(0, visibleReadingCount);
-  const toggleStatusExpanded = () => {
-    setExpandedStatusModuleIds((ids) => (
-      ids.includes(selectedModule.id)
-        ? ids.filter((id) => id !== selectedModule.id)
-        : [...ids, selectedModule.id]
-    ));
-  };
   const handleStartStatusQuestion = (item: PracticeQuestionStatusItem) => {
     if (selectedModule.id === 'reading') {
       const targetPassage = CET4_READING_BANK.find((passage) =>
@@ -481,7 +472,14 @@ export default function PracticeHub({
     }
 
     if (selectedModule.id === 'vocabulary') {
-      onStartVocabulary(item.id);
+      const replayAttempt = item.practiced
+        ? findLatestPracticeAttempt({
+            attempts: mergedPracticeAttempts,
+            moduleId: 'vocabulary',
+            questionId: item.id,
+          })
+        : undefined;
+      onStartVocabulary(item.id, replayAttempt);
       return;
     }
     if (selectedModule.id === 'grammar') {
@@ -582,6 +580,28 @@ export default function PracticeHub({
         )}
 
         {isCet4 && (
+        <div className="flex gap-2 overflow-x-auto pb-1 md:hidden" aria-label="快速选择专项模块">
+          {orderedModules.map((module) => (
+            <button
+              key={module.id}
+              type="button"
+              data-testid={`practice-module-quick-select-${module.id}`}
+              onClick={() => {
+                setHasManualSelection(true);
+                setSelectedModuleId(module.id);
+                setStatusFilter('all');
+                setQuestionJumpValue('');
+              }}
+              className={`min-h-11 shrink-0 rounded-xl border px-3 text-xs font-black ${selectedModuleId === module.id ? 'border-[#003178] bg-[#003178] text-white' : 'border-slate-200 bg-white text-slate-600'}`}
+              aria-pressed={selectedModuleId === module.id}
+            >
+              {module.label}
+            </button>
+          ))}
+        </div>
+        )}
+
+        {isCet4 && (
         <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4" aria-label="专项练习模块">
           {orderedModules.map((module, index) => {
             const Icon = module.Icon;
@@ -596,7 +616,7 @@ export default function PracticeHub({
             return (
               <article
                 key={module.id}
-                className={`ui-panel flex min-h-[220px] flex-col transition ${
+                className={`ui-panel min-h-[220px] flex-col transition ${isActive ? 'flex' : 'hidden md:flex'} ${
                   isActive ? 'border-[#003178] bg-[#f8fbff] ring-1 ring-[#dcecff]' : 'hover:border-[#003178]/30'
                 }`}
               >
@@ -768,10 +788,8 @@ export default function PracticeHub({
             practicedCount={selectedStatusPracticedCount}
             remainingCount={selectedStatusRemainingCount}
             statusFilter={statusFilter}
-            expanded={statusExpanded}
             displayedCount={filteredQuestionStatuses.length}
             onStatusFilterChange={setStatusFilter}
-            onToggleExpanded={toggleStatusExpanded}
             onSelectQuestion={handleStartStatusQuestion}
             jumpValue={questionJumpValue}
             onJumpValueChange={setQuestionJumpValue}
@@ -881,10 +899,8 @@ function QuestionStatusPanel({
   practicedCount,
   remainingCount,
   statusFilter,
-  expanded,
   displayedCount,
   onStatusFilterChange,
-  onToggleExpanded,
   onSelectQuestion,
   jumpValue,
   onJumpValueChange,
@@ -897,10 +913,8 @@ function QuestionStatusPanel({
   practicedCount: number;
   remainingCount: number;
   statusFilter: PracticeStatusFilter;
-  expanded: boolean;
   displayedCount: number;
   onStatusFilterChange: (filter: PracticeStatusFilter) => void;
-  onToggleExpanded: () => void;
   onSelectQuestion: (item: PracticeQuestionStatusItem) => void;
   jumpValue: string;
   onJumpValueChange: (value: string) => void;
@@ -923,11 +937,11 @@ function QuestionStatusPanel({
     }, new Map<string, PracticeQuestionStatusItem[]>()).entries())
       .sort((left, right) => (grammarTopicOrder.get(left[0]) ?? 999) - (grammarTopicOrder.get(right[0]) ?? 999))
     : [];
-  const renderStatusButton = (item: PracticeQuestionStatusItem) => (
+  const renderStatusButton = (item: PracticeQuestionStatusItem, mobileIndex?: number) => (
     <div
       key={item.id}
       role="listitem"
-      className="min-w-11"
+      className={`${mobileIndex !== undefined && mobileIndex >= MOBILE_QUESTION_STATUS_PREVIEW_LIMIT ? 'hidden sm:block' : ''} min-w-11`}
     >
       <button
         type="button"
@@ -1043,18 +1057,15 @@ function QuestionStatusPanel({
         </div>
       ) : (
         <div role="list" className="mt-4 grid grid-cols-[repeat(auto-fill,minmax(2.75rem,1fr))] gap-2">
-          {statuses.map(renderStatusButton)}
+          {statuses.map((item, index) => renderStatusButton(item, index))}
         </div>
       )}
 
-      {canToggle && (
-        <button
-          type="button"
-          onClick={onToggleExpanded}
-          className="ui-button ui-button-secondary ui-button-full mt-4"
-        >
-          {expanded ? '收起题号列表' : `展开当前筛选 ${displayedCount} 题`}
-        </button>
+      {(canToggle || displayedCount > MOBILE_QUESTION_STATUS_PREVIEW_LIMIT) && (
+        <p className="mt-4 rounded-xl border border-[#dde5ee] bg-[#f8fafc] px-3 py-2 text-center text-xs font-bold text-slate-500">
+          <span className="sm:hidden">当前显示前 {MOBILE_QUESTION_STATUS_PREVIEW_LIMIT} 题，可用题号直达其余题目。</span>
+          <span className="hidden sm:inline">当前显示前 {QUESTION_STATUS_PREVIEW_LIMIT} 题，可用题号直达其余题目。</span>
+        </p>
       )}
     </section>
   );

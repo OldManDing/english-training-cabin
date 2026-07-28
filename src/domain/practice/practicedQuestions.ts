@@ -237,7 +237,7 @@ export function mergePracticeProgressAttempts(params: {
     merged.push(attempt);
   });
 
-  return merged;
+  return repairLegacyVocabularyStatusAttempts(merged).attempts;
 }
 
 function localDateKey(date: Date): string | null {

@@ -17,12 +17,34 @@ export interface LearningDataBackup {
   };
 }
 
+export interface LearningWorkspaceMeta {
+  id: 'current';
+  userId: string;
+  boundAt: string;
+  updatedAt: string;
+}
+
+export interface LearningWorkspaceArchive {
+  id: string;
+  userId: string;
+  createdAt: string;
+  backup: LearningDataBackup;
+}
+
+export interface LearningWorkspacePreparation {
+  status: 'claimed' | 'unchanged' | 'switched';
+  previousUserId?: string;
+  archivedRecords: number;
+}
+
 class EnglishTrainingDb extends Dexie {
   studyGoals!: Table<StudyGoal, string>;
   practiceSessions!: Table<PracticeSession, string>;
   attempts!: Table<Attempt, string>;
   reviewItems!: Table<ReviewItem, string>;
   skillProfiles!: Table<SkillProfile, string>;
+  learningWorkspaceMeta!: Table<LearningWorkspaceMeta, string>;
+  learningWorkspaceArchives!: Table<LearningWorkspaceArchive, string>;
 
   constructor() {
     super('english-training-cabin');
@@ -33,12 +55,108 @@ class EnglishTrainingDb extends Dexie {
       reviewItems: 'id, targetType, targetId, examId, moduleId, skillArea, nextReviewAt, priorityScore',
       skillProfiles: 'id, skillArea, subSkillId, lastUpdatedAt',
     });
+    this.version(2).stores({
+      studyGoals: 'id, examId, status, updatedAt',
+      practiceSessions: 'id, examId, moduleId, status, startedAt, finishedAt',
+      attempts: 'id, sessionId, questionId, examId, moduleId, questionTypeId, createdAt',
+      reviewItems: 'id, targetType, targetId, examId, moduleId, skillArea, nextReviewAt, priorityScore',
+      skillProfiles: 'id, skillArea, subSkillId, lastUpdatedAt',
+      learningWorkspaceMeta: 'id, userId, updatedAt',
+      learningWorkspaceArchives: 'id, userId, createdAt',
+    });
   }
 }
 
 export const db = new EnglishTrainingDb();
 
 export const DEFAULT_GOAL_ID = 'goal-cet4-primary';
+
+const LEARNING_TABLES = [
+  db.studyGoals,
+  db.practiceSessions,
+  db.attempts,
+  db.reviewItems,
+  db.skillProfiles,
+] as const;
+
+async function exportLearningDataFromOpenTransaction(exportedAt: string): Promise<LearningDataBackup> {
+  const [studyGoals, practiceSessions, attempts, reviewItems, skillProfiles] = await Promise.all([
+    db.studyGoals.toArray(),
+    db.practiceSessions.toArray(),
+    db.attempts.toArray(),
+    db.reviewItems.toArray(),
+    db.skillProfiles.toArray(),
+  ]);
+
+  return {
+    app: 'english-training-cabin',
+    schemaVersion: 1,
+    exportedAt,
+    data: { studyGoals, practiceSessions, attempts, reviewItems, skillProfiles },
+  };
+}
+
+function countBackupRecords(backup: LearningDataBackup): number {
+  return Object.values(backup.data).reduce((sum, records) => sum + records.length, 0);
+}
+
+export async function prepareLearningWorkspaceForAccount(userId: string): Promise<LearningWorkspacePreparation> {
+  const normalizedUserId = userId.trim();
+  if (!normalizedUserId) throw new Error('无法绑定空的学习账号。');
+
+  return db.transaction(
+    'rw',
+    [...LEARNING_TABLES, db.learningWorkspaceMeta, db.learningWorkspaceArchives],
+    async () => {
+      const now = new Date().toISOString();
+      const current = await db.learningWorkspaceMeta.get('current');
+
+      if (!current) {
+        await db.learningWorkspaceMeta.put({
+          id: 'current',
+          userId: normalizedUserId,
+          boundAt: now,
+          updatedAt: now,
+        });
+        return { status: 'claimed', archivedRecords: 0 };
+      }
+
+      if (current.userId === normalizedUserId) {
+        await db.learningWorkspaceMeta.update('current', { updatedAt: now });
+        return { status: 'unchanged', archivedRecords: 0 };
+      }
+
+      const backup = await exportLearningDataFromOpenTransaction(now);
+      const archivedRecords = countBackupRecords(backup);
+      if (archivedRecords > 0) {
+        await db.learningWorkspaceArchives.put({
+          id: `${current.userId}:${now}`,
+          userId: current.userId,
+          createdAt: now,
+          backup,
+        });
+      }
+
+      await Promise.all(LEARNING_TABLES.map((table) => table.clear()));
+      await db.learningWorkspaceMeta.put({
+        id: 'current',
+        userId: normalizedUserId,
+        boundAt: now,
+        updatedAt: now,
+      });
+
+      return {
+        status: 'switched',
+        previousUserId: current.userId,
+        archivedRecords,
+      };
+    },
+  );
+}
+
+export async function getLearningWorkspaceMeta(): Promise<LearningWorkspaceMeta | undefined> {
+  return db.learningWorkspaceMeta.get('current');
+}
 
 export async function getOrCreateActiveGoal(): Promise<StudyGoal> {
   const activeGoals = await db.studyGoals.where('status').equals('active').toArray();
@@ -231,42 +349,7 @@ export async function importLearningData(value: unknown): Promise<{
   reviewItems: number;
   skillProfiles: number;
 }> {
-  const backup = value && typeof value === 'object' ? value as Partial<LearningDataBackup> : null;
-  if (!backup || backup.app !== 'english-training-cabin' || backup.schemaVersion !== 1 || !backup.data) {
-    throw new Error('备份文件格式不正确。');
-  }
-
-  const studyGoals = assertBackupArray(backup.data.studyGoals, 'studyGoals') as unknown as StudyGoal[];
-  const practiceSessions = assertBackupArray(backup.data.practiceSessions, 'practiceSessions') as unknown as PracticeSession[];
-  const attempts = assertBackupArray(backup.data.attempts, 'attempts') as unknown as Attempt[];
-  const reviewItems = assertBackupArray(backup.data.reviewItems, 'reviewItems') as unknown as ReviewItem[];
-  const skillProfiles = assertBackupArray(backup.data.skillProfiles, 'skillProfiles') as unknown as SkillProfile[];
-
-  await db.transaction('rw', [db.studyGoals, db.practiceSessions, db.attempts, db.reviewItems, db.skillProfiles], async () => {
-    await Promise.all([
-      db.studyGoals.clear(),
-      db.practiceSessions.clear(),
-      db.attempts.clear(),
-      db.reviewItems.clear(),
-      db.skillProfiles.clear(),
-    ]);
-
-    await Promise.all([
-      studyGoals.length > 0 ? db.studyGoals.bulkPut(studyGoals) : Promise.resolve(),
-      practiceSessions.length > 0 ? db.practiceSessions.bulkPut(practiceSessions) : Promise.resolve(),
-      attempts.length > 0 ? db.attempts.bulkPut(attempts) : Promise.resolve(),
-      reviewItems.length > 0 ? db.reviewItems.bulkPut(reviewItems) : Promise.resolve(),
-      skillProfiles.length > 0 ? db.skillProfiles.bulkPut(skillProfiles) : Promise.resolve(),
-    ]);
-  });
-
-  return {
-    studyGoals: studyGoals.length,
-    practiceSessions: practiceSessions.length,
-    attempts: attempts.length,
-    reviewItems: reviewItems.length,
-    skillProfiles: skillProfiles.length,
-  };
+  return mergeLearningData(value);
 }
 
 export async function mergeLearningData(value: unknown): Promise<{

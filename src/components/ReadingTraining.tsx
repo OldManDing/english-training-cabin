@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, CheckCircle2, XCircle, ChevronRight, HelpCircle, Headphones, ListChecks, Sparkles, Target } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, XCircle, ChevronRight, HelpCircle, Headphones, ListChecks, LoaderCircle, Sparkles, Target } from 'lucide-react';
 import { Attempt, ChoiceOption, Passage, PracticeCompletionReport, Question, SkillArea } from '../types';
 import { getReadingChineseSupport } from '../domain/practice/chineseSupport';
 import { buildChoiceReplayAnswer } from '../domain/practice/attemptReplay';
@@ -23,7 +23,7 @@ interface ReadingTrainingProps {
   initialQuestionId?: string;
   replayAttempt?: Attempt;
   onBack: () => void;
-  onComplete: (score: number, report: PracticeCompletionReport) => void;
+  onComplete: (score: number, report: PracticeCompletionReport) => Promise<void> | void;
   onAnswerRecorded?: (report: PracticeCompletionReport) => Promise<void> | void;
 }
 
@@ -224,6 +224,7 @@ export default function ReadingTraining({
   const [recordStatus, setRecordStatus] = useState<AnswerRecordStatus>(
     initialDraft.isSubmitted && onAnswerRecorded ? 'saved' : 'idle',
   );
+  const [isCompleting, setIsCompleting] = useState(false);
   const [startedAt] = useState(() => initialDraft.startedAt);
   const requireAnswerQuestionIdMatch = passage.moduleId === 'grammar' || Boolean(initialQuestionId);
   const getSavedAnswerAt = (index: number) => getQuestionMatchedAnswer(
@@ -429,6 +430,7 @@ export default function ReadingTraining({
   };
 
   const handleNext = () => {
+    if (isCompleting) return;
     if (currentIdx < passage.questions.length - 1) {
       const nextIdx = currentIdx + 1;
       const savedAnswer = getSavedAnswerAt(nextIdx);
@@ -454,9 +456,11 @@ export default function ReadingTraining({
         includeEvidence: true,
         answeredOnly: true,
       });
-      void recordWriteRef.current.finally(() => {
-        onComplete(finalScore, report);
-      });
+      setIsCompleting(true);
+      void recordWriteRef.current
+        .catch(() => undefined)
+        .then(() => onComplete(finalScore, report))
+        .finally(() => setIsCompleting(false));
     }
   };
 
@@ -951,13 +955,14 @@ export default function ReadingTraining({
                     <div className="text-xs font-bold text-gray-400">看完规则解析后继续下一题。</div>
                     <button
                       onClick={handleNext}
+                      disabled={isCompleting}
                       data-testid="reading-next"
                       className="ui-button ui-button-primary ui-button-full sm:w-auto"
                     >
                       <span>
-                        {currentIdx === passage.questions.length - 1 ? '完成训练' : `进入第 ${currentDisplayNumber + 1} 题`}
+                        {isCompleting ? '正在保存训练记录' : currentIdx === passage.questions.length - 1 ? '完成训练' : `进入第 ${currentDisplayNumber + 1} 题`}
                       </span>
-                      <ChevronRight className="h-4 w-4" />
+                      {isCompleting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ChevronRight className="h-4 w-4" />}
                     </button>
                   </div>
                 </div>
@@ -1281,13 +1286,14 @@ export default function ReadingTraining({
             ) : (
               <button
                 onClick={handleNext}
+                disabled={isCompleting}
                 data-testid="reading-next"
                 className="ui-button ui-button-primary ui-button-full sm:w-auto"
               >
                 <span>
-                  {currentIdx === passage.questions.length - 1 ? '完成训练，提交今日总战报' : '进入第 ' + (currentIdx + 2) + ' 题'}
+                  {isCompleting ? '正在保存训练记录' : currentIdx === passage.questions.length - 1 ? '完成训练，提交今日总战报' : '进入第 ' + (currentIdx + 2) + ' 题'}
                 </span>
-                <ChevronRight className="h-4 w-4" />
+                {isCompleting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ChevronRight className="h-4 w-4" />}
               </button>
             )}
           </div>

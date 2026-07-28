@@ -63,6 +63,7 @@ export default function ProgressSection({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<AbilityEvidenceTab>('reading');
   const [selectedWeek, setSelectedWeek] = useState<string>('W6');
+  const [showDetailedEvidence, setShowDetailedEvidence] = useState(() => !window.matchMedia('(max-width: 767px)').matches);
   const abilitySummary = buildAbilityEvidenceSummary(persistedSkillProfiles, scoreChange);
   const evidenceKnowledgeTabs = buildEvidenceKnowledgeTabs(persistedSkillProfiles);
   const stageProgress = buildStageProgressSummary(persistedSkillProfiles);
@@ -229,6 +230,17 @@ export default function ProgressSection({
           </section>
         </div>
 
+        <button
+          type="button"
+          onClick={() => setShowDetailedEvidence((current) => !current)}
+          className="ui-button ui-button-secondary ui-button-full md:hidden"
+          aria-expanded={showDetailedEvidence}
+        >
+          {showDetailedEvidence ? '收起详细证据' : '查看详细证据'}
+        </button>
+
+        {showDetailedEvidence && (
+        <>
         <section className="ui-panel transition-colors hover:border-[#003178]">
           <div className="mb-5 flex flex-col gap-3 border-b pb-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -458,6 +470,8 @@ export default function ProgressSection({
             })}
           </div>
         </section>
+        </>
+        )}
       </div>
       </div>
     </div>

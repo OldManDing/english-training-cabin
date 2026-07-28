@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Flag, LayoutGrid, Target, Calendar, Check, Lock, Sparkles, Sliders, ChevronDown, Save, Sparkle, RefreshCw, Database, Download, Upload } from 'lucide-react';
-import { exportLearningData, importLearningData } from '../lib/storage/db';
+import { exportLearningData, getOrCreateActiveGoal, mergeLearningData } from '../lib/storage/db';
+import { getStoredAuthToken } from '../lib/api';
+import { syncAllLocalLearningData } from '../lib/storage/authoritativeLearningSync';
 import SaasAccountPanel from './SaasAccountPanel';
 import UserFeedbackPanel from './UserFeedbackPanel';
 import LegalLinks from './LegalLinks';
@@ -108,6 +110,10 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
   };
 
   const handleSaveSettings = async () => {
+    if (new Date(`${examDate}T23:59:59`).getTime() < Date.now()) {
+      triggerToast('考试日期已过，请先更新日期。');
+      return;
+    }
     try {
       await persistCurrentSettings();
       triggerToast("训练目标已保存，今日计划会随目标更新。");
@@ -118,6 +124,10 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
   };
 
   const handleGeneratePlan = async () => {
+    if (new Date(`${examDate}T23:59:59`).getTime() < Date.now()) {
+      triggerToast('考试日期已过，请先更新日期。');
+      return;
+    }
     setIsGeneratingPlan(true);
     try {
       await persistCurrentSettings();
@@ -132,6 +142,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
 
   const handleExportLearningData = async () => {
     try {
+      await getOrCreateActiveGoal();
       const backup = await exportLearningData();
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -159,11 +170,24 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
 
     try {
       const backup = JSON.parse(await file.text()) as unknown;
-      const restored = await importLearningData(backup);
+      const restored = await mergeLearningData(backup);
+      const token = getStoredAuthToken();
+      let serverSummary = '登录后会自动保存到服务器。';
+      let serverConfirmed = false;
+      if (token) {
+        try {
+          const confirmedCount = await syncAllLocalLearningData(token);
+          serverSummary = `服务器已确认 ${confirmedCount} 项记录。`;
+          serverConfirmed = true;
+        } catch (error) {
+          console.error('Failed to confirm merged learning data on server:', error);
+          serverSummary = '本地合并已保留；网络恢复后请执行一次服务器对账。';
+        }
+      }
       await onDataRestored?.();
-      const summary = `恢复完成：目标 ${restored.studyGoals} 项、练习 ${restored.practiceSessions} 组、错题复习 ${restored.reviewItems} 项、能力画像 ${restored.skillProfiles} 项。`;
-      onTriggerModal?.('学习数据恢复完成', summary);
-      triggerToast('学习数据已恢复到当前浏览器。');
+      const summary = `合并完成：目标 ${restored.studyGoals} 项、练习 ${restored.practiceSessions} 组、答题 ${restored.attempts} 条、错题复习 ${restored.reviewItems} 项、能力画像 ${restored.skillProfiles} 项。现有记录没有被删除。${serverSummary}`;
+      onTriggerModal?.('学习数据合并完成', summary);
+      triggerToast(serverConfirmed ? '备份已合并并保存到服务器。' : '备份已合并，现有学习记录未被删除。');
     } catch (error) {
       console.error('Failed to restore learning data:', error);
       triggerToast('恢复失败：请导入由英语训练舱导出的有效 JSON 备份。');
@@ -175,6 +199,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
 
   // Derived calculation values matching simulated statistics
   const daysRemaining = Math.max(0, Math.ceil((new Date(`${examDate}T00:00:00`).getTime() - new Date(new Date().toDateString()).getTime()) / 86400000));
+  const examDateExpired = new Date(`${examDate}T23:59:59`).getTime() < Date.now();
   const totalStudyHours = Math.round((dailyTargetMinutes * daysRemaining) / 60);
   
   // Determine intensity based on daily minutes
@@ -265,6 +290,11 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                 <div className="space-y-1.5">
                   <label className="block text-[11px] font-bold text-[#434652]">考试日期</label>
                   <DateField ariaLabel="考试日期" value={examDate} onChange={setExamDate} />
+                  {examDateExpired && (
+                    <p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-bold leading-5 text-amber-800">
+                      该考试日期已过，请更新日期后再生成训练计划。
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -422,13 +452,18 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
               </div>
             </div>
 
+            <SaasAccountPanel
+              onTriggerModal={onTriggerModal}
+              onServerDataRestored={onServerDataRestored}
+            />
+
             <div className="ui-panel space-y-4">
               <h3 className="text-sm font-black text-[#003178] flex items-center gap-2">
                 <Database className="h-4 w-4 text-[#003178]" />
-                离线副本与导出
+                数据安全与恢复
               </h3>
               <p className="text-[11px] leading-5 text-[#434652] font-semibold">
-                学习记录由服务器持续保存；浏览器保留离线副本，也可导出独立备份。
+                服务器是主存储；浏览器是当前账号的离线工作副本。导入备份只合并，不会删除现有记录。
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
@@ -441,7 +476,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                 </button>
                 <label className="ui-button ui-button-primary ui-button-full cursor-pointer">
                   <Upload className="h-4 w-4" />
-                  恢复学习数据
+                  合并本地备份
                   <input
                     data-testid="restore-learning-data-input"
                     type="file"
@@ -452,11 +487,6 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                 </label>
               </div>
             </div>
-
-            <SaasAccountPanel
-              onTriggerModal={onTriggerModal}
-              onServerDataRestored={onServerDataRestored}
-            />
 
             <UserFeedbackPanel pageContext="settings" />
 
@@ -525,7 +555,7 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
                 <button
                   type="button"
                   onClick={handleGeneratePlan}
-                  disabled={isGeneratingPlan}
+                  disabled={isGeneratingPlan || examDateExpired}
                   className="ui-button ui-button-primary ui-button-full"
                 >
                   {isGeneratingPlan ? (

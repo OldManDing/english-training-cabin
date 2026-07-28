@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Loader2, X } from 'lucide-react';
 import SaasAccountPanel, { PublicSaasAccountContext } from './SaasAccountPanel';
 import { apiRequest, AUTH_STATE_CHANGE_EVENT, clearStoredAuthToken, getStoredAuthToken } from '../lib/api';
+import { prepareLearningWorkspaceForAccount } from '../lib/storage/db';
 
 interface AuthGateProps {
   children: React.ReactNode;
@@ -31,6 +32,8 @@ export default function AuthGate({ children }: AuthGateProps) {
         );
         if (!mounted) return;
         if (payload.authenticated && payload.account) {
+          await prepareLearningWorkspaceForAccount(payload.account.user.id);
+          if (!mounted) return;
           setState('authenticated');
           return;
         }

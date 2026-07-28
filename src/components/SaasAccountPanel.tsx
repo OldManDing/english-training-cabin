@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Cloud, Copy, DownloadCloud, KeyRound, LogIn, LogOut, RefreshCw, ShieldCheck, UploadCloud, UserPlus } from 'lucide-react';
 import { apiRequest, clearStoredAuthToken, getStoredAuthToken, setStoredAuthToken } from '../lib/api';
 import { syncAllLocalLearningData, synchronizeAuthoritativeLearningData } from '../lib/storage/authoritativeLearningSync';
+import { prepareLearningWorkspaceForAccount, type LearningDataBackup } from '../lib/storage/db';
 import SaasOperationsPanel from './SaasOperationsPanel';
 import LegalLinks from './LegalLinks';
 
@@ -72,6 +73,20 @@ type AuthPayload = {
   recoveryCodeExpiresAt?: string;
 };
 
+type CloudSafetyStatus = {
+  current: null | {
+    updatedAt: string;
+    counts: {
+      studyGoals: number;
+      practiceSessions: number;
+      attempts: number;
+      reviewItems: number;
+      skillProfiles: number;
+    };
+  };
+  versions: Array<{ id: string; createdAt: string }>;
+};
+
 export default function SaasAccountPanel({ onTriggerModal, onServerDataRestored, onAuthenticated, onLogout }: SaasAccountPanelProps) {
   const [initialAction] = useState(getInitialAuthAction);
   const [mode, setMode] = useState<AuthMode>(initialAction.mode ?? 'login');
@@ -87,9 +102,17 @@ export default function SaasAccountPanel({ onTriggerModal, onServerDataRestored,
   const latestTokenRef = useRef<string | null>(getStoredAuthToken());
   const [account, setAccount] = useState<PublicSaasAccountContext | null>(null);
   const [statusText, setStatusText] = useState(INITIAL_CLOUD_STATUS);
+  const [workspaceNotice, setWorkspaceNotice] = useState('');
   const [authError, setAuthError] = useState('');
   const [isBusy, setIsBusy] = useState(false);
   const [showOperations, setShowOperations] = useState(false);
+  const [cloudSafetyStatus, setCloudSafetyStatus] = useState<CloudSafetyStatus | null>(null);
+
+  const refreshCloudSafetyStatus = async (authToken = token) => {
+    if (!authToken) return;
+    const status = await apiRequest<CloudSafetyStatus>('/api/cloud/learning-data/versions', {}, authToken);
+    setCloudSafetyStatus(status);
+  };
 
   useEffect(() => {
     setAuthError('');
@@ -149,6 +172,9 @@ export default function SaasAccountPanel({ onTriggerModal, onServerDataRestored,
           return;
         }
         setAccount(payload.account);
+        void refreshCloudSafetyStatus(token).catch((error) => {
+          console.error('Failed to load cloud learning safety status:', error);
+        });
         setStatusText((current) =>
           current === INITIAL_CLOUD_STATUS || current === '登录状态已失效，请重新登录。'
             ? '已连接。'
@@ -213,6 +239,7 @@ export default function SaasAccountPanel({ onTriggerModal, onServerDataRestored,
           body: JSON.stringify(body),
         },
       );
+      const workspace = await prepareLearningWorkspaceForAccount(payload.account.user.id);
       setStoredAuthToken(payload.token, !payload.recoveryCode);
       latestTokenRef.current = payload.token;
       setToken(payload.token);
@@ -225,6 +252,9 @@ export default function SaasAccountPanel({ onTriggerModal, onServerDataRestored,
         reset: '密码已重置，请保存新恢复码。',
       };
       setStatusText(statusByMode[mode]);
+      setWorkspaceNotice(workspace.status === 'switched'
+        ? `已切换账号，旧账号的 ${workspace.archivedRecords} 项本地记录已隔离归档。`
+        : '');
       if (payload.recoveryCode) {
         setOneTimeRecoveryCode(payload.recoveryCode);
       }
@@ -250,6 +280,7 @@ export default function SaasAccountPanel({ onTriggerModal, onServerDataRestored,
       setToken(null);
       setAccount(null);
       setOneTimeRecoveryCode(null);
+      setWorkspaceNotice('');
       setStatusText('已退出。');
       onLogout?.();
     } finally {
@@ -280,6 +311,7 @@ export default function SaasAccountPanel({ onTriggerModal, onServerDataRestored,
     setIsBusy(true);
     try {
       const syncedEntities = await syncAllLocalLearningData(token);
+      await refreshCloudSafetyStatus(token);
       setStatusText(`服务器对账完成：已确认 ${syncedEntities} 项学习记录。`);
     } catch (error) {
       setStatusText(getApiMessage(error));
@@ -293,10 +325,39 @@ export default function SaasAccountPanel({ onTriggerModal, onServerDataRestored,
     setIsBusy(true);
     try {
       const restored = await synchronizeAuthoritativeLearningData(token);
+      await refreshCloudSafetyStatus(token);
       await onServerDataRestored?.();
       const summary = `服务器重建完成：目标 ${restored.mergedCounts.studyGoals} 项、练习 ${restored.mergedCounts.practiceSessions} 组、答题 ${restored.mergedCounts.attempts} 条、复习 ${restored.mergedCounts.reviewItems} 项、画像 ${restored.mergedCounts.skillProfiles} 项。`;
       onTriggerModal?.('服务器学习数据重建完成', summary);
       setStatusText(summary);
+    } catch (error) {
+      setStatusText(getApiMessage(error));
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const handleDownloadLatestRecoveryPoint = async () => {
+    if (!token) return;
+    const latestVersion = cloudSafetyStatus?.versions[0];
+    if (!latestVersion) {
+      setStatusText('当前还没有可下载的历史恢复点。');
+      return;
+    }
+
+    setIsBusy(true);
+    try {
+      const response = await apiRequest<{
+        version: { id: string; createdAt: string; backup: LearningDataBackup };
+      }>(`/api/cloud/learning-data/versions/${encodeURIComponent(latestVersion.id)}`, {}, token);
+      const blob = new Blob([JSON.stringify(response.version.backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `英语训练舱-服务器恢复点-${response.version.createdAt.slice(0, 10)}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setStatusText('最近的服务器恢复点已下载，可通过“合并本地备份”恢复缺失记录。');
     } catch (error) {
       setStatusText(getApiMessage(error));
     } finally {
@@ -524,6 +585,29 @@ export default function SaasAccountPanel({ onTriggerModal, onServerDataRestored,
               <span className="rounded-full bg-white px-3 py-1 text-[#1b6d24] border border-emerald-100">学习记录已由服务器保存</span>
               <span className="rounded-full bg-white px-3 py-1 text-[#003178] border border-[#dbeafe]">团队席位 {account.entitlements.teamSeats} 人</span>
             </div>
+            <div data-testid="cloud-learning-safety-status" className="grid grid-cols-2 gap-2 pt-1 sm:grid-cols-4">
+              <div className="rounded-xl border border-[#dbeafe] bg-white p-2.5">
+                <div className="text-[9px] font-bold text-slate-400">练习</div>
+                <div className="mt-1 font-mono text-base font-black text-[#003178]">{cloudSafetyStatus?.current?.counts.practiceSessions ?? 0}</div>
+              </div>
+              <div className="rounded-xl border border-[#dbeafe] bg-white p-2.5">
+                <div className="text-[9px] font-bold text-slate-400">答题</div>
+                <div className="mt-1 font-mono text-base font-black text-[#003178]">{cloudSafetyStatus?.current?.counts.attempts ?? 0}</div>
+              </div>
+              <div className="rounded-xl border border-[#dbeafe] bg-white p-2.5">
+                <div className="text-[9px] font-bold text-slate-400">复习</div>
+                <div className="mt-1 font-mono text-base font-black text-[#003178]">{cloudSafetyStatus?.current?.counts.reviewItems ?? 0}</div>
+              </div>
+              <div className="rounded-xl border border-[#dbeafe] bg-white p-2.5">
+                <div className="text-[9px] font-bold text-slate-400">恢复点</div>
+                <div className="mt-1 font-mono text-base font-black text-[#003178]">{cloudSafetyStatus?.versions.length ?? 0}</div>
+              </div>
+            </div>
+            <p className="text-[10px] font-bold text-slate-500">
+              {cloudSafetyStatus?.current
+                ? `服务器最后确认 ${new Date(cloudSafetyStatus.current.updatedAt).toLocaleString('zh-CN')}`
+                : '正在读取服务器保存状态'}
+            </p>
             <button
               type="button"
               onClick={handleGenerateRecoveryCode}
@@ -533,6 +617,17 @@ export default function SaasAccountPanel({ onTriggerModal, onServerDataRestored,
               <KeyRound className="h-3.5 w-3.5" />
               生成新恢复码
             </button>
+            {Boolean(cloudSafetyStatus?.versions.length) && (
+              <button
+                type="button"
+                onClick={handleDownloadLatestRecoveryPoint}
+                disabled={isBusy}
+                className="ui-button ui-button-secondary ui-button-compact"
+              >
+                <DownloadCloud className="h-3.5 w-3.5" />
+                下载最近恢复点
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -620,6 +715,16 @@ export default function SaasAccountPanel({ onTriggerModal, onServerDataRestored,
         <div className="flex items-start gap-2 rounded-2xl border border-[#d2e2ec] bg-[#f8fafc] px-3 py-2">
           <ShieldCheck className="h-4 w-4 text-[#003178] shrink-0 mt-0.5" />
           <p className="text-[10.5px] leading-5 font-bold text-[#434652]">{statusText}</p>
+        </div>
+      )}
+
+      {workspaceNotice && (
+        <div
+          data-testid="learning-workspace-notice"
+          className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2"
+        >
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+          <p className="text-[10.5px] font-bold leading-5 text-amber-900">{workspaceNotice}</p>
         </div>
       )}
     </div>

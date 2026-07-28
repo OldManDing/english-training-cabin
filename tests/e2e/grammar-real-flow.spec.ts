@@ -224,6 +224,7 @@ test('grammar practice uses a compact task-first layout on mobile', async ({ pag
   await registerAndEnterApp(page, 'real-grammar-mobile-layout');
   await page.locator('aside button').nth(1).click();
 
+  await page.getByTestId('practice-module-quick-select-grammar').click();
   await page.getByTestId('practice-module-action-grammar').click();
 
   await expect(page.getByText('考点：时态 / 现在完成时')).toBeVisible();
@@ -266,6 +267,7 @@ test('grammar feedback actions stay in document flow without covering analysis',
   await registerAndEnterApp(page, 'real-grammar-no-floating-cover');
   await page.locator('aside button').nth(1).click();
 
+  await page.getByTestId('practice-module-quick-select-grammar').click();
   await page.getByTestId('practice-module-action-grammar').click();
   await page.getByRole('button', { name: /^A / }).click();
   await page.getByTestId('reading-submit').click();

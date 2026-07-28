@@ -262,6 +262,25 @@ describe('practiced question filtering', () => {
     expect(progress.get('listening')).toMatchObject({ practiced: 1, total: 8, remaining: 7 });
   });
 
+  it('repairs legacy vocabulary ids after draft attempts are merged', () => {
+    const legacyWrongAttempts = CET4_VOCABULARY_BANK.slice(240, 250).map((item, index) => ({
+      ...makeAttempt(item.id, 'vocabulary'),
+      id: `draft-vocabulary-${item.id}`,
+      sessionId: 'draft-vocabulary',
+      answer: item.correctAnswer,
+      createdAt: `2026-06-14T10:00:${String(index).padStart(2, '0')}.000Z`,
+    }));
+
+    const merged = mergePracticeProgressAttempts({
+      persistedAttempts: [],
+      draftAttempts: legacyWrongAttempts,
+    });
+
+    expect(merged.map((attempt) => attempt.questionId)).toEqual(
+      CET4_VOCABULARY_BANK.slice(120, 130).map((item) => item.id),
+    );
+  });
+
   it('counts visible practice attempts for the current local day only', () => {
     const attempts: Attempt[] = [
       { ...makeAttempt('today-1', 'vocabulary'), createdAt: localIso(2026, 6, 14, 8) },

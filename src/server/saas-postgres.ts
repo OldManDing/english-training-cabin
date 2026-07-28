@@ -4,8 +4,10 @@ import {
   BillingEventInput,
   CloudLearningEntityRecord,
   CloudLearningSnapshotRecord,
+  CloudLearningSnapshotVersionRecord,
   ContentAssetRecord,
   DataRequestRecord,
+  hasSameLearningSnapshotData,
   OrganizationInvitationRecord,
   SaasAccountRecord,
   SaasApiError,
@@ -64,6 +66,33 @@ CREATE TABLE IF NOT EXISTS learning_snapshots (
   backup jsonb NOT NULL,
   updated_at timestamptz NOT NULL,
   PRIMARY KEY (organization_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS learning_snapshot_versions (
+  id uuid PRIMARY KEY,
+  organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  backup jsonb NOT NULL,
+  updated_at timestamptz NOT NULL,
+  created_at timestamptz NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS learning_snapshot_versions_account_idx
+  ON learning_snapshot_versions (organization_id, user_id, created_at DESC);
+
+INSERT INTO learning_snapshot_versions (id, organization_id, user_id, backup, updated_at, created_at)
+SELECT md5(snapshot.organization_id::text || ':' || snapshot.user_id::text || ':' || snapshot.updated_at::text)::uuid,
+       snapshot.organization_id,
+       snapshot.user_id,
+       snapshot.backup,
+       snapshot.updated_at,
+       snapshot.updated_at
+FROM learning_snapshots snapshot
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM learning_snapshot_versions version
+  WHERE version.organization_id = snapshot.organization_id
+    AND version.user_id = snapshot.user_id
 );
 
 CREATE TABLE IF NOT EXISTS learning_entities (
@@ -579,8 +608,17 @@ export function createPostgresSaasStore(databaseUrl: string): SaasStore {
       });
     },
     saveLearningSnapshot(input) {
-      return withClient(async (client) => {
+      return withTransaction(async (client) => {
         const now = new Date().toISOString();
+        const currentResult = await client.query(
+          'SELECT * FROM learning_snapshots WHERE organization_id = $1 AND user_id = $2 FOR UPDATE',
+          [input.organizationId, input.userId],
+        );
+        const current = currentResult.rows[0] as Record<string, unknown> | undefined;
+        const dataChanged = !current || !hasSameLearningSnapshotData(
+          (current.backup as CloudLearningSnapshotRecord['backup']).data,
+          input.backup.data,
+        );
         const result = await client.query(
           `INSERT INTO learning_snapshots (organization_id, user_id, backup, updated_at)
            VALUES ($1, $2, $3, $4)
@@ -589,6 +627,22 @@ export function createPostgresSaasStore(databaseUrl: string): SaasStore {
            RETURNING *`,
           [input.organizationId, input.userId, input.backup, now],
         );
+        if (dataChanged) {
+          await client.query(
+            `INSERT INTO learning_snapshot_versions (id, organization_id, user_id, backup, updated_at, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [crypto.randomUUID(), input.organizationId, input.userId, input.backup, now, now],
+          );
+          await client.query(
+            `DELETE FROM learning_snapshot_versions
+             WHERE id IN (
+               SELECT id FROM learning_snapshot_versions
+               WHERE organization_id = $1 AND user_id = $2
+               ORDER BY created_at DESC OFFSET 10
+             )`,
+            [input.organizationId, input.userId],
+          );
+        }
         const row = result.rows[0] as Record<string, unknown>;
         return {
           organizationId: String(row.organization_id),
@@ -611,6 +665,24 @@ export function createPostgresSaasStore(databaseUrl: string): SaasStore {
           backup: row.backup as CloudLearningSnapshotRecord['backup'],
           updatedAt: toIso(row.updated_at as Date | string)!,
         } : undefined;
+      });
+    },
+    listLearningSnapshotVersions(organizationId, userId) {
+      return withClient(async (client) => {
+        const result = await client.query(
+          `SELECT * FROM learning_snapshot_versions
+           WHERE organization_id = $1 AND user_id = $2
+           ORDER BY created_at DESC`,
+          [organizationId, userId],
+        );
+        return result.rows.map((row) => ({
+          id: String(row.id),
+          organizationId: String(row.organization_id),
+          userId: String(row.user_id),
+          backup: row.backup as CloudLearningSnapshotVersionRecord['backup'],
+          updatedAt: toIso(row.updated_at as Date | string)!,
+          createdAt: toIso(row.created_at as Date | string)!,
+        }));
       });
     },
     upsertLearningEntities(input) {
@@ -661,12 +733,17 @@ export function createPostgresSaasStore(databaseUrl: string): SaasStore {
           'DELETE FROM learning_snapshots WHERE organization_id = $1 AND user_id = $2',
           [organizationId, userId],
         );
+        const snapshotVersionResult = await client.query(
+          'DELETE FROM learning_snapshot_versions WHERE organization_id = $1 AND user_id = $2',
+          [organizationId, userId],
+        );
         const entityResult = await client.query(
           'DELETE FROM learning_entities WHERE organization_id = $1 AND user_id = $2',
           [organizationId, userId],
         );
         return {
           snapshotsDeleted: snapshotResult.rowCount ?? 0,
+          snapshotVersionsDeleted: snapshotVersionResult.rowCount ?? 0,
           entitiesDeleted: entityResult.rowCount ?? 0,
         };
       });

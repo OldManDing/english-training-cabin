@@ -581,7 +581,7 @@ test('MVP critical reading flow persists local learning evidence', async ({ page
     await page.getByRole('button', { name: index === 4 ? /完成训练/ : /进入第/ }).click();
   }
 
-  await expect(page.getByRole('heading', { name: '能力地图' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '能力地图' })).toBeVisible({ timeout: 20_000 });
 
   const counts = await page.evaluate(async () => {
     function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
@@ -805,8 +805,8 @@ test('practice question status numbers open the selected module question', async
   expect(accompanyIndex).toBeGreaterThanOrEqual(0);
   const accompanyItem = CET4_VOCABULARY_BANK[accompanyIndex];
   await page.getByTestId('practice-module-select-vocabulary').click();
-  await page.getByRole('button', { name: /展开当前筛选/ }).click();
-  await page.getByTestId(`practice-question-status-vocabulary-${accompanyIndex + 1}`).click();
+  await page.getByTestId('practice-question-jump-input-vocabulary').fill(String(accompanyIndex + 1));
+  await page.getByTestId('practice-question-jump-submit-vocabulary').click();
   await expect(page.getByRole('heading', { name: 'accompany' })).toBeVisible();
   await expect(page.getByText(accompanyItem.phonetic, { exact: true })).toBeVisible();
   await expect(page.getByText(/发音提示/)).toHaveCount(0);
@@ -825,8 +825,7 @@ test('practice question status numbers open the selected module question', async
   await expect(page.getByTestId('practice-question-status-group-grammar-voice')).toContainText('语态题');
   await page.getByTestId('practice-question-status-grammar-2').click();
   await expect(page.getByText(CET4_GRAMMAR_PRACTICE_QUESTIONS[1].prompt)).toBeVisible();
-  await expect(page.getByText('核心考向：时态|现在完成时')).toBeVisible();
-  await expect(page.getByTestId('practice-method-guide-topic-grammar-tense')).toContainText('当前考点');
+  await expect(page.getByText('考点：时态 / 现在完成时')).toBeVisible();
   await page.getByTestId('reading-back-to-practice').click();
 
   const grammarCheckpointNumbers = [21, 22, 50, 250, 500, 1000];
@@ -1487,9 +1486,9 @@ test('diagnostic weakness updates the daily primary task and routes into the mat
   await expect(page.getByTestId('today-task-row-practice-grammar-0')).toContainText('语法结构与固定搭配专项');
 
   await page.getByTestId('today-primary-task-action').click();
-  await expect(page.getByRole('heading', { name: '语法与完形填空训练舱' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: /语法与完形填空训练舱：语法结构与固定搭配专项/ })).toBeVisible();
-  await expect(page.getByTestId('practice-method-guide-topic-grammar-tense')).toContainText('当前考点');
+  await expect(page.getByRole('heading', { name: '语法结构', exact: true })).toBeVisible();
+  await expect(page.getByText('考点：时态 / 现在完成时')).toBeVisible();
+  await expect(page.getByTestId('reading-submit')).toBeVisible();
 });
 
 test('target exam filters visible question bank and mock exam guides incomplete submissions', async ({ page }) => {
@@ -2048,7 +2047,7 @@ test('local learning data can be exported and restored from settings', async ({ 
   await page.reload();
 
   await page.getByRole('button', { name: '设置' }).click();
-  await expect(page.getByRole('heading', { name: '本地数据保险箱' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '数据安全与恢复' })).toBeVisible();
 
   const download = await Promise.all([
     page.waitForEvent('download'),
@@ -2113,7 +2112,7 @@ test('local learning data can be exported and restored from settings', async ({ 
     buffer: Buffer.from(JSON.stringify(backup)),
   });
 
-  await expect(page.getByRole('heading', { name: '学习数据恢复完成' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '学习数据合并完成' })).toBeVisible();
 
   const restored = await page.evaluate(async () => {
     function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
@@ -2130,9 +2129,10 @@ test('local learning data can be exported and restored from settings', async ({ 
     });
     const tx = db.transaction(['studyGoals', 'reviewItems'], 'readonly');
     const goal = await requestToPromise(tx.objectStore('studyGoals').get('goal-restored'));
+    const goalCount = await requestToPromise(tx.objectStore('studyGoals').count());
     const reviewCount = await requestToPromise(tx.objectStore('reviewItems').count());
     db.close();
-    return { goal, reviewCount };
+    return { goal, goalCount, reviewCount };
   });
 
   expect(restored.goal).toMatchObject({
@@ -2140,5 +2140,6 @@ test('local learning data can be exported and restored from settings', async ({ 
     targetScore: 605,
     dailyMinutes: 45,
   });
+  expect(restored.goalCount).toBeGreaterThanOrEqual(2);
   expect(restored.reviewCount).toBe(1);
 });

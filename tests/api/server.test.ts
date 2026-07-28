@@ -431,6 +431,87 @@ describe('server API', () => {
     assertSmokeLearningBackupRoundTrip(cloudResponse.body.snapshot);
   });
 
+  it('keeps recovery points and blocks partial learning snapshot regressions', async () => {
+    const saasApp = createApp({
+      saasStore: createInMemorySaasStore(),
+      saasSessionSecret: 'cloud-version-guard-secret',
+    });
+    const registerResponse = await request(saasApp)
+      .post('/api/auth/register')
+      .send({
+        email: `cloud-version-${Date.now()}@example.com`,
+        inviteCode: LOCAL_REGISTRATION_INVITE_CODE,
+        password: 'secure-password-1',
+        name: 'Cloud Version Learner',
+        organizationName: 'Cloud Version Team',
+      })
+      .expect(201);
+    const token = registerResponse.body.token as string;
+    const firstBackup = createSmokeLearningBackup('version-first');
+    const expandedBackup = structuredClone(firstBackup);
+    expandedBackup.exportedAt = new Date(Date.now() + 1_000).toISOString();
+    expandedBackup.data.attempts.push({
+      ...expandedBackup.data.attempts[0],
+      id: 'version-second-attempt',
+      createdAt: expandedBackup.exportedAt,
+    });
+
+    await request(saasApp)
+      .put('/api/cloud/learning-data')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ backup: firstBackup })
+      .expect(200);
+    await request(saasApp)
+      .put('/api/cloud/learning-data')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        backup: {
+          ...expandedBackup,
+          data: {
+            skillProfiles: expandedBackup.data.skillProfiles,
+            reviewItems: expandedBackup.data.reviewItems,
+            attempts: expandedBackup.data.attempts,
+            practiceSessions: expandedBackup.data.practiceSessions,
+            studyGoals: expandedBackup.data.studyGoals,
+          },
+        },
+      })
+      .expect(200);
+
+    await request(saasApp)
+      .put('/api/cloud/learning-data')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ backup: expandedBackup })
+      .expect(200);
+
+    const versions = await request(saasApp)
+      .get('/api/cloud/learning-data/versions')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(versions.body.current.counts.attempts).toBe(2);
+    expect(versions.body.versions).toHaveLength(2);
+    expect(versions.body.versions[0].counts.attempts).toBe(2);
+    expect(versions.body.versions[1].counts.attempts).toBe(1);
+
+    const recoveryPoint = await request(saasApp)
+      .get(`/api/cloud/learning-data/versions/${versions.body.versions[1].id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(recoveryPoint.body.version.backup.data.attempts).toHaveLength(1);
+
+    await request(saasApp)
+      .get('/api/cloud/learning-data/versions/not-owned')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(404);
+
+    const blocked = await request(saasApp)
+      .put('/api/cloud/learning-data')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ backup: firstBackup })
+      .expect(409);
+    expect(blocked.body.error).toBe('learning_snapshot_regression_blocked');
+  });
+
   it('allows repeated organization names without blocking public self-service signup', async () => {
     const saasApp = createApp({
       saasStore: createInMemorySaasStore(),

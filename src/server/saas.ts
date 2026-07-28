@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
+import { isDeepStrictEqual } from 'node:util';
 
 export type SubscriptionTier = 'free' | 'pro' | 'team' | 'enterprise';
 export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'canceled';
@@ -55,11 +56,23 @@ export interface LearningBackupSnapshot {
   };
 }
 
+export function hasSameLearningSnapshotData(
+  left: LearningBackupSnapshot['data'],
+  right: LearningBackupSnapshot['data'],
+): boolean {
+  return isDeepStrictEqual(left, right);
+}
+
 export interface CloudLearningSnapshotRecord {
   organizationId: string;
   userId: string;
   backup: LearningBackupSnapshot;
   updatedAt: string;
+}
+
+export interface CloudLearningSnapshotVersionRecord extends CloudLearningSnapshotRecord {
+  id: string;
+  createdAt: string;
 }
 
 export type LearningEntityType = 'studyGoal' | 'practiceSession' | 'attempt' | 'reviewItem' | 'skillProfile';
@@ -154,6 +167,7 @@ export interface SaasDatabaseShape {
   organizations: SaasOrganizationRecord[];
   subscriptions: SaasSubscriptionRecord[];
   learningSnapshots: CloudLearningSnapshotRecord[];
+  learningSnapshotVersions: CloudLearningSnapshotVersionRecord[];
   learningEntities: CloudLearningEntityRecord[];
   oneTimeTokens: SaasOneTimeTokenRecord[];
   billingWebhookEvents: BillingWebhookEventRecord[];
@@ -214,6 +228,7 @@ export interface SaasStore {
     backup: LearningBackupSnapshot;
   }): Promise<CloudLearningSnapshotRecord>;
   getLearningSnapshot(organizationId: string, userId: string): Promise<CloudLearningSnapshotRecord | undefined>;
+  listLearningSnapshotVersions(organizationId: string, userId: string): Promise<CloudLearningSnapshotVersionRecord[]>;
   upsertLearningEntities(input: {
     organizationId: string;
     userId: string;
@@ -226,6 +241,7 @@ export interface SaasStore {
   }): Promise<CloudLearningEntityRecord[]>;
   deleteLearningData(organizationId: string, userId: string): Promise<{
     snapshotsDeleted: number;
+    snapshotVersionsDeleted: number;
     entitiesDeleted: number;
   }>;
   applyBillingEvent(input: BillingEventInput): Promise<SaasSubscriptionRecord>;
@@ -370,6 +386,7 @@ function createEmptyDatabase(): SaasDatabaseShape {
     organizations: [],
     subscriptions: [],
     learningSnapshots: [],
+    learningSnapshotVersions: [],
     learningEntities: [],
     oneTimeTokens: [],
     billingWebhookEvents: [],
@@ -801,12 +818,30 @@ function createStoreFromDatabase(options: {
         const currentIndex = db.learningSnapshots.findIndex((snapshot) =>
           snapshot.organizationId === input.organizationId && snapshot.userId === input.userId,
         );
+        const current = currentIndex >= 0 ? db.learningSnapshots[currentIndex] : undefined;
+        const dataChanged = !current || !hasSameLearningSnapshotData(current.backup.data, input.backup.data);
         const snapshot: CloudLearningSnapshotRecord = {
           organizationId: input.organizationId,
           userId: input.userId,
           backup: input.backup,
           updatedAt: now,
         };
+        if (dataChanged) {
+          db.learningSnapshotVersions.push({
+            ...snapshot,
+            id: crypto.randomUUID(),
+            createdAt: now,
+          });
+          const accountVersions = db.learningSnapshotVersions
+            .filter((version) => version.organizationId === input.organizationId && version.userId === input.userId)
+            .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+          const retainedIds = new Set(accountVersions.slice(0, 10).map((version) => version.id));
+          db.learningSnapshotVersions = db.learningSnapshotVersions.filter((version) =>
+            version.organizationId !== input.organizationId ||
+            version.userId !== input.userId ||
+            retainedIds.has(version.id),
+          );
+        }
         if (currentIndex >= 0) db.learningSnapshots[currentIndex] = snapshot;
         else db.learningSnapshots.push(snapshot);
         return snapshot;
@@ -816,6 +851,11 @@ function createStoreFromDatabase(options: {
       return read((db) => db.learningSnapshots.find((snapshot) =>
         snapshot.organizationId === organizationId && snapshot.userId === userId,
       ));
+    },
+    listLearningSnapshotVersions(organizationId, userId) {
+      return read((db) => db.learningSnapshotVersions
+        .filter((version) => version.organizationId === organizationId && version.userId === userId)
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt)));
     },
     upsertLearningEntities(input) {
       return mutate((db) => {
@@ -858,6 +898,7 @@ function createStoreFromDatabase(options: {
     deleteLearningData(organizationId, userId) {
       return mutate((db) => {
         const snapshotCount = db.learningSnapshots.length;
+        const snapshotVersionCount = db.learningSnapshotVersions.length;
         const entityCount = db.learningEntities.length;
         db.learningSnapshots = db.learningSnapshots.filter((snapshot) =>
           snapshot.organizationId !== organizationId || snapshot.userId !== userId,
@@ -865,8 +906,12 @@ function createStoreFromDatabase(options: {
         db.learningEntities = db.learningEntities.filter((entity) =>
           entity.organizationId !== organizationId || entity.userId !== userId,
         );
+        db.learningSnapshotVersions = db.learningSnapshotVersions.filter((version) =>
+          version.organizationId !== organizationId || version.userId !== userId,
+        );
         return {
           snapshotsDeleted: snapshotCount - db.learningSnapshots.length,
+          snapshotVersionsDeleted: snapshotVersionCount - db.learningSnapshotVersions.length,
           entitiesDeleted: entityCount - db.learningEntities.length,
         };
       });
@@ -1099,12 +1144,30 @@ export function createInMemorySaasStore(initial?: Partial<SaasDatabaseShape>): S
 
 function normalizeDatabaseShape(value: unknown): SaasDatabaseShape {
   const input = value && typeof value === 'object' ? value as Partial<SaasDatabaseShape> : {};
+  const learningSnapshots = Array.isArray(input.learningSnapshots) ? input.learningSnapshots : [];
+  const learningSnapshotVersions = Array.isArray(input.learningSnapshotVersions)
+    ? [...input.learningSnapshotVersions]
+    : [];
+  learningSnapshots.forEach((snapshot) => {
+    const hasRecoveryPoint = learningSnapshotVersions.some((version) =>
+      version.organizationId === snapshot.organizationId && version.userId === snapshot.userId,
+    );
+    if (!hasRecoveryPoint) {
+      const seed = `${snapshot.organizationId}:${snapshot.userId}:${snapshot.updatedAt}`;
+      learningSnapshotVersions.push({
+        ...snapshot,
+        id: `legacy-${crypto.createHash('sha256').update(seed).digest('hex').slice(0, 32)}`,
+        createdAt: snapshot.updatedAt,
+      });
+    }
+  });
   return {
     schemaVersion: 3,
     users: Array.isArray(input.users) ? input.users : [],
     organizations: Array.isArray(input.organizations) ? input.organizations : [],
     subscriptions: Array.isArray(input.subscriptions) ? input.subscriptions : [],
-    learningSnapshots: Array.isArray(input.learningSnapshots) ? input.learningSnapshots : [],
+    learningSnapshots,
+    learningSnapshotVersions,
     learningEntities: Array.isArray(input.learningEntities) ? input.learningEntities : [],
     oneTimeTokens: Array.isArray(input.oneTimeTokens) ? input.oneTimeTokens : [],
     billingWebhookEvents: Array.isArray(input.billingWebhookEvents) ? input.billingWebhookEvents : [],
@@ -1634,5 +1697,21 @@ export function shouldBlockEmptyLearningSnapshotOverwrite(
     existingSnapshot &&
     countLearningEvidenceRecords(existingSnapshot.backup) > 0 &&
     countLearningEvidenceRecords(incomingBackup) === 0,
+  );
+}
+
+export function shouldBlockLearningSnapshotRegression(
+  existingSnapshot: CloudLearningSnapshotRecord | undefined,
+  incomingBackup: LearningBackupSnapshot,
+): boolean {
+  if (!existingSnapshot) return false;
+  const current = existingSnapshot.backup.data;
+  const incoming = incomingBackup.data;
+  return (
+    incoming.studyGoals.length < current.studyGoals.length ||
+    incoming.practiceSessions.length < current.practiceSessions.length ||
+    incoming.attempts.length < current.attempts.length ||
+    incoming.reviewItems.length < current.reviewItems.length ||
+    incoming.skillProfiles.length < current.skillProfiles.length
   );
 }

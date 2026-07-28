@@ -87,6 +87,12 @@ function getDaysRemaining(examDate?: string): number {
   return Math.max(0, Math.ceil((target.getTime() - todayStart.getTime()) / 86400000));
 }
 
+function isPastExamDate(examDate?: string): boolean {
+  if (!examDate) return false;
+  const target = new Date(`${examDate}T23:59:59`);
+  return !Number.isNaN(target.getTime()) && target.getTime() < Date.now();
+}
+
 function countDueReviews(reviewItems: ReviewItem[]): number {
   return getDueWrongQuestionReviewItemsOn(reviewItems).length;
 }
@@ -261,6 +267,7 @@ function buildGrammarTopicPassage(topicId: GrammarStructureTopicId, attempts: At
 type PracticeJumpTarget = {
   moduleId: 'vocabulary' | 'cloze' | 'grammar' | 'reading' | 'listening' | 'writing' | 'translation';
   questionId: string;
+  replayAttempt?: Attempt;
 };
 
 type LearningSyncState = 'syncing' | 'synced' | 'pending';
@@ -308,6 +315,7 @@ function StudyApp() {
   });
   const [speakingScoreChange, setSpeakingScoreChange] = useState<{ from: number; to: number } | undefined>(undefined);
   const examCountdown = getDaysRemaining(activeGoal?.examDate);
+  const examDateExpired = isPastExamDate(activeGoal?.examDate);
   const activeExamId = activeGoal?.examId ?? 'cet4';
   const activeExamName = getExamRegistryEntry(activeExamId)?.profile.name ?? 'CET-4';
   const estimatedScore = estimateCetScore(persistedSkillProfiles);
@@ -363,6 +371,7 @@ function StudyApp() {
   );
   const practiceJumpAttempt = useMemo(() => {
     if (!practiceJumpTarget) return undefined;
+    if (practiceJumpTarget.replayAttempt) return practiceJumpTarget.replayAttempt;
     const legacyListeningId = practiceJumpTarget.moduleId === 'listening'
       ? LISTENING_QUESTION_LEGACY_IDS.get(String(practiceJumpTarget.questionId))
       : undefined;
@@ -483,7 +492,11 @@ function StudyApp() {
           if (mounted) {
             setLearningSyncState('synced');
           }
-          if (mounted && syncResult.downloadedEntities > 0) {
+          const recoveredEvidenceCount = syncResult.mergedCounts.practiceSessions
+            + syncResult.mergedCounts.attempts
+            + syncResult.mergedCounts.reviewItems
+            + syncResult.mergedCounts.skillProfiles;
+          if (mounted && syncResult.downloadedEntities > 0 && recoveredEvidenceCount > 0) {
             handleTriggerModal(
               '已同步云端学习数据',
               `这台设备已从服务端恢复学习记录：练习 ${syncResult.mergedCounts.practiceSessions} 组、答题 ${syncResult.mergedCounts.attempts} 条、复习 ${syncResult.mergedCounts.reviewItems} 项、画像 ${syncResult.mergedCounts.skillProfiles} 项。`,
@@ -752,8 +765,8 @@ function StudyApp() {
     startLearningWithReviewReminder('完形填空训练', () => setIsPracticing(true));
   };
 
-  const handleStartVocabularyPractice = (questionId?: string) => {
-    setPracticeJumpTarget(questionId ? { moduleId: 'vocabulary', questionId } : null);
+  const handleStartVocabularyPractice = (questionId?: string, replayAttempt?: Attempt) => {
+    setPracticeJumpTarget(questionId ? { moduleId: 'vocabulary', questionId, replayAttempt } : null);
     startLearningWithReviewReminder('单词练习', () => setIsVocabularyPracticing(true));
   };
 
@@ -825,7 +838,7 @@ function StudyApp() {
   };
 
   const handleCompletePractice = (score: number, report: PracticeCompletionReport) => {
-    void completeAndShowProgress(
+    return completeAndShowProgress(
       score,
       report,
       () => setIsPracticing(false),
@@ -941,6 +954,7 @@ function StudyApp() {
             onTriggerModal={handleTriggerModal}
             readingProgress={readingProgress}
             examCountdown={examCountdown}
+            examDateExpired={examDateExpired}
             targetScore={activeGoal?.targetScore ?? targetScoreLimit ?? 550}
             estimatedScore={estimatedScore}
             abilityEvidenceCount={abilityEvidenceCount}
@@ -1056,6 +1070,7 @@ function StudyApp() {
             onTriggerModal={handleTriggerModal}
             readingProgress={readingProgress}
             examCountdown={examCountdown}
+            examDateExpired={examDateExpired}
             targetScore={activeGoal?.targetScore ?? targetScoreLimit ?? 550}
             estimatedScore={estimatedScore}
             abilityEvidenceCount={abilityEvidenceCount}
@@ -1078,7 +1093,7 @@ function StudyApp() {
   return (
     <div className="app-page-surface min-h-screen bg-slate-50 flex flex-col lg:flex-row font-sans antialiased text-[#1e333c]">
       <div
-        className={`pointer-events-none fixed bottom-3 right-3 z-40 flex min-h-9 max-w-[calc(100vw-1.5rem)] items-center gap-2 rounded-lg border bg-white px-3 py-2 text-xs font-bold shadow-sm ${
+        className={`pointer-events-none order-last mx-4 mb-4 flex min-h-9 items-center gap-2 rounded-lg border bg-white px-3 py-2 text-xs font-bold shadow-sm sm:fixed sm:bottom-3 sm:right-3 sm:z-40 sm:m-0 sm:max-w-[calc(100vw-1.5rem)] ${
           learningSyncState === 'pending'
             ? 'border-amber-300 text-amber-800'
             : learningSyncState === 'syncing'

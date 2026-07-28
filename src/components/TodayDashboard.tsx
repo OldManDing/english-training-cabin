@@ -26,6 +26,7 @@ interface TodayDashboardProps {
   onTriggerModal?: (title: string, body: string) => void;
   readingProgress: { completed: boolean; score?: number };
   examCountdown?: number;
+  examDateExpired?: boolean;
   targetScore?: number;
   targetExamName?: string;
   estimatedScore?: number;
@@ -59,6 +60,7 @@ export default function TodayDashboard({
   onTriggerModal,
   readingProgress,
   examCountdown = 0,
+  examDateExpired = false,
   targetScore = 550,
   targetExamName = '大学英语四级',
   estimatedScore,
@@ -319,13 +321,23 @@ export default function TodayDashboard({
                 <History className="h-4 w-4" />
                 专项已答
               </button>
-              <div className="ui-chip">
+              <div className={examDateExpired ? 'ui-chip border-amber-200 bg-amber-50 text-amber-800' : 'ui-chip'}>
                 <Clock className="h-4 w-4 text-[#003178]" />
-                距离考试还有 {examCountdown} 天
+                {examDateExpired ? '考试日期已过' : `距离考试还有 ${examCountdown} 天`}
               </div>
             </div>
           </div>
         </header>
+
+        {examDateExpired && (
+          <section role="alert" className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-sm font-black text-amber-900">训练目标日期需要更新</h3>
+              <p className="mt-1 text-xs font-semibold leading-5 text-amber-800">当前计划仍可继续训练，但倒计时和强度估算已失效。</p>
+            </div>
+            <button type="button" onClick={onOpenSettings} className="ui-button ui-button-warning shrink-0">更新考试日期</button>
+          </section>
+        )}
 
         {!hasAbilityEvidence && (
           <section data-testid="three-minute-start" className="ui-panel-soft">

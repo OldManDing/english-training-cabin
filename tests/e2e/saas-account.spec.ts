@@ -140,7 +140,7 @@ test('SaaS account trial can sync and restore local learning data', async ({ pag
   await page.getByTestId('saas-password-input').fill('secure-password-1');
   await page.getByTestId('saas-auth-submit').click();
 
-  await expect(page.getByTestId('saas-recovery-code')).toBeVisible();
+  await expect(page.getByTestId('saas-recovery-code')).toBeVisible({ timeout: 15_000 });
   await page.getByTestId('saas-enter-app').click();
   await expect(page.getByRole('heading', { name: '今日训练' })).toBeVisible();
   await page.getByRole('button', { name: '设置' }).click();
@@ -193,7 +193,32 @@ test('SaaS account trial can sync and restore local learning data', async ({ pag
   await page.getByTestId('saas-password-input').fill('member-secure-password-1');
   await page.getByTestId('saas-auth-submit').click();
   await expect(page.getByText('邀请已接受，您已加入团队。')).toBeVisible();
+  await expect(page.getByTestId('learning-workspace-notice')).toContainText('旧账号的');
   await expect(page.getByTestId('saas-recovery-code')).toBeVisible();
+
+  const isolatedWorkspace = await page.evaluate(async () => {
+    function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
+      return new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('english-training-cabin');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const stores = ['studyGoals', 'practiceSessions', 'attempts', 'reviewItems', 'skillProfiles'];
+    const tx = db.transaction([...stores, 'learningWorkspaceMeta', 'learningWorkspaceArchives'], 'readonly');
+    const counts = await Promise.all(stores.map((store) => requestToPromise(tx.objectStore(store).count())));
+    const meta = await requestToPromise(tx.objectStore('learningWorkspaceMeta').get('current'));
+    const archives = await requestToPromise(tx.objectStore('learningWorkspaceArchives').count());
+    db.close();
+    return { counts, meta, archives };
+  });
+  expect(isolatedWorkspace.counts).toEqual([0, 0, 0, 0, 0]);
+  expect(isolatedWorkspace.meta).toMatchObject({ id: 'current' });
+  expect(isolatedWorkspace.archives).toBeGreaterThanOrEqual(1);
 });
 
 test('SaaS login on a new device automatically restores existing cloud learning data', async ({ page, request }) => {

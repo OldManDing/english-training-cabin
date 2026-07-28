@@ -58,6 +58,7 @@ import {
   SaasStore,
   summarizeLearningSnapshot,
   shouldBlockEmptyLearningSnapshotOverwrite,
+  shouldBlockLearningSnapshotRegression,
   toPublicAccountContext,
   toPublicContentAssets,
   toPublicDataRequests,
@@ -2508,6 +2509,39 @@ Return JSON only with this shape:
     });
   }));
 
+  app.get('/api/cloud/learning-data/versions', requireSaasAuth, asyncRoute(async (_req, res) => {
+    const { account } = getSaasContext(res);
+    const [snapshot, versions] = await Promise.all([
+      saasStore.getLearningSnapshot(account.organization.id, account.user.id),
+      saasStore.listLearningSnapshotVersions(account.organization.id, account.user.id),
+    ]);
+    res.json({
+      current: snapshot ? summarizeLearningSnapshot(snapshot) : null,
+      versions: versions.map((version) => ({
+        id: version.id,
+        createdAt: version.createdAt,
+        ...summarizeLearningSnapshot(version),
+      })),
+    });
+  }));
+
+  app.get('/api/cloud/learning-data/versions/:versionId', requireSaasAuth, asyncRoute(async (req, res) => {
+    const { account } = getSaasContext(res);
+    const versions = await saasStore.listLearningSnapshotVersions(account.organization.id, account.user.id);
+    const version = versions.find((item) => item.id === req.params.versionId);
+    if (!version) {
+      throw new SaasApiError(404, 'learning_snapshot_version_not_found', '未找到这个学习数据恢复点。');
+    }
+    res.json({
+      version: {
+        id: version.id,
+        createdAt: version.createdAt,
+        updatedAt: version.updatedAt,
+        backup: version.backup,
+      },
+    });
+  }));
+
   app.put('/api/cloud/learning-data', requireSaasAuth, asyncRoute(async (req, res) => {
     const { account } = getSaasContext(res);
     const context = toPublicAccountContext(account);
@@ -2522,6 +2556,13 @@ Return JSON only with this shape:
         409,
         'empty_learning_snapshot_overwrite_blocked',
         '当前浏览器没有练习、答题或复习记录，已停止覆盖云端已有学习数据。请先从云端恢复，再继续同步。',
+      );
+    }
+    if (shouldBlockLearningSnapshotRegression(existingSnapshot, backup)) {
+      throw new SaasApiError(
+        409,
+        'learning_snapshot_regression_blocked',
+        '本次同步会减少服务器已有学习记录，已停止覆盖。请先从服务器重建，再合并本地备份。',
       );
     }
 

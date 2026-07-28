@@ -166,6 +166,19 @@ async function uploadLearningEntities(entities: LearningEntity[], token: string)
   return confirmed;
 }
 
+async function saveConsistencySnapshot(token: string): Promise<LearningDataBackup> {
+  const backup = await exportLearningData();
+  await apiRequest<CloudLearningResponse>(
+    '/api/cloud/learning-data',
+    {
+      method: 'PUT',
+      body: JSON.stringify({ backup }),
+    },
+    token,
+  );
+  return backup;
+}
+
 function filterEntitiesByIds(entities: LearningEntity[], ids: LearningEntityIds): LearningEntity[] {
   const requested = new Set<string>();
   ids.studyGoalIds?.forEach((id) => requested.add(`studyGoal:${id}`));
@@ -205,6 +218,7 @@ export function syncLearningEntityIds(ids: LearningEntityIds, token?: string): P
     }
     const confirmed = await uploadLearningEntities(entities, authToken);
     await mergeLearningData(learningEntitiesToBackup(confirmed));
+    await saveConsistencySnapshot(authToken);
     clearConfirmedPendingKeys(attemptedKeys);
     return entities.length;
   });
@@ -219,6 +233,7 @@ export function syncAllLocalLearningData(token?: string): Promise<number> {
     if (entities.length === 0) return 0;
     const confirmed = await uploadLearningEntities(entities, authToken);
     await mergeLearningData(learningEntitiesToBackup(confirmed));
+    await saveConsistencySnapshot(authToken);
     clearConfirmedPendingKeys(attemptedKeys);
     return entities.length;
   });
@@ -264,12 +279,13 @@ async function performAuthoritativeLearningDataSync(token?: string): Promise<Aut
   const mergedEntities = mergeLearningEntities(serverEntities, localEntities, confirmedEntities);
   const mergedBackup = learningEntitiesToBackup(mergedEntities);
   await mergeLearningData(mergedBackup);
+  const confirmedBackup = await saveConsistencySnapshot(authToken);
   const localByKey = new Map(localEntities.map((entity) => [entityKey(entity), entity]));
 
   return {
     localBeforeCounts: getLearningBackupCounts(localBackup),
     serverBeforeCounts: getLearningBackupCounts(learningEntitiesToBackup(serverEntities)),
-    mergedCounts: getLearningBackupCounts(mergedBackup),
+    mergedCounts: getLearningBackupCounts(confirmedBackup),
     uploadedEntities: uploadCandidates.length,
     downloadedEntities: mergedEntities.filter((entity) => {
       const localEntity = localByKey.get(entityKey(entity));

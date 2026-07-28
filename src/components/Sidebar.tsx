@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { BookOpen, Sparkles, FolderSync, Mic, BarChart3, DownloadCloud, Settings, HelpCircle, ClipboardCheck } from 'lucide-react';
 import { ActiveTab } from '../types';
 
@@ -10,6 +10,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ activeTab, setActiveTab, examCountdown, onTriggerModal }: SidebarProps) {
+  const primaryNavRef = useRef<HTMLElement>(null);
   const menuItems = [
     { id: 'today', label: '今日训练', icon: BookOpen },
     { id: 'practice', label: '专项练习', icon: Sparkles },
@@ -19,6 +20,12 @@ export default function Sidebar({ activeTab, setActiveTab, examCountdown, onTrig
     { id: 'progress', label: '能力进展', icon: BarChart3 },
     { id: 'import', label: '材料导入', icon: DownloadCloud },
   ] as const;
+
+  useEffect(() => {
+    primaryNavRef.current
+      ?.querySelector<HTMLElement>('[aria-current="page"]')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [activeTab]);
 
   return (
     <aside className="app-page-surface ui-sidebar sticky top-0 z-40 flex h-auto w-full shrink-0 flex-col border-b lg:h-screen lg:w-64 lg:justify-between lg:border-b-0 lg:border-r select-none">
@@ -37,7 +44,7 @@ export default function Sidebar({ activeTab, setActiveTab, examCountdown, onTrig
           <div className="h-[1px] w-full bg-[#e2e8f0]" />
         </div>
 
-        <nav className="px-3 pb-3 lg:p-3 flex lg:block gap-2 lg:space-y-1 overflow-x-auto overscroll-x-contain">
+        <nav ref={primaryNavRef} className="px-3 pb-3 lg:p-3 flex lg:block gap-2 lg:space-y-1 overflow-x-auto overscroll-x-contain">
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -45,6 +52,7 @@ export default function Sidebar({ activeTab, setActiveTab, examCountdown, onTrig
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
+                aria-current={isActive ? 'page' : undefined}
                 className={`ui-sidebar-item shrink-0 min-w-[116px] px-3 py-2.5 text-left text-xs font-semibold lg:w-full lg:min-w-0 lg:px-4 lg:py-3 ${
                   isActive ? 'ui-sidebar-item-active font-bold' : ''
                 }`}

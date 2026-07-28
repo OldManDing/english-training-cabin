@@ -1,5 +1,5 @@
 import { apiRequest } from '../api';
-import { exportLearningData, importLearningData } from './db';
+import { exportLearningData, mergeLearningData } from './db';
 import {
   getLearningBackupCounts,
   hasLearningEvidence,
@@ -66,7 +66,7 @@ export async function restoreCloudLearningDataWhenLocalEmpty(token: string): Pro
     };
   }
 
-  const importedCounts = await importLearningData(response.snapshot.backup);
+  const importedCounts = await mergeLearningData(response.snapshot.backup);
   return {
     status: 'restored',
     cloudUpdatedAt: response.snapshot.updatedAt,
