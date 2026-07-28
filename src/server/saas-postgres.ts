@@ -9,6 +9,7 @@ import {
   DataRequestRecord,
   hasSameLearningSnapshotData,
   OrganizationInvitationRecord,
+  OrganizationAuditEvent,
   SaasAccountRecord,
   SaasApiError,
   SaasOrganizationRecord,
@@ -1015,6 +1016,83 @@ export function createPostgresSaasStore(databaseUrl: string): SaasStore {
           blockedContentAssets: Number(row.blocked_content_assets),
           openDataRequests: Number(row.open_data_requests),
         };
+      });
+    },
+    getOrganizationDataProtectionSummary(organizationId) {
+      return withClient(async (client) => {
+        const result = await client.query(
+          `WITH protected_users AS (
+             SELECT user_id FROM learning_snapshots WHERE organization_id = $1
+             UNION
+             SELECT user_id FROM learning_entities WHERE organization_id = $1 AND deleted_at IS NULL
+           )
+           SELECT
+             (SELECT count(*)::int FROM users WHERE organization_id = $1) AS members,
+             (SELECT count(*)::int FROM protected_users) AS protected_members,
+             (SELECT count(*)::int FROM users WHERE organization_id = $1 AND id NOT IN (SELECT user_id FROM protected_users)) AS members_without_cloud_data,
+             (SELECT count(*)::int FROM learning_snapshot_versions WHERE organization_id = $1) AS snapshot_versions,
+             (SELECT count(*)::int FROM learning_entities WHERE organization_id = $1 AND entity_type = 'practiceDraft' AND deleted_at IS NULL) AS active_practice_drafts,
+             (SELECT max(updated_at) FROM learning_snapshots WHERE organization_id = $1) AS latest_snapshot_at,
+             (SELECT max(updated_at) FROM learning_entities WHERE organization_id = $1 AND deleted_at IS NULL) AS latest_entity_at`,
+          [organizationId],
+        );
+        const row = result.rows[0] as Record<string, unknown>;
+        return {
+          members: Number(row.members),
+          protectedMembers: Number(row.protected_members),
+          membersWithoutCloudData: Number(row.members_without_cloud_data),
+          snapshotVersions: Number(row.snapshot_versions),
+          activePracticeDrafts: Number(row.active_practice_drafts),
+          latestSnapshotAt: toIso(row.latest_snapshot_at as Date | string | null),
+          latestEntityAt: toIso(row.latest_entity_at as Date | string | null),
+        };
+      });
+    },
+    listOrganizationAuditEvents(organizationId, limit = 50) {
+      return withClient(async (client) => {
+        const result = await client.query(
+          `SELECT event_type, source_id, actor_user_id, subject_user_id, occurred_at
+           FROM (
+             SELECT 'account.session_created'::text AS event_type, id::text AS source_id, user_id AS actor_user_id, user_id AS subject_user_id, created_at AS occurred_at
+             FROM sessions WHERE organization_id = $1
+             UNION ALL
+             SELECT 'account.session_revoked', id::text, user_id, user_id, revoked_at
+             FROM sessions WHERE organization_id = $1 AND revoked_at IS NOT NULL
+             UNION ALL
+             SELECT 'learning.snapshot_saved', id::text, user_id, user_id, created_at
+             FROM learning_snapshot_versions WHERE organization_id = $1
+             UNION ALL
+             SELECT 'workspace.invitation_created', id::text, invited_by_user_id, NULL::uuid, created_at
+             FROM organization_invitations WHERE organization_id = $1
+             UNION ALL
+             SELECT 'workspace.invitation_accepted', invitation.id::text, accepted_user.id, accepted_user.id, invitation.accepted_at
+             FROM organization_invitations invitation
+             LEFT JOIN users accepted_user ON accepted_user.organization_id = invitation.organization_id AND accepted_user.email = invitation.email
+             WHERE invitation.organization_id = $1 AND invitation.accepted_at IS NOT NULL
+             UNION ALL
+             SELECT 'content.asset_created', id::text, owner_user_id, NULL::uuid, created_at
+             FROM content_assets WHERE organization_id = $1
+             UNION ALL
+             SELECT 'content.asset_updated', id::text, owner_user_id, NULL::uuid, updated_at
+             FROM content_assets WHERE organization_id = $1 AND updated_at > created_at
+             UNION ALL
+             SELECT 'compliance.request_created', id::text, user_id, user_id, created_at
+             FROM data_requests WHERE organization_id = $1
+             UNION ALL
+             SELECT 'compliance.request_resolved', id::text, NULL::uuid, user_id, completed_at
+             FROM data_requests WHERE organization_id = $1 AND completed_at IS NOT NULL
+           ) events
+           ORDER BY occurred_at DESC
+           LIMIT $2`,
+          [organizationId, Math.max(1, Math.min(100, limit))],
+        );
+        return result.rows.map((row) => ({
+          type: String(row.event_type) as OrganizationAuditEvent['type'],
+          sourceId: String(row.source_id),
+          actorUserId: row.actor_user_id ? String(row.actor_user_id) : undefined,
+          subjectUserId: row.subject_user_id ? String(row.subject_user_id) : undefined,
+          occurredAt: toIso(row.occurred_at as Date | string)!,
+        }));
       });
     },
   };

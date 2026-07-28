@@ -1906,9 +1906,22 @@ describe('server API', () => {
   });
 
   it('supports non-payment SaaS commercial operations from API to governance queues', async () => {
+    const dataProtectionRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'english-training-protection-'));
+    const dataProtectionStatusFile = path.join(dataProtectionRoot, 'status.json');
+    await fs.writeFile(dataProtectionStatusFile, JSON.stringify({
+      schemaVersion: 1,
+      backupId: 'scheduled-api-test',
+      release: 'api-test-release',
+      completedAt: new Date().toISOString(),
+      status: 'passed',
+      databaseBytes: 4096,
+      appDataBytes: 2048,
+      restoreDrill: { status: 'passed', countsMatched: true },
+    }), 'utf8');
     const saasApp = createApp({
       saasStore: createInMemorySaasStore(),
       saasSessionSecret: 'commercial-ops-secret',
+      dataProtectionStatusFile,
     });
 
     const owner = await request(saasApp)
@@ -2075,7 +2088,29 @@ describe('server API', () => {
       contentAssets: 1,
       openDataRequests: 0,
     });
+    expect(operations.body.dataProtection).toMatchObject({
+      members: 2,
+      protectedMembers: 0,
+      membersWithoutCloudData: 2,
+      snapshotVersions: 0,
+      activePracticeDrafts: 0,
+      infrastructure: {
+        state: 'healthy',
+        backupId: 'scheduled-api-test',
+        restoreDrill: { status: 'passed', countsMatched: true },
+      },
+    });
+    expect(operations.body.auditEvents.map((event: { type: string }) => event.type)).toEqual(expect.arrayContaining([
+      'account.session_created',
+      'workspace.invitation_created',
+      'workspace.invitation_accepted',
+      'content.asset_created',
+      'content.asset_updated',
+      'compliance.request_created',
+      'compliance.request_resolved',
+    ]));
     expect(operations.body.observability.api.requestsTotal).toBeGreaterThan(0);
+    await fs.rm(dataProtectionRoot, { recursive: true, force: true });
   });
 
   it('keeps strict CSP in test and production-like runtime', () => {

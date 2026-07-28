@@ -161,6 +161,35 @@ export interface OrganizationInvitationRecord {
   createdAt: string;
 }
 
+export interface OrganizationDataProtectionSummary {
+  members: number;
+  protectedMembers: number;
+  membersWithoutCloudData: number;
+  snapshotVersions: number;
+  activePracticeDrafts: number;
+  latestSnapshotAt?: string;
+  latestEntityAt?: string;
+}
+
+export type OrganizationAuditEventType =
+  | 'account.session_created'
+  | 'account.session_revoked'
+  | 'learning.snapshot_saved'
+  | 'workspace.invitation_created'
+  | 'workspace.invitation_accepted'
+  | 'content.asset_created'
+  | 'content.asset_updated'
+  | 'compliance.request_created'
+  | 'compliance.request_resolved';
+
+export interface OrganizationAuditEvent {
+  type: OrganizationAuditEventType;
+  sourceId: string;
+  actorUserId?: string;
+  subjectUserId?: string;
+  occurredAt: string;
+}
+
 export interface SaasDatabaseShape {
   schemaVersion: 3;
   users: SaasUserRecord[];
@@ -303,6 +332,8 @@ export interface SaasStore {
     blockedContentAssets: number;
     openDataRequests: number;
   }>;
+  getOrganizationDataProtectionSummary(organizationId: string): Promise<OrganizationDataProtectionSummary>;
+  listOrganizationAuditEvents(organizationId: string, limit?: number): Promise<OrganizationAuditEvent[]>;
 }
 
 export interface PublicSaasAccountContext {
@@ -1125,6 +1156,125 @@ function createStoreFromDatabase(options: {
           request.organizationId === organizationId && (request.status === 'queued' || request.status === 'processing'),
         ).length,
       }));
+    },
+    getOrganizationDataProtectionSummary(organizationId) {
+      return read((db) => {
+        const members = db.users.filter((user) => user.organizationId === organizationId);
+        const snapshots = db.learningSnapshots.filter((snapshot) => snapshot.organizationId === organizationId);
+        const snapshotVersions = db.learningSnapshotVersions.filter((snapshot) => snapshot.organizationId === organizationId);
+        const activeEntities = db.learningEntities.filter((entity) =>
+          entity.organizationId === organizationId && !entity.deletedAt,
+        );
+        const protectedUserIds = new Set([
+          ...snapshots.map((snapshot) => snapshot.userId),
+          ...activeEntities.map((entity) => entity.userId),
+        ]);
+        return {
+          members: members.length,
+          protectedMembers: members.filter((member) => protectedUserIds.has(member.id)).length,
+          membersWithoutCloudData: members.filter((member) => !protectedUserIds.has(member.id)).length,
+          snapshotVersions: snapshotVersions.length,
+          activePracticeDrafts: activeEntities.filter((entity) => entity.entityType === 'practiceDraft').length,
+          latestSnapshotAt: snapshots.map((snapshot) => snapshot.updatedAt).sort().at(-1),
+          latestEntityAt: activeEntities.map((entity) => entity.updatedAt).sort().at(-1),
+        };
+      });
+    },
+    listOrganizationAuditEvents(organizationId, limit = 50) {
+      return read((db) => {
+        const events: OrganizationAuditEvent[] = [];
+        db.sessions
+          .filter((session) => session.organizationId === organizationId)
+          .forEach((session) => {
+            events.push({
+              type: 'account.session_created',
+              sourceId: session.id,
+              actorUserId: session.userId,
+              subjectUserId: session.userId,
+              occurredAt: session.createdAt,
+            });
+            if (session.revokedAt) {
+              events.push({
+                type: 'account.session_revoked',
+                sourceId: session.id,
+                actorUserId: session.userId,
+                subjectUserId: session.userId,
+                occurredAt: session.revokedAt,
+              });
+            }
+          });
+        db.learningSnapshotVersions
+          .filter((version) => version.organizationId === organizationId)
+          .forEach((version) => events.push({
+            type: 'learning.snapshot_saved',
+            sourceId: version.id,
+            actorUserId: version.userId,
+            subjectUserId: version.userId,
+            occurredAt: version.createdAt,
+          }));
+        db.organizationInvitations
+          .filter((invitation) => invitation.organizationId === organizationId)
+          .forEach((invitation) => {
+            events.push({
+              type: 'workspace.invitation_created',
+              sourceId: invitation.id,
+              actorUserId: invitation.invitedByUserId,
+              occurredAt: invitation.createdAt,
+            });
+            if (invitation.acceptedAt) {
+              const acceptedUser = db.users.find((user) =>
+                user.organizationId === organizationId && user.email === invitation.email,
+              );
+              events.push({
+                type: 'workspace.invitation_accepted',
+                sourceId: invitation.id,
+                actorUserId: acceptedUser?.id,
+                subjectUserId: acceptedUser?.id,
+                occurredAt: invitation.acceptedAt,
+              });
+            }
+          });
+        db.contentAssets
+          .filter((asset) => asset.organizationId === organizationId)
+          .forEach((asset) => {
+            events.push({
+              type: 'content.asset_created',
+              sourceId: asset.id,
+              actorUserId: asset.ownerUserId,
+              occurredAt: asset.createdAt,
+            });
+            if (asset.updatedAt > asset.createdAt) {
+              events.push({
+                type: 'content.asset_updated',
+                sourceId: asset.id,
+                actorUserId: asset.ownerUserId,
+                occurredAt: asset.updatedAt,
+              });
+            }
+          });
+        db.dataRequests
+          .filter((request) => request.organizationId === organizationId)
+          .forEach((request) => {
+            events.push({
+              type: 'compliance.request_created',
+              sourceId: request.id,
+              actorUserId: request.userId,
+              subjectUserId: request.userId,
+              occurredAt: request.createdAt,
+            });
+            if (request.completedAt) {
+              events.push({
+                type: 'compliance.request_resolved',
+                sourceId: request.id,
+                subjectUserId: request.userId,
+                occurredAt: request.completedAt,
+              });
+            }
+          });
+        return events
+          .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))
+          .slice(0, Math.max(1, Math.min(100, limit)));
+      });
     },
   };
 }

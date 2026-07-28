@@ -162,6 +162,9 @@ test('SaaS account trial can sync and restore local learning data', async ({ pag
   await expect(page.getByText('团队与数据管理（高级）')).toBeVisible();
   await page.getByTestId('saas-ops-toggle').click();
   await expect(page.getByText('团队协作与数据安全')).toBeVisible();
+  await expect(page.getByTestId('data-protection-center')).toContainText('数据保护');
+  await expect(page.getByTestId('data-protection-center')).toContainText('账号覆盖');
+  await expect(page.getByTestId('operations-audit-log')).toContainText('最近操作');
 
   await page.getByTestId('saas-invite-email').fill(`member-${Date.now()}@example.com`);
   await page.getByRole('button', { name: '邀请', exact: true }).click();

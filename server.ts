@@ -72,6 +72,7 @@ import {
   verifySessionToken,
 } from './src/server/saas';
 import { createPostgresSaasStore } from './src/server/saas-postgres';
+import { readInfrastructureProtectionStatus } from './src/server/dataProtection';
 import {
   canGenerateLocalRealPaperListeningAudio,
   findLocalRealPaperFile,
@@ -1702,6 +1703,8 @@ export interface CreateAppOptions {
   saasSessionSecret?: string | null;
   billingWebhookSecret?: string;
   feedbackFilePath?: string;
+  dataProtectionStatusFile?: string;
+  dataProtectionStaleAfterHours?: number;
 }
 
 type AuthenticatedSaasContext = {
@@ -1759,6 +1762,9 @@ export function createApp(options: CreateAppOptions = {}) {
   const saasSessionSecret = options.saasSessionSecret ?? getSaasSessionSecret();
   const billingWebhookSecret = options.billingWebhookSecret ?? readEnvironmentValue('BILLING_WEBHOOK_SECRET');
   const feedbackFilePath = options.feedbackFilePath ?? getDefaultFeedbackFilePath();
+  const dataProtectionStatusFile = options.dataProtectionStatusFile ?? readEnvironmentValue('DATA_PROTECTION_STATUS_FILE');
+  const dataProtectionStaleAfterHours = options.dataProtectionStaleAfterHours
+    ?? Math.max(1, Math.min(168, Number(readEnvironmentValue('DATA_PROTECTION_STALE_AFTER_HOURS') ?? 36)));
 
   const issueAccountSession = async (account: SaasAccountRecord, req?: Request) => {
     const secret = requireSaasSessionSecret(saasSessionSecret);
@@ -2360,13 +2366,41 @@ Return JSON only with this shape:
     if (account.user.role !== 'owner') {
       throw new SaasApiError(403, 'forbidden', '只有团队所有者可以查看运营概览。');
     }
-    const overview = await saasStore.getOrganizationAdminOverview(account.organization.id);
+    const [overview, dataProtection, auditEvents, infrastructure, members] = await Promise.all([
+      saasStore.getOrganizationAdminOverview(account.organization.id),
+      saasStore.getOrganizationDataProtectionSummary(account.organization.id),
+      saasStore.listOrganizationAuditEvents(account.organization.id, 30),
+      readInfrastructureProtectionStatus(dataProtectionStatusFile, {
+        staleAfterHours: dataProtectionStaleAfterHours,
+      }),
+      saasStore.listOrganizationMembers(account.organization.id),
+    ]);
+    const membersById = new Map(members.map((member) => [member.id, member]));
     res.json({
       organization: {
         id: account.organization.id,
         name: account.organization.name,
       },
       overview,
+      dataProtection: {
+        ...dataProtection,
+        infrastructure,
+      },
+      auditEvents: auditEvents.map((event) => ({
+        ...event,
+        actor: event.actorUserId && membersById.has(event.actorUserId)
+          ? {
+              id: event.actorUserId,
+              name: membersById.get(event.actorUserId)!.name,
+            }
+          : undefined,
+        subject: event.subjectUserId && membersById.has(event.subjectUserId)
+          ? {
+              id: event.subjectUserId,
+              name: membersById.get(event.subjectUserId)!.name,
+            }
+          : undefined,
+      })),
       observability: getObservabilitySummary(),
       store: saasStore.kind,
     });

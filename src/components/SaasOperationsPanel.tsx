@@ -3,7 +3,9 @@ import {
   Activity,
   CheckCircle2,
   ChevronDown,
+  DatabaseBackup,
   FileCheck2,
+  History,
   KeyRound,
   RefreshCw,
   ShieldAlert,
@@ -91,6 +93,44 @@ interface DataRequest {
 interface OperationalSummary {
   overview: AdminOverview;
   store: 'memory' | 'file' | 'postgres';
+  dataProtection: {
+    members: number;
+    protectedMembers: number;
+    membersWithoutCloudData: number;
+    snapshotVersions: number;
+    activePracticeDrafts: number;
+    latestSnapshotAt?: string;
+    latestEntityAt?: string;
+    infrastructure: {
+      state: 'healthy' | 'stale' | 'failed' | 'not_configured';
+      backupId?: string;
+      release?: string;
+      completedAt?: string;
+      ageHours?: number;
+      databaseBytes?: number;
+      appDataBytes?: number;
+      restoreDrill?: {
+        status: 'passed' | 'failed';
+        countsMatched: boolean;
+      };
+    };
+  };
+  auditEvents: Array<{
+    type:
+      | 'account.session_created'
+      | 'account.session_revoked'
+      | 'learning.snapshot_saved'
+      | 'workspace.invitation_created'
+      | 'workspace.invitation_accepted'
+      | 'content.asset_created'
+      | 'content.asset_updated'
+      | 'compliance.request_created'
+      | 'compliance.request_resolved';
+    sourceId: string;
+    occurredAt: string;
+    actor?: { id: string; name: string };
+    subject?: { id: string; name: string };
+  }>;
   observability: {
     api: { requestsTotal: number; errorsTotal: number; errorRate: number };
     ai: { requestsTotal: number; fallbacksTotal: number; fallbackRate: number; averageLatencyMs: number };
@@ -151,6 +191,32 @@ function compactDeviceLabel(userAgent?: string) {
   if (userAgent.includes('Safari/')) return 'Safari';
   return userAgent.slice(0, 42);
 }
+
+function formatBytes(value?: number) {
+  if (!Number.isFinite(value)) return '暂无';
+  if ((value ?? 0) < 1024) return `${Math.max(0, value ?? 0)} B`;
+  if ((value ?? 0) < 1024 * 1024) return `${Math.round((value ?? 0) / 1024)} KB`;
+  return `${((value ?? 0) / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+const protectionStateLabels: Record<OperationalSummary['dataProtection']['infrastructure']['state'], string> = {
+  healthy: '恢复演练通过',
+  stale: '备份已过期',
+  failed: '备份校验失败',
+  not_configured: '未接入自动备份',
+};
+
+const auditEventLabels: Record<OperationalSummary['auditEvents'][number]['type'], string> = {
+  'account.session_created': '设备登录',
+  'account.session_revoked': '会话撤销',
+  'learning.snapshot_saved': '学习恢复点更新',
+  'workspace.invitation_created': '团队邀请创建',
+  'workspace.invitation_accepted': '团队邀请接受',
+  'content.asset_created': '内容资产登记',
+  'content.asset_updated': '内容授权更新',
+  'compliance.request_created': '数据请求提交',
+  'compliance.request_resolved': '数据请求结案',
+};
 
 export default function SaasOperationsPanel({ token, account, onStatus }: SaasOperationsPanelProps) {
   const [sessions, setSessions] = useState<PublicSession[]>([]);
@@ -316,6 +382,59 @@ export default function SaasOperationsPanel({ token, account, onStatus }: SaasOp
         </div>
       )}
 
+      {isOwner && operationalSummary && (
+        <section className="rounded-2xl bg-white border border-[#dbeafe] p-4 space-y-3" data-testid="data-protection-center">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h5 className="text-[11px] font-black text-[#003178] flex items-center gap-2">
+                <DatabaseBackup className="h-4 w-4" />
+                数据保护
+              </h5>
+              <p className="mt-1 text-[10px] font-bold text-[#434652]">
+                最近云端更新 {formatDate(operationalSummary.dataProtection.latestEntityAt ?? operationalSummary.dataProtection.latestSnapshotAt)}
+              </p>
+            </div>
+            <span className={`shrink-0 rounded-full border px-3 py-1 text-[9.5px] font-black ${
+              operationalSummary.dataProtection.infrastructure.state === 'healthy'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                : operationalSummary.dataProtection.infrastructure.state === 'stale'
+                  ? 'border-amber-200 bg-amber-50 text-amber-700'
+                  : 'border-rose-200 bg-rose-50 text-rose-700'
+            }`}>
+              {protectionStateLabels[operationalSummary.dataProtection.infrastructure.state]}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="border-l-2 border-emerald-500 bg-[#f8fafc] px-3 py-2">
+              <p className="text-[9px] font-black text-[#434652]">账号覆盖</p>
+              <p className="mt-1 text-sm font-black text-[#003178]">{operationalSummary.dataProtection.protectedMembers}/{operationalSummary.dataProtection.members}</p>
+            </div>
+            <div className="border-l-2 border-[#003178] bg-[#f8fafc] px-3 py-2">
+              <p className="text-[9px] font-black text-[#434652]">恢复点</p>
+              <p className="mt-1 text-sm font-black text-[#003178]">{operationalSummary.dataProtection.snapshotVersions}</p>
+            </div>
+            <div className="border-l-2 border-cyan-500 bg-[#f8fafc] px-3 py-2">
+              <p className="text-[9px] font-black text-[#434652]">云端草稿</p>
+              <p className="mt-1 text-sm font-black text-[#003178]">{operationalSummary.dataProtection.activePracticeDrafts}</p>
+            </div>
+            <div className="border-l-2 border-slate-400 bg-[#f8fafc] px-3 py-2">
+              <p className="text-[9px] font-black text-[#434652]">备份体积</p>
+              <p className="mt-1 text-sm font-black text-[#003178]">{formatBytes(operationalSummary.dataProtection.infrastructure.databaseBytes)}</p>
+            </div>
+          </div>
+          {operationalSummary.dataProtection.infrastructure.completedAt && (
+            <p className="text-[10px] font-bold text-[#434652]">
+              最近演练 {formatDate(operationalSummary.dataProtection.infrastructure.completedAt)} · 数据库 {formatBytes(operationalSummary.dataProtection.infrastructure.databaseBytes)} · 应用数据 {formatBytes(operationalSummary.dataProtection.infrastructure.appDataBytes)}
+            </p>
+          )}
+          {operationalSummary.dataProtection.membersWithoutCloudData > 0 && (
+            <p className="border-l-2 border-amber-500 bg-amber-50 px-3 py-2 text-[10px] font-black text-amber-800">
+              {operationalSummary.dataProtection.membersWithoutCloudData} 个成员尚未形成云端学习记录。
+            </p>
+          )}
+        </section>
+      )}
+
       <div className="grid grid-cols-1 gap-3">
         <section className="rounded-2xl bg-white border border-[#dbeafe] p-4 space-y-3">
           <h5 className="text-[11px] font-black text-[#003178] flex items-center gap-2">
@@ -460,6 +579,29 @@ export default function SaasOperationsPanel({ token, account, onStatus }: SaasOp
           ))}
         </div>
       </section>
+
+      {isOwner && operationalSummary && (
+        <section className="rounded-2xl bg-white border border-[#dbeafe] p-4 space-y-3" data-testid="operations-audit-log">
+          <h5 className="text-[11px] font-black text-[#003178] flex items-center gap-2">
+            <History className="h-4 w-4" />
+            最近操作
+          </h5>
+          <div className="max-h-64 divide-y divide-[#eef2ff] overflow-y-auto">
+            {operationalSummary.auditEvents.map((event) => (
+              <div key={`${event.type}-${event.sourceId}-${event.occurredAt}`} className="flex items-start justify-between gap-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black text-[#003178]">{auditEventLabels[event.type]}</p>
+                  <p className="truncate text-[9.5px] font-bold text-[#434652]">{event.actor?.name ?? event.subject?.name ?? '系统任务'}</p>
+                </div>
+                <time className="shrink-0 text-[9px] font-bold text-slate-500">{formatDate(event.occurredAt)}</time>
+              </div>
+            ))}
+            {operationalSummary.auditEvents.length === 0 && (
+              <p className="py-3 text-[10px] font-bold text-[#434652]">暂无操作记录。</p>
+            )}
+          </div>
+        </section>
+      )}
 
       {isOwner && operationalSummary && (
         <section className="rounded-2xl bg-[#eef7fc] border border-[#d2e2ec] p-4 space-y-2">
