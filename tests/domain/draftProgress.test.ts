@@ -12,6 +12,7 @@ vi.mock('../../src/lib/api', () => ({
 
 import {
   clearPracticeDraft,
+  clearPracticeDraftAfterCompletion,
   loadPracticeDraft,
   PRACTICE_DRAFT_SYNC_EVENT,
   preparePracticeDraftWorkspaceForAccount,
@@ -152,6 +153,29 @@ describe('account practice draft synchronization', () => {
     expect(storage.getItem(key)).toBeNull();
     const uploaded = JSON.parse(apiRequestMock.mock.calls.at(-1)?.[1].body);
     expect(uploaded.entities[0]).toMatchObject({ entityId: key, deletedAt: expect.any(String) });
+  });
+
+  it('only clears a draft after the completion record is confirmed', async () => {
+    const storage = installBrowserStorage();
+    apiRequestMock.mockResolvedValue({ entities: [] });
+    const key = practiceDraftKeys.subjective('writing');
+    savePracticeDraft(key, {
+      version: 1,
+      mode: 'writing',
+      startedAt: '2026-07-29T10:00:00.000Z',
+      taskIndex: 0,
+      answer: 'This answer must remain available after a failed save.',
+      updatedAt: '2026-07-29T10:00:00.000Z',
+    });
+
+    await expect(clearPracticeDraftAfterCompletion(key, async () => false)).resolves.toBe(false);
+    expect(loadPracticeDraft<{ answer: string }>(key)?.answer).toContain('must remain available');
+    expect(storage.getItem(key)).not.toContain('__practiceDraftDeleted');
+
+    await expect(clearPracticeDraftAfterCompletion(key, async () => true)).resolves.toBe(true);
+    expect(loadPracticeDraft(key)).toBeNull();
+    expect(storage.getItem(key)).toContain('__practiceDraftDeleted');
+    await vi.runAllTimersAsync();
   });
 
   it('keeps the global state pending when one of two concurrent saves fails', async () => {

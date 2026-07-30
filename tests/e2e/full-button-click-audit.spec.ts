@@ -238,6 +238,8 @@ async function tagVisibleButtons(page: Page, scopeSelector = 'main'): Promise<Bu
 }
 
 async function closeTransientUi(page: Page) {
+  // Completion modals may appear shortly after the initiating request resolves.
+  await page.waitForTimeout(300);
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const closeButtons = [
       page.getByRole('button', { name: '关闭提示' }),
@@ -321,10 +323,18 @@ async function auditVisibleButtonsForState(
 }
 
 async function goHome(page: Page) {
-  await closeTransientUi(page);
   const homeButton = page.getByRole('button', { name: '今日训练', exact: true }).first();
   if (await homeButton.isVisible({ timeout: 1_000 }).catch(() => false)) {
-    await homeButton.click({ timeout: 5_000 });
+    let reachedHome = false;
+    for (let attempt = 0; attempt < 3 && !reachedHome; attempt += 1) {
+      await closeTransientUi(page);
+      try {
+        await homeButton.click({ timeout: 3_000 });
+        reachedHome = true;
+      } catch (error) {
+        if (!/intercepts pointer events|Timeout/i.test(String(error)) || attempt === 2) throw error;
+      }
+    }
   } else {
     await page.goto('/');
   }

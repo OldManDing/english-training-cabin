@@ -349,7 +349,9 @@ export default function SaasOperationsPanel({ token, account, onStatus }: SaasOp
             团队协作与数据安全
           </h4>
           <p className="mt-1 text-[10.5px] font-bold leading-5 text-[#434652]">
-            面向团队所有者开放，集中处理账号安全、团队链接、内容授权、数据请求和聚合观测。
+            {isOwner
+              ? '集中处理账号安全、团队链接、内容授权、数据请求和聚合观测。'
+              : '查看自己的设备会话、成员信息和数据权利请求。'}
           </p>
         </div>
         <button

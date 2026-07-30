@@ -6,7 +6,7 @@ import { readAttemptTextAnswer } from '../domain/practice/attemptReplay';
 import {
   SubjectivePracticeDraft,
   clampDraftIndex,
-  clearPracticeDraft,
+  clearPracticeDraftAfterCompletion,
   loadPracticeDraft,
   practiceDraftKeys,
   savePracticeDraft,
@@ -23,7 +23,7 @@ interface SubjectiveTrainingProps {
   initialPromptId?: string;
   replayAttempt?: Attempt;
   onBack: () => void;
-  onComplete: (score: number, report: PracticeCompletionReport) => void;
+  onComplete: (score: number, report: PracticeCompletionReport) => Promise<boolean | void> | boolean | void;
 }
 
 const TASKS: Record<SubjectiveMode, {
@@ -125,7 +125,7 @@ const loadSubjectiveDraftState = (
     startedAt: draft.startedAt ?? fallback.startedAt,
     taskIndex: initialPromptId ? targetIndex : draftTaskIndex,
     answer: typeof draft.answer === 'string' ? draft.answer : '',
-    analysis: null,
+    analysis: draft.analysis && typeof draft.analysis.score === 'number' ? draft.analysis : null,
   };
 };
 
@@ -140,6 +140,7 @@ export default function SubjectiveTraining({ mode, initialPromptId, replayAttemp
   const [answer, setAnswer] = useState(initialDraft.answer);
   const [analysis, setAnalysis] = useState<SubjectivePracticeAnalysis | null>(initialDraft.analysis);
   const [isEvaluating, setIsEvaluating] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const promptItem = promptBank[taskIndex % promptBank.length];
   const writingChinesePrompt = mode === 'writing'
@@ -204,6 +205,15 @@ export default function SubjectiveTraining({ mode, initialPromptId, replayAttemp
         }),
       });
       setAnalysis(result);
+      savePracticeDraft<SubjectivePracticeDraft>(draftKey, {
+        version: 1,
+        mode,
+        startedAt,
+        taskIndex,
+        answer,
+        analysis: result,
+        updatedAt: new Date().toISOString(),
+      });
       trackTelemetry('subjective_evaluated', {
         mode,
         latencyMs: Math.round(performance.now() - started),
@@ -217,8 +227,8 @@ export default function SubjectiveTraining({ mode, initialPromptId, replayAttemp
     }
   };
 
-  const handleComplete = () => {
-    if (!analysis) return;
+  const handleComplete = async () => {
+    if (!analysis || isCompleting) return;
 
     const report = buildSubjectivePracticeReport({
       examId: 'cet4',
@@ -232,8 +242,12 @@ export default function SubjectiveTraining({ mode, initialPromptId, replayAttemp
       answer,
       analysis,
     });
-    clearPracticeDraft(draftKey);
-    onComplete(analysis.score, report);
+    setIsCompleting(true);
+    try {
+      await clearPracticeDraftAfterCompletion(draftKey, () => onComplete(analysis.score, report));
+    } finally {
+      setIsCompleting(false);
+    }
   };
 
   const Icon = mode === 'translation' ? Languages : FileText;
@@ -389,10 +403,11 @@ export default function SubjectiveTraining({ mode, initialPromptId, replayAttemp
 
               <button
                 onClick={handleComplete}
+                disabled={isCompleting}
                 className="ui-button ui-button-primary ui-button-full"
               >
-                <CheckCircle2 className="h-4 w-4" />
-                完成训练并写入能力画像
+                {isCompleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                {isCompleting ? '正在保存训练记录' : '完成训练并写入能力画像'}
               </button>
             </div>
           )}

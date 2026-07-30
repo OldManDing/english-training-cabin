@@ -338,7 +338,7 @@ export default function ReviewSection({
       triggerToast(`已按“${outcomeLabels[reviewOutcome]}”更新掌握度与下次间隔。`);
     } catch (error) {
       console.error('Failed to save review completion:', error);
-      triggerToast('复习已完成，但本地复习计划更新失败，请稍后重试。');
+      triggerToast('复习记录保存失败，本次尚未计入完成，请稍后重试。');
     } finally {
       setIsSaving(false);
     }

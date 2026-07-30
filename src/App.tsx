@@ -915,7 +915,7 @@ function StudyApp() {
   };
 
   const handleCompleteSubjectivePractice = (score: number, report: PracticeCompletionReport) => {
-    void completeAndShowProgress(
+    return completeAndShowProgress(
       score,
       report,
       () => setSubjectivePracticeMode(null),
@@ -959,7 +959,7 @@ function StudyApp() {
   };
 
   const handleCompleteMockExam = (score: number, report: PracticeCompletionReport) => {
-    void completeAndShowProgress(
+    return completeAndShowProgress(
       score,
       report,
       () => undefined,
@@ -1205,11 +1205,11 @@ function StudyApp() {
             practicedQuestionIds={practicedListeningQuestionIds}
             onBack={handleBackFromPractice}
             onAnswerRecorded={handleRecordChoiceAnswer}
-            onComplete={(score, report) => {
-              void completeAndShowProgress(
-                score,
-                report,
-                () => setIsListeningPracticing(false),
+              onComplete={(score, report) => {
+                return completeAndShowProgress(
+                  score,
+                  report,
+                  () => setIsListeningPracticing(false),
                 'listening_practice_persist',
                 '听力记录保存失败',
                 '本次听力记录没有成功写入本地数据库，页面暂不退出。请稍后重试。',

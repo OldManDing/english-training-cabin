@@ -31,7 +31,7 @@ import RealPaperPracticePanel, {
 } from './mockExam/RealPaperPracticePanel';
 import PracticeMethodGuide from './PracticeMethodGuide';
 import {
-  clearPracticeDraft,
+  clearPracticeDraftAfterCompletion,
   loadPracticeDraft,
   practiceDraftKeys,
   savePracticeDraft,
@@ -42,7 +42,7 @@ type MockExamPageMode = 'standard-mock' | 'real-paper';
 
 interface MockExamProps {
   onBack: () => void;
-  onComplete: (score: number, report: PracticeCompletionReport) => void;
+  onComplete: (score: number, report: PracticeCompletionReport) => Promise<boolean | void> | boolean | void;
   skillProfiles?: SkillProfile[];
   dailyPlan?: DailyPlan | null;
 }
@@ -345,8 +345,10 @@ export default function MockExam({ onComplete, skillProfiles = [], dailyPlan }: 
     if (!result) return;
     setIsCompleting(true);
     try {
-      await Promise.resolve(onComplete(result.score, result.report));
-      clearPracticeDraft(practiceDraftKeys.mockExam);
+      await clearPracticeDraftAfterCompletion(
+        practiceDraftKeys.mockExam,
+        () => onComplete(result.score, result.report),
+      );
     } finally {
       setIsCompleting(false);
     }

@@ -43,6 +43,7 @@ interface SaasAccountPanelProps {
 
 const INITIAL_CLOUD_STATUS = '登录后自动保存学习记录。';
 type AuthMode = 'login' | 'register' | 'invitation' | 'reset';
+type SessionCheckState = 'idle' | 'checking' | 'unavailable';
 
 function getInitialAuthAction(): { mode?: AuthMode; token?: string } {
   const token = new URLSearchParams(window.location.search).get('token') ?? undefined;
@@ -102,6 +103,8 @@ export default function SaasAccountPanel({ onTriggerModal, onServerDataRestored,
   const [token, setToken] = useState<string | null>(() => getStoredAuthToken());
   const latestTokenRef = useRef<string | null>(getStoredAuthToken());
   const [account, setAccount] = useState<PublicSaasAccountContext | null>(null);
+  const [sessionCheckState, setSessionCheckState] = useState<SessionCheckState>(() => token ? 'checking' : 'idle');
+  const [sessionCheckVersion, setSessionCheckVersion] = useState(0);
   const [statusText, setStatusText] = useState(INITIAL_CLOUD_STATUS);
   const [workspaceNotice, setWorkspaceNotice] = useState('');
   const [authError, setAuthError] = useState('');
@@ -157,9 +160,13 @@ export default function SaasAccountPanel({ onTriggerModal, onServerDataRestored,
   };
 
   useEffect(() => {
-    if (!token) return;
+    if (!token) {
+      setSessionCheckState('idle');
+      return;
+    }
     if (oneTimeRecoveryCode) return;
     let mounted = true;
+    setSessionCheckState('checking');
 
     apiRequest<{ authenticated: boolean; account: PublicSaasAccountContext | null }>('/api/auth/session', {}, token)
       .then((payload) => {
@@ -169,10 +176,12 @@ export default function SaasAccountPanel({ onTriggerModal, onServerDataRestored,
           latestTokenRef.current = null;
           setToken(null);
           setAccount(null);
+          setSessionCheckState('idle');
           setStatusText('登录状态已失效，请重新登录。');
           return;
         }
         setAccount(payload.account);
+        setSessionCheckState('idle');
         void refreshCloudSafetyStatus(token).catch((error) => {
           console.error('Failed to load cloud learning safety status:', error);
         });
@@ -184,17 +193,22 @@ export default function SaasAccountPanel({ onTriggerModal, onServerDataRestored,
       })
       .catch(() => {
         if (!mounted) return;
-        clearStoredAuthToken();
-        latestTokenRef.current = null;
-        setToken(null);
-        setAccount(null);
-        setStatusText('登录状态已失效，请重新登录。');
+        if (!getStoredAuthToken()) {
+          latestTokenRef.current = null;
+          setToken(null);
+          setAccount(null);
+          setSessionCheckState('idle');
+          setStatusText('登录状态已失效，请重新登录。');
+          return;
+        }
+        setSessionCheckState('unavailable');
+        setStatusText('暂时无法连接服务器，登录凭证和本地学习数据均已保留。');
       });
 
     return () => {
       mounted = false;
     };
-  }, [token, oneTimeRecoveryCode]);
+  }, [token, oneTimeRecoveryCode, sessionCheckVersion]);
 
   const handleAuthSubmit = async () => {
     setAuthError('');
@@ -396,7 +410,47 @@ export default function SaasAccountPanel({ onTriggerModal, onServerDataRestored,
         </div>
       )}
 
-      {!account ? (
+      {!account && token && sessionCheckState !== 'idle' ? (
+        <section
+          data-testid="saas-session-unavailable"
+          className="rounded-2xl border border-amber-200 bg-amber-50 p-4"
+          role={sessionCheckState === 'unavailable' ? 'alert' : 'status'}
+        >
+          <div className="flex items-start gap-3">
+            <RefreshCw className={`mt-0.5 h-4 w-4 shrink-0 text-amber-700 ${sessionCheckState === 'checking' ? 'animate-spin' : ''}`} />
+            <div className="min-w-0">
+              <h2 className="text-sm font-black text-amber-900">
+                {sessionCheckState === 'checking' ? '正在验证登录状态' : '暂时无法连接服务器'}
+              </h2>
+              <p className="mt-1 text-xs font-bold leading-5 text-amber-800">
+                {sessionCheckState === 'checking'
+                  ? '正在读取服务器账号信息。'
+                  : '登录凭证和本地学习数据均已保留，请检查网络后重试。'}
+              </p>
+            </div>
+          </div>
+          {sessionCheckState === 'unavailable' && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="ui-button ui-button-primary ui-button-compact"
+                onClick={() => setSessionCheckVersion((current) => current + 1)}
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                重试
+              </button>
+              <button
+                type="button"
+                className="ui-button ui-button-muted ui-button-compact"
+                onClick={handleLogout}
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                退出账号
+              </button>
+            </div>
+          )}
+        </section>
+      ) : !account ? (
         <form
           className="space-y-3"
           onSubmit={(event) => {

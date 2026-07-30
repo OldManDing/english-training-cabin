@@ -8,7 +8,7 @@ import {
   ChoicePracticeDraftAnswer,
   VocabularyPracticeDraft,
   clampDraftIndex,
-  clearPracticeDraft,
+  clearPracticeDraftAfterCompletion,
   loadPracticeDraft,
   practiceDraftKeys,
   savePracticeDraft,
@@ -485,8 +485,7 @@ export default function VocabularyTraining({
     });
     void recordWriteRef.current
       .then(async () => {
-        const completed = await onComplete(score, report);
-        if (completed !== false) clearPracticeDraft(draftKey);
+        await clearPracticeDraftAfterCompletion(draftKey, () => onComplete(score, report));
       })
       .finally(() => {
         isFinishingRef.current = false;

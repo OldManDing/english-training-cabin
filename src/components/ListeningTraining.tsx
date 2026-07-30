@@ -9,7 +9,7 @@ import {
   ListeningPracticeDraft,
   ListeningQuestionDraft,
   clampDraftIndex,
-  clearPracticeDraft,
+  clearPracticeDraftAfterCompletion,
   loadPracticeDraft,
   practiceDraftKeys,
   savePracticeDraft,
@@ -24,7 +24,7 @@ interface ListeningTrainingProps {
   initialQuestionId?: string;
   replayAttempt?: Attempt;
   onBack: () => void;
-  onComplete: (score: number, report: PracticeCompletionReport) => void;
+  onComplete: (score: number, report: PracticeCompletionReport) => Promise<boolean | void> | boolean | void;
   onAnswerRecorded?: (report: PracticeCompletionReport) => Promise<void> | void;
   practicedQuestionIds?: Iterable<string>;
 }
@@ -175,6 +175,7 @@ export default function ListeningTraining({
   
   // Accordion status
   const [isTranscriptionExpanded, setIsTranscriptionExpanded] = useState(true);
+  const [isCompleting, setIsCompleting] = useState(false);
 
   // Questions Database
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(initialDraft.currentQuestionIndex);
@@ -435,12 +436,12 @@ export default function ListeningTraining({
   };
 
   const handleNextQuestion = () => {
+    if (isCompleting) return;
     if (currentQuestionIndex < questions.length - 1) {
       const nextIndex = currentQuestionIndex + 1;
       setCurrentQuestionIndex(nextIndex);
       persistDraft(questions, nextIndex);
     } else {
-      clearPracticeDraft(practiceDraftKeys.listening);
       const submittedQuestions = questions.filter((question) => question.isSubmitted && question.selectedAnswer);
       const correctCalculated = submittedQuestions.filter(q => q.selectedAnswer === q.correctAnswer).length;
       const score = submittedQuestions.length > 0 ? Math.round((correctCalculated / submittedQuestions.length) * 100) : 0;
@@ -448,7 +449,12 @@ export default function ListeningTraining({
         sessionStatus: 'completed',
         includeEvidence: true,
       });
-      onComplete(score, report);
+      setIsCompleting(true);
+      void clearPracticeDraftAfterCompletion(
+        practiceDraftKeys.listening,
+        () => onComplete(score, report),
+      )
+        .finally(() => setIsCompleting(false));
     }
   };
 
@@ -995,11 +1001,12 @@ export default function ListeningTraining({
 
                 <button
                   onClick={handleNextQuestion}
+                  disabled={isCompleting}
                   data-testid="listening-next"
                   className="ui-button ui-button-primary ui-button-compact"
                 >
-                  <span>{currentQuestionIndex < questions.length - 1 ? '下一题' : '完成本次听力练习'}</span>
-                  <ArrowRight className="h-3.5 w-3.5" />
+                  <span>{isCompleting ? '正在保存训练记录' : currentQuestionIndex < questions.length - 1 ? '下一题' : '完成本次听力练习'}</span>
+                  {isCompleting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <ArrowRight className="h-3.5 w-3.5" />}
                 </button>
               </div>
             </div>

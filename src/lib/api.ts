@@ -45,7 +45,17 @@ export async function apiFetch(path: string, options: RequestInit = {}, token = 
 export async function apiRequest<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
   const response = await apiFetch(path, options, token ?? getStoredAuthToken());
   const text = await response.text();
-  const payload = text ? JSON.parse(text) as { message?: string } : null;
+  let payload: { message?: string } | null = null;
+  if (text) {
+    try {
+      payload = JSON.parse(text) as { message?: string };
+    } catch {
+      if (!response.ok) {
+        throw new Error(`服务器请求失败（${response.status}），请稍后重试。`);
+      }
+      throw new Error('服务器响应格式异常，请稍后重试。');
+    }
+  }
 
   if (!response.ok) {
     throw new Error(payload?.message || `请求失败：${response.status}`);

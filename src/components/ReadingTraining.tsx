@@ -8,7 +8,7 @@ import {
   ChoicePracticeDraftAnswer,
   ReadingPracticeDraft,
   clampDraftIndex,
-  clearPracticeDraft,
+  clearPracticeDraftAfterCompletion,
   loadPracticeDraft,
   practiceDraftKeys,
   savePracticeDraft,
@@ -23,7 +23,7 @@ interface ReadingTrainingProps {
   initialQuestionId?: string;
   replayAttempt?: Attempt;
   onBack: () => void;
-  onComplete: (score: number, report: PracticeCompletionReport) => Promise<void> | void;
+  onComplete: (score: number, report: PracticeCompletionReport) => Promise<boolean | void> | boolean | void;
   onAnswerRecorded?: (report: PracticeCompletionReport) => Promise<void> | void;
 }
 
@@ -446,7 +446,6 @@ export default function ReadingTraining({
         isSubmitted: Boolean(savedAnswer),
       });
     } else {
-      clearPracticeDraft(draftKey);
       // Calculate overall score
       const answeredCount = userAnswers.filter(Boolean).length;
       const correctCount = userAnswers.filter(ans => ans?.correct).length;
@@ -459,7 +458,7 @@ export default function ReadingTraining({
       setIsCompleting(true);
       void recordWriteRef.current
         .catch(() => undefined)
-        .then(() => onComplete(finalScore, report))
+        .then(() => clearPracticeDraftAfterCompletion(draftKey, () => onComplete(finalScore, report)))
         .finally(() => setIsCompleting(false));
     }
   };

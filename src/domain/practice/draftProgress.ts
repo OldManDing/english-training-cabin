@@ -1,5 +1,6 @@
 import { ChoiceOption } from '../../types';
 import { apiRequest, getStoredAuthToken } from '../../lib/api';
+import type { SubjectivePracticeAnalysis } from './reports';
 
 const DRAFT_KEY_PREFIX = 'english-training-cabin:practice-draft';
 const REAL_PAPER_DRAFT_KEY_PREFIX = 'english-training-cabin:local-real-paper-draft:v1:';
@@ -70,6 +71,7 @@ export interface SubjectivePracticeDraft {
   startedAt: string;
   taskIndex: number;
   answer: string;
+  analysis?: SubjectivePracticeAnalysis;
   updatedAt: string;
 }
 
@@ -303,6 +305,16 @@ export function clearPracticeDraft(key: string) {
     }
   }
   scheduleCloudDraftSync(toCloudEntity(key, null, deletedAt));
+}
+
+export async function clearPracticeDraftAfterCompletion(
+  key: string,
+  complete: () => Promise<boolean | void> | boolean | void,
+): Promise<boolean> {
+  const completed = await complete();
+  if (completed === false) return false;
+  clearPracticeDraft(key);
+  return true;
 }
 
 export function clearAllPracticeDrafts(options: { sync?: boolean } = {}) {

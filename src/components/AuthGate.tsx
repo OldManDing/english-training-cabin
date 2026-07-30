@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2, X } from 'lucide-react';
+import { Loader2, LogOut, RefreshCw, WifiOff, X } from 'lucide-react';
 import SaasAccountPanel, { PublicSaasAccountContext } from './SaasAccountPanel';
 import { apiRequest, AUTH_STATE_CHANGE_EVENT, clearStoredAuthToken, getStoredAuthToken } from '../lib/api';
 import { prepareLearningWorkspaceForAccount } from '../lib/storage/db';
@@ -9,11 +9,12 @@ interface AuthGateProps {
   children: React.ReactNode;
 }
 
-type AuthGateState = 'checking' | 'authenticated' | 'anonymous';
+type AuthGateState = 'checking' | 'authenticated' | 'anonymous' | 'unavailable';
 
 export default function AuthGate({ children }: AuthGateProps) {
   const [state, setState] = useState<AuthGateState>('checking');
   const [modalContent, setModalContent] = useState<{ title: string; body: string } | null>(null);
+  const [verificationAttempt, setVerificationAttempt] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -43,8 +44,7 @@ export default function AuthGate({ children }: AuthGateProps) {
         setState('anonymous');
       } catch {
         if (!mounted) return;
-        clearStoredAuthToken();
-        setState('anonymous');
+        setState(getStoredAuthToken() ? 'unavailable' : 'anonymous');
       }
     }
 
@@ -60,7 +60,7 @@ export default function AuthGate({ children }: AuthGateProps) {
       mounted = false;
       window.removeEventListener(AUTH_STATE_CHANGE_EVENT, handleAuthStateChange);
     };
-  }, []);
+  }, [verificationAttempt]);
 
   if (state === 'checking') {
     return (
@@ -75,6 +75,50 @@ export default function AuthGate({ children }: AuthGateProps) {
 
   if (state === 'authenticated') {
     return <>{children}</>;
+  }
+
+  if (state === 'unavailable') {
+    return (
+      <main className="app-page-surface flex min-h-[100svh] items-center justify-center bg-[#f4f6f8] px-4 py-6 sm:px-6">
+        <section className="w-full max-w-[380px] rounded-2xl border border-amber-200 bg-white p-5 shadow-sm">
+          <div className="flex items-start gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-700">
+              <WifiOff className="h-5 w-5" />
+            </span>
+            <div>
+              <h1 className="text-base font-black text-[#101828]">暂时无法连接服务器</h1>
+              <p className="mt-1 text-xs font-semibold leading-5 text-[#5d6675]">
+                登录凭证仍保留。网络恢复后可以继续验证当前账号。
+              </p>
+            </div>
+          </div>
+          <div className="mt-5 grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => {
+                setState('checking');
+                setVerificationAttempt((current) => current + 1);
+              }}
+              className="ui-button ui-button-primary ui-button-full"
+            >
+              <RefreshCw className="h-4 w-4" />
+              重试连接
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                clearStoredAuthToken();
+                setState('anonymous');
+              }}
+              className="ui-button ui-button-secondary ui-button-full"
+            >
+              <LogOut className="h-4 w-4" />
+              退出并重新登录
+            </button>
+          </div>
+        </section>
+      </main>
+    );
   }
 
   return (
