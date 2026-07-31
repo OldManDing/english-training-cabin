@@ -70,3 +70,16 @@
 - 发布前后计数未下降：用户 819、学习快照 242、学习实体 515、活动草稿 7、会话 865。
 - 生产基础 smoke、真实 AI/GA smoke、认证容错 Playwright 和桌面/移动端视觉 Playwright 均通过。
 - 线上 `current`、运行镜像、健康检查和构建资源均与最终发布标签一致。
+
+### 第二轮发布
+
+- 发布标签：`v1-20260731-evidence-backed-product-audit`
+- 发布提交：`d9ee19e`
+- 发布目录：`/opt/english-training-cabin/releases/v1-20260731-evidence-backed-product-audit`
+- 回滚目录：`/opt/english-training-cabin/releases/v1-20260731-functional-integrity-audit-r1`
+- 可恢复备份：`/opt/english-training-cabin/backups/scheduled/scheduled-20260731T124742Z`，数据库恢复演练、关键表计数和 SHA-256 均通过。
+- 部署审计：`/opt/english-training-cabin/backups/deploy-audits/v1-20260731-evidence-backed-product-audit-20260731T124830Z`。
+- 发布前后计数完全一致：组织 806、用户 820、学习快照 243、快照版本 273、学习实体 535、活动草稿 7、会话 866。
+- 生产基础 smoke 与 GA smoke 通过；线上真实浏览器 7 个关键用例通过，覆盖服务端确认失败、口语草稿恢复、能力证据隔离、阅读/口语落库、控制台错误和桌面/移动端设计审计。
+- 公共健康接口返回 200，数据存储为 PostgreSQL；线上 HTML 引用构建资源 `index-Di2__PTa.js` 与 `index-CcHQ4Bvb.css`，和本地已验证构建一致。
+- 真实 AI 生成在 GA smoke 中通过；后续口语浏览器测试触发供应商 `usage_limited` 状态，服务保持 `ok` 且降级回退可用，需作为外部额度状态继续观察。
