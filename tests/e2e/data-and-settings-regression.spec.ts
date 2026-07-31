@@ -32,12 +32,14 @@ test('restores an in-progress standard mock in a clean browser context', async (
   }
 });
 
-test('reopens settings with the saved baseline and recording preference', async ({ page }) => {
+test('keeps capability evidence separate from settings and persists recording preference', async ({ page }) => {
   await registerAndEnterApp(page, 'settings-persistence');
   await page.waitForLoadState('networkidle');
   await page.getByRole('button', { name: '设置', exact: true }).click();
 
-  await page.getByRole('button', { name: '阅读能力 高级' }).click();
+  await expect(page.getByText('能力基线', { exact: true })).toBeVisible();
+  await expect(page.getByText('阅读、听力、写作等能力只由诊断和真实训练证据生成，不能在设置页手动修改。')).toBeVisible();
+  await expect(page.getByRole('button', { name: '进行能力诊断' })).toBeVisible();
   const speakingPreparation = page.getByRole('button', { name: '准备 CET-4 口语' });
   if (await speakingPreparation.getAttribute('aria-pressed') === 'true') await speakingPreparation.click();
   const recordingReminder = page.getByRole('button', { name: '切换口语录音质量提醒' });
@@ -47,7 +49,11 @@ test('reopens settings with the saved baseline and recording preference', async 
 
   await page.getByRole('button', { name: '今日训练', exact: true }).click();
   await page.getByRole('button', { name: '设置', exact: true }).click();
-  await expect(page.getByRole('button', { name: '阅读能力 高级' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('button', { name: '准备 CET-4 口语' })).toHaveAttribute('aria-pressed', 'false');
   await expect(page.getByRole('button', { name: '切换口语录音质量提醒' })).toHaveAttribute('aria-pressed', 'false');
+
+  await page.getByRole('button', { name: '今日训练', exact: true }).click();
+  await page.getByRole('button', { name: '能力进展', exact: true }).click();
+  await expect(page.getByText('暂无能力证据。完成诊断或任一专项训练后自动更新。')).toBeVisible();
+  await expect(page.getByRole('button', { name: '开始入门诊断' })).toBeVisible();
 });

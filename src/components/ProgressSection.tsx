@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Activity, AlertCircle, Award, Check, Database, FileText, Globe, Sparkle, Zap } from 'lucide-react';
+import { Activity, AlertCircle, Award, Check, ChevronRight, Database, FileText, Globe, Sparkle, Zap } from 'lucide-react';
 import { Attempt, PracticeSession, ReviewItem, SkillProfile } from '../types';
 import { buildMotivationSnapshot, buildProgressTrustBrief } from '../domain/productCoach';
 import {
@@ -18,6 +18,7 @@ interface ProgressSectionProps {
   persistedPracticeSessions?: PracticeSession[];
   persistedAttempts?: Attempt[];
   persistedReviewItems?: ReviewItem[];
+  onStartDiagnostic?: () => void;
 }
 
 const KNOWLEDGE_NODE_ICONS: Record<AbilityNodeIcon, React.ComponentType<{ className?: string }>> = {
@@ -59,6 +60,7 @@ export default function ProgressSection({
   persistedPracticeSessions = [],
   persistedAttempts = [],
   persistedReviewItems = [],
+  onStartDiagnostic,
 }: ProgressSectionProps) {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<AbilityEvidenceTab>('reading');
@@ -126,6 +128,15 @@ export default function ProgressSection({
           <div className="mt-3 rounded-2xl border border-[#cfe6f2] bg-[#eef7fc] px-4 py-3 text-xs font-bold leading-6 text-[#003178]">
             连续 {motivation.streakDays} 天 · 本周 {motivation.weeklyAttempts} 次作答 · 已修复 {motivation.repairedMistakes} 个错因。{motivation.message}
           </div>
+          {!abilitySummary.hasEvidence && onStartDiagnostic ? (
+            <div className="mt-3 flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs font-bold leading-5 text-amber-900">先完成入门能力诊断，能力地图才会开始累积真实证据。</p>
+              <button type="button" onClick={onStartDiagnostic} className="ui-button ui-button-primary ui-button-compact shrink-0">
+                开始入门诊断
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          ) : null}
         </section>
 
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-5 lg:gap-8">

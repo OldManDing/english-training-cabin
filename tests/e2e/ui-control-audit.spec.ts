@@ -248,11 +248,8 @@ test('primary workspaces keep controls usable and reset scroll on navigation', a
   await chooseCalendarDay(page, '考试日期', futureExamDate);
   await page.getByLabel('目标分数').fill('560');
   await chooseComboboxOption(page, '每日投入时长', /60 分钟/);
-  await page.getByRole('button', { name: '阅读能力 高级' }).click();
-  await page.getByRole('button', { name: '听力能力 入门' }).click();
-  await page.getByRole('button', { name: '翻译水平 中级' }).click();
-  await page.getByRole('button', { name: '写作能力 高级' }).click();
-  await page.getByRole('button', { name: '口语表达 中级' }).click();
+  await expect(page.getByText('能力基线', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '进行能力诊断' })).toBeVisible();
   await page.getByRole('button', { name: '切换口语录音质量提醒' }).click();
   const speechToggleBox = await page.getByRole('button', { name: '切换口语录音质量提醒' }).boundingBox();
   expect(speechToggleBox?.width).toBeGreaterThanOrEqual(60);

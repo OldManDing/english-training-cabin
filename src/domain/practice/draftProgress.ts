@@ -86,12 +86,36 @@ export interface MockExamPracticeDraft {
   updatedAt: string;
 }
 
+export interface SpeakingPracticeAnalysis {
+  originalTextWithMarkings: string;
+  improvedTextWithConnectors: string;
+  fillerCount: number;
+  fluencyAnalysis: string;
+  logicAnalysis: string;
+  vocabularyAnalysis: string;
+  scoreImprovementFrom: number;
+  scoreImprovementTo: number;
+}
+
+export interface SpeakingPracticeDraft {
+  version: 1;
+  step: 1 | 2 | 3 | 4;
+  startedAt: string;
+  speechDraft: string;
+  speechAnalysis?: SpeakingPracticeAnalysis;
+  analysisMode?: 'live' | 'fallback';
+  secondAttemptDraft: string;
+  isSecondAttemptStarted: boolean;
+  updatedAt: string;
+}
+
 export const practiceDraftKeys = {
   reading: (passageId: string) => `${DRAFT_KEY_PREFIX}:reading:${passageId}`,
   vocabulary: `${DRAFT_KEY_PREFIX}:vocabulary`,
   listening: `${DRAFT_KEY_PREFIX}:listening-long-conversation`,
   subjective: (mode: SubjectiveDraftMode) => `${DRAFT_KEY_PREFIX}:subjective:${mode}`,
   mockExam: `${DRAFT_KEY_PREFIX}:mock-exam`,
+  speaking: `${DRAFT_KEY_PREFIX}:speaking`,
   realPaper: (paperId: string) => `${REAL_PAPER_DRAFT_KEY_PREFIX}${paperId}`,
 };
 

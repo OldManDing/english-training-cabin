@@ -90,6 +90,96 @@ test('subjective completion failure preserves answer and AI feedback until persi
   await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), WRITING_DRAFT_KEY)).toBeNull();
 });
 
+test('server confirmation failure does not close or tombstone a completed subjective draft', async ({ page }) => {
+  await page.route('**/api/ai/evaluate-subjective', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        score: 77,
+        mistakeReasons: ['证据仍可更具体'],
+        comments: [WRITING_FEEDBACK],
+        nextActions: ['补充一个可验证的课堂学习例子。'],
+        sampleAnswer: WRITING_ANSWER,
+        confidence: 'high',
+      }),
+    });
+  });
+
+  await registerAndEnterApp(page, 'server-confirmation-failure');
+  await page.getByRole('button', { name: '专项练习', exact: true }).click();
+  await page.getByRole('button', { name: '开始写作训练' }).click();
+  await page.locator('textarea').fill(WRITING_ANSWER);
+  await page.getByRole('button', { name: '提交并获取 AI 反馈' }).click();
+  await expect(page.getByText(WRITING_FEEDBACK)).toBeVisible();
+  await expect(page.getByText('学习记录与草稿已保存到服务器')).toBeVisible({ timeout: 10_000 });
+
+  await page.route('**/api/cloud/learning-entities', async (route) => {
+    if (route.request().method() === 'PUT') {
+      await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'injected failure' }) });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.getByRole('button', { name: '完成训练并写入能力画像' }).click();
+  await expect(page.getByRole('heading', { name: '主观题记录保存失败' })).toBeVisible();
+  await expect(page.getByText(WRITING_FEEDBACK)).toBeVisible();
+  await expect(page.locator('textarea')).toHaveValue(WRITING_ANSWER);
+  await expect.poll(() => page.evaluate((key) => {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  }, WRITING_DRAFT_KEY)).not.toBeNull();
+
+  await page.getByRole('button', { name: '我知道了' }).click();
+  await page.unroute('**/api/cloud/learning-entities');
+  await page.getByRole('button', { name: '完成训练并写入能力画像' }).click();
+  await expect(page.getByRole('heading', { name: '能力地图' })).toBeVisible();
+  await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), WRITING_DRAFT_KEY)).toBeNull();
+});
+
+test('restores the speaking analysis and second-attempt draft after refresh', async ({ page }) => {
+  const firstSpeech = 'In the picture, I can see wind turbines and solar panels. They can reduce pollution and support clean energy.';
+  const secondSpeech = 'The picture shows renewable energy facilities, which can reduce pollution and support sustainable development.';
+  await page.route('**/api/ai/analyze-speech', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        originalTextWithMarkings: firstSpeech,
+        improvedTextWithConnectors: secondSpeech,
+        fillerCount: 0,
+        fluencyAnalysis: '先完整输出主题句。',
+        logicAnalysis: '补充原因和限制。',
+        vocabularyAnalysis: '使用 renewable energy facilities。',
+        scoreImprovementFrom: 58,
+        scoreImprovementTo: 74,
+      }),
+    });
+  });
+
+  await registerAndEnterApp(page, 'speaking-draft-restore');
+  await page.getByRole('button', { name: '口语重说', exact: true }).click();
+  await page.getByRole('button', { name: '开始录音' }).click();
+  await expect(page.locator('textarea')).toBeVisible({ timeout: 7_000 });
+  await page.locator('textarea').fill(firstSpeech);
+  await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), 'english-training-cabin:practice-draft:speaking')).not.toBeNull();
+
+  await page.getByRole('button', { name: '完成录音' }).click();
+  await expect(page.getByRole('heading', { name: /口语重说 - AI 反馈与改写/ })).toBeVisible();
+  await page.getByRole('button', { name: '开始第二次重说' }).click();
+  await page.locator('textarea').fill(secondSpeech);
+  await expect.poll(async () => page.evaluate((key) => {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as { step?: number; secondAttemptDraft?: string }) : null;
+  }, 'english-training-cabin:practice-draft:speaking')).toMatchObject({ step: 3, secondAttemptDraft: secondSpeech });
+
+  await page.reload();
+  await expect(page.getByRole('heading', { name: '今日训练' })).toBeVisible();
+  await page.getByRole('button', { name: '口语重说', exact: true }).click();
+  await expect(page.getByRole('heading', { name: /口语重说 - AI 反馈与改写/ })).toBeVisible();
+  await expect(page.getByText('第二次重说转写')).toBeVisible();
+  await expect(page.locator('textarea')).toHaveValue(secondSpeech);
+});
+
 test('mock exam persistence failure keeps the completed report and draft available for retry', async ({ page }) => {
   test.setTimeout(90_000);
   await installIndexedDbWriteFailureSwitch(page);

@@ -4,6 +4,7 @@ import {
   Brain,
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   Clock,
   Lightbulb,
   ListTodo,
@@ -27,6 +28,7 @@ interface ReviewSectionProps {
   reviewGateStatus?: ReviewGateStatus;
   onCompleteReviewItem?: (reviewItemId: string, evidence: ReviewCompletionEvidence) => Promise<void> | void;
   onStartVariantPractice?: (moduleId: CoachModuleId) => void;
+  onViewPractice?: () => void;
 }
 
 type ReviewOutcome = NonNullable<ReviewCompletionEvidence['reviewOutcome']>;
@@ -172,6 +174,7 @@ export default function ReviewSection({
   reviewGateStatus,
   onCompleteReviewItem,
   onStartVariantPractice,
+  onViewPractice,
 }: ReviewSectionProps) {
   const [selectedReviewItemId, setSelectedReviewItemId] = useState<string | null>(null);
   const [completedReviewIds, setCompletedReviewIds] = useState<string[]>([]);
@@ -750,6 +753,14 @@ export default function ReviewSection({
           <section className="ui-panel">
             <div className="ui-empty-state text-sm font-semibold leading-7">
               今天没有到期复习项。先完成专项训练或模考。
+              {onViewPractice ? (
+                <div className="mt-4">
+                  <button type="button" onClick={onViewPractice} className="ui-button ui-button-primary ui-button-compact">
+                    去专项练习
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : null}
               {upcomingReviewItems.length > 0 ? (
                 <div className="mt-3 rounded-2xl border border-[#cfe6f2] bg-[#f8fbff] px-4 py-3 text-xs font-bold leading-6 text-[#003178]">
                   还有 {upcomingReviewItems.length} 条未到期复习项，最早 {formatReviewDate(upcomingReviewItems[0].nextReviewAt)} 再出现。

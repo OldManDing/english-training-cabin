@@ -339,24 +339,6 @@ export default function TodayDashboard({
           </section>
         )}
 
-        {!hasAbilityEvidence && (
-          <section data-testid="three-minute-start" className="ui-panel-soft">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <span className="ui-chip ui-chip-accent">3 分钟启动</span>
-                <h3 className="mt-3 text-lg font-black text-[#003178]">先做诊断</h3>
-                <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
-                  完成后生成今日计划。
-                </p>
-              </div>
-              <button type="button" onClick={onStartOnboarding} className="ui-button ui-button-primary shrink-0">
-                <Sparkles className="h-4 w-4 text-emerald-300" />
-                立即启动
-              </button>
-            </div>
-          </section>
-        )}
-
         {reviewGateStatus?.locked && (
           <section data-testid="review-gate-banner" className="ui-panel-soft">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

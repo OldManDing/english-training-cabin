@@ -50,7 +50,7 @@ test('real grammar number flow answers several questions and reopens saved attem
   test.setTimeout(180_000);
 
   await registerAndEnterApp(page, 'real-grammar-number-flow');
-  await page.locator('aside button').nth(1).click();
+  await page.getByRole('button', { name: '专项练习', exact: true }).click();
 
   for (let index = 0; index < grammarRealFlowNumbers.length; index += 1) {
     const questionNumber = grammarRealFlowNumbers[index];
@@ -83,7 +83,7 @@ test('real grammar number flow answers several questions and reopens saved attem
 
 test('normal grammar practice shows batch numbering instead of source-bank numbering', async ({ page }) => {
   await registerAndEnterApp(page, 'real-grammar-normal-numbering');
-  await page.locator('aside button').nth(1).click();
+  await page.getByRole('button', { name: '专项练习', exact: true }).click();
 
   await page.getByTestId('practice-module-action-grammar').click();
   await expect(page.getByText('第 1 题 / 共 40 题')).toBeVisible();
@@ -97,7 +97,7 @@ test('grammar topic group practice stays inside the selected topic', async ({ pa
   expect(secondTenseQuestion).toBeTruthy();
 
   await registerAndEnterApp(page, 'real-grammar-topic-group');
-  await page.locator('aside button').nth(1).click();
+  await page.getByRole('button', { name: '专项练习', exact: true }).click();
   await page.getByTestId('practice-module-select-grammar').click();
 
   await expect(page.getByTestId('grammar-topic-practice')).toBeVisible();
@@ -149,7 +149,7 @@ test('grammar number jump keeps compact top progress and next question unanswere
     },
   );
 
-  await page.locator('aside button').nth(1).click();
+  await page.getByRole('button', { name: '专项练习', exact: true }).click();
   await openGrammarQuestion(page, 21);
   await expectGrammarQuestion(page, 21);
   await expect(page.getByTestId('reading-progress-summary')).toContainText(`21/${grammarTotal}`);
@@ -197,7 +197,7 @@ test('grammar restored header keeps title, badge, and progress on one clean row'
     },
   );
 
-  await page.locator('aside button').nth(1).click();
+  await page.getByRole('button', { name: '专项练习', exact: true }).click();
   await page.getByTestId('practice-module-select-grammar').click();
   await page.getByTestId('grammar-topic-start-tense').click();
 
@@ -222,7 +222,7 @@ test('grammar restored header keeps title, badge, and progress on one clean row'
 test('grammar practice uses a compact task-first layout on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await registerAndEnterApp(page, 'real-grammar-mobile-layout');
-  await page.locator('aside button').nth(1).click();
+  await page.getByRole('button', { name: '专项练习', exact: true }).click();
 
   await page.getByTestId('practice-module-quick-select-grammar').click();
   await page.getByTestId('practice-module-action-grammar').click();
@@ -242,7 +242,7 @@ test('grammar practice uses a compact task-first layout on mobile', async ({ pag
 
 test('grammar answer feedback is rule based and hides internal trap slugs', async ({ page }) => {
   await registerAndEnterApp(page, 'real-grammar-rule-feedback');
-  await page.locator('aside button').nth(1).click();
+  await page.getByRole('button', { name: '专项练习', exact: true }).click();
   await openGrammarQuestion(page, 250);
 
   await expect(page.getByText('考点：状语从句 / although 引导')).toBeVisible();
@@ -265,7 +265,7 @@ test('grammar answer feedback is rule based and hides internal trap slugs', asyn
 test('grammar feedback actions stay in document flow without covering analysis', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await registerAndEnterApp(page, 'real-grammar-no-floating-cover');
-  await page.locator('aside button').nth(1).click();
+  await page.getByRole('button', { name: '专项练习', exact: true }).click();
 
   await page.getByTestId('practice-module-quick-select-grammar').click();
   await page.getByTestId('practice-module-action-grammar').click();

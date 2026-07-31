@@ -859,7 +859,7 @@ test('grammar and cloze specialty questions submit and mark answered immediately
   await resetLocalLearningData(page);
   await page.reload();
 
-  await page.locator('aside button').nth(1).click();
+  await page.getByRole('button', { name: '专项练习', exact: true }).click();
 
   await page.getByTestId('practice-module-select-grammar').click();
   await page.getByTestId('practice-question-status-grammar-1').click();
@@ -985,7 +985,7 @@ test('legacy vocabulary draft answers keep 121 to 130 answered and 241 to 255 un
   await seedLegacyVocabularyDraftStatusGap(page);
   await page.reload();
 
-  await page.locator('aside button').nth(1).click();
+  await page.getByRole('button', { name: '专项练习', exact: true }).click();
   await page.getByTestId('practice-module-select-vocabulary').click();
   await page.getByTestId('practice-question-filter-vocabulary-answered').click();
 
@@ -1007,7 +1007,7 @@ test('persisted legacy vocabulary status repairs 121 to 130 answered and 241 to 
   await seedPersistedLegacyVocabularyWrongStatus(page);
   await page.reload();
 
-  await page.locator('aside button').nth(1).click();
+  await page.getByRole('button', { name: '专项练习', exact: true }).click();
   await page.getByTestId('practice-module-select-vocabulary').click();
   await page.getByTestId('practice-question-filter-vocabulary-answered').click();
 
@@ -1052,7 +1052,7 @@ test('submitted draft answers count as today records before finishing the sessio
   await resetLocalLearningData(page);
   await page.reload();
 
-  await page.locator('aside button').nth(1).click();
+  await page.getByRole('button', { name: '专项练习', exact: true }).click();
   await page.getByTestId('practice-module-action-vocabulary').click();
   for (let index = 0; index < 3; index += 1) {
     await page.locator('article.ui-panel button').filter({ hasText: /^A\.|^B\.|^C\.|^D\./ }).first().click();
@@ -1114,7 +1114,7 @@ test('submitted draft answers count as today records before finishing the sessio
   await expect(page.getByTestId('vocabulary-post-answer-support')).toBeVisible();
   await page.getByTestId('vocabulary-back-to-practice').click();
 
-  await page.locator('aside button').first().click();
+  await page.getByRole('button', { name: '今日训练', exact: true }).click();
   await expect(page.getByTestId('today-answered-question-count')).toHaveText('3');
   await expect(page.getByTestId('motivation-weekly-attempts')).toHaveText('3');
 });
@@ -1343,7 +1343,7 @@ test('MVP critical speaking retell flow persists review and ability evidence', a
   await page.getByRole('button', { name: '完成第二次重说并生成对比报告' }).click();
 
   await expect(page.getByRole('heading', { name: /口语重说 - 训练对比报告/ })).toBeVisible();
-  await expect(page.getByText('本轮口语证据已写入本地能力画像')).toBeVisible();
+  await expect(page.getByText('本轮口语证据已保存并同步到服务器，复习队列会在今日任务中自动调度。')).toBeVisible();
 
   const counts = await page.evaluate(async () => {
     function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {

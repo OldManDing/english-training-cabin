@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Flag, LayoutGrid, Target, Calendar, Check, Lock, Sparkles, Sliders, ChevronDown, Save, Sparkle, RefreshCw, Database, Download, Upload } from 'lucide-react';
+import { Activity, Flag, Target, Calendar, Check, Lock, Sparkles, Sliders, ChevronDown, Save, Sparkle, RefreshCw, Database, Download, Upload } from 'lucide-react';
 import { exportLearningData, getOrCreateActiveGoal, mergeLearningData } from '../lib/storage/db';
 import { getStoredAuthToken } from '../lib/api';
 import { syncAllLocalLearningData } from '../lib/storage/authoritativeLearningSync';
@@ -15,11 +15,6 @@ interface SettingsSectionProps {
     examType: string;
     examDate: string;
     prepareSpeaking: boolean;
-    readingLevel: number;
-    listeningLevel: number;
-    translationLevel: number;
-    writingLevel: number;
-    speakingLevel: number;
     targetScore: number;
     dailyTargetMinutes: number;
     whisperNoiseReduction: boolean;
@@ -29,12 +24,12 @@ interface SettingsSectionProps {
   initialExamDate?: string;
   initialDailyMinutes?: number;
   initialPrepareSpeaking?: boolean;
-  initialSkillLevels?: Partial<Record<'reading' | 'listening' | 'translation' | 'writing' | 'speaking', number>>;
   initialRecordingQualityReminder?: boolean;
   onSetScoreLimit?: (score: number) => void;
   onTriggerModal?: (title: string, body: string) => void;
   onDataRestored?: () => Promise<void>;
   onServerDataRestored?: () => Promise<void>;
+  onStartDiagnostic?: () => void;
 }
 
 const examOptions = listPublicExamProfiles();
@@ -46,19 +41,12 @@ function toSettingsExamType(examId?: string): string {
   return 'cet4';
 }
 
-export default function SettingsSection({ onSave, targetScoreLimit = 550, initialExamId, initialExamDate, initialDailyMinutes, initialPrepareSpeaking = true, initialSkillLevels, initialRecordingQualityReminder = true, onSetScoreLimit, onTriggerModal, onDataRestored, onServerDataRestored }: SettingsSectionProps) {
+export default function SettingsSection({ onSave, targetScoreLimit = 550, initialExamId, initialExamDate, initialDailyMinutes, initialPrepareSpeaking = true, initialRecordingQualityReminder = true, onSetScoreLimit, onTriggerModal, onDataRestored, onServerDataRestored, onStartDiagnostic }: SettingsSectionProps) {
   // Local Settings States matching the screenshot
   const [examType, setExamType] = useState<string>(toSettingsExamType(initialExamId));
   const [examDate, setExamDate] = useState<string>(initialExamDate ?? getSuggestedExamDate());
   const [prepareSpeaking, setPrepareSpeaking] = useState<boolean>(initialPrepareSpeaking);
   
-  // Base skill levels: 0 = 入门, 1 = 中级, 2 = 高级
-  const [readingLevel, setReadingLevel] = useState<number>(initialSkillLevels?.reading ?? 1);
-  const [listeningLevel, setListeningLevel] = useState<number>(initialSkillLevels?.listening ?? 1);
-  const [translationLevel, setTranslationLevel] = useState<number>(initialSkillLevels?.translation ?? 0);
-  const [writingLevel, setWritingLevel] = useState<number>(initialSkillLevels?.writing ?? 1);
-  const [speakingLevel, setSpeakingLevel] = useState<number>(initialSkillLevels?.speaking ?? 0);
-
   const [targetScore, setTargetScore] = useState<number>(targetScoreLimit);
   const [dailyTargetMinutes, setDailyTargetMinutes] = useState<number>(initialDailyMinutes ?? 60); // 60 minutes as in screenshot
   
@@ -89,13 +77,8 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
 
   useEffect(() => {
     setPrepareSpeaking(initialPrepareSpeaking);
-    setReadingLevel(initialSkillLevels?.reading ?? 1);
-    setListeningLevel(initialSkillLevels?.listening ?? 1);
-    setTranslationLevel(initialSkillLevels?.translation ?? 0);
-    setWritingLevel(initialSkillLevels?.writing ?? 1);
-    setSpeakingLevel(initialSkillLevels?.speaking ?? 0);
     setWhisperNoiseReduction(initialRecordingQualityReminder);
-  }, [initialPrepareSpeaking, initialRecordingQualityReminder, initialSkillLevels?.listening, initialSkillLevels?.reading, initialSkillLevels?.speaking, initialSkillLevels?.translation, initialSkillLevels?.writing]);
+  }, [initialPrepareSpeaking, initialRecordingQualityReminder]);
 
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
@@ -108,11 +91,6 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
     examType,
     examDate,
     prepareSpeaking,
-    readingLevel,
-    listeningLevel,
-    translationLevel,
-    writingLevel,
-    speakingLevel,
     targetScore,
     dailyTargetMinutes,
     whisperNoiseReduction,
@@ -210,9 +188,6 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
       triggerToast('恢复失败：请导入由英语训练舱导出的有效 JSON 备份。');
     }
   };
-
-  // Helper arrays
-  const levelLabels = ["入门", "中级", "高级"];
 
   // Derived calculation values matching simulated statistics
   const daysRemaining = Math.max(0, Math.ceil((new Date(`${examDate}T00:00:00`).getTime() - new Date(new Date().toDateString()).getTime()) / 86400000));
@@ -335,48 +310,27 @@ export default function SettingsSection({ onSave, targetScoreLimit = 550, initia
               </div>
             </div>
 
-            {/* Sub-block Container: "当前基础" Header on Left column, "目标分数" on Right column under same row */}
+            {/* Evidence baseline and target score */}
             <div className="ui-panel">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                
-                {/* Sub-item Left: 当前基础 */}
-                <div className="space-y-5">
-                  <h3 className="text-sm font-black text-[#003178] flex items-center gap-2">
-                    <LayoutGrid className="h-4 w-4 text-[#003178]" />
-                    当前基础
-                  </h3>
-
-                  <div className="space-y-3.5">
-                    {[
-                      { key: 'reading', label: '阅读能力', level: readingLevel, setLevel: setReadingLevel },
-                      { key: 'listening', label: '听力能力', level: listeningLevel, setLevel: setListeningLevel },
-                      { key: 'translation', label: '翻译水平', level: translationLevel, setLevel: setTranslationLevel },
-                      { key: 'writing', label: '写作能力', level: writingLevel, setLevel: setWritingLevel },
-                      { key: 'speaking', label: '口语表达', level: speakingLevel, setLevel: setSpeakingLevel },
-                    ].map((item) => (
-                      <div key={item.key} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-xs">
-                        <span className="font-bold text-[#434652]">{item.label}</span>
-                        <div className="grid grid-cols-3 sm:flex bg-[#f0f7fc] p-0.5 rounded-lg border border-[#cfe6f2] sm:scale-95 sm:origin-right">
-                          {levelLabels.map((lbl, idx) => (
-                            <button
-                              key={lbl}
-                              type="button"
-                              aria-label={`${item.label} ${lbl}`}
-                              aria-pressed={item.level === idx}
-                              onClick={() => item.setLevel(idx)}
-                              className={`text-[10px] font-bold px-3 py-2 sm:py-1 rounded-md transition-all ${
-                                item.level === idx
-                                  ? 'bg-[#003178] text-white shadow-2xs'
-                                  : 'text-[#434652] hover:bg-[#e1f1fc]'
-                              }`}
-                            >
-                              {lbl}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
+                <div className="flex flex-col justify-between gap-5 rounded-xl border border-[#cfe6f2] bg-[#f8fbff] p-4">
+                  <div>
+                    <h3 className="flex items-center gap-2 text-sm font-black text-[#003178]">
+                      <Activity className="h-4 w-4" />
+                      能力基线
+                    </h3>
+                    <p className="mt-3 text-xs font-semibold leading-6 text-slate-600">
+                      阅读、听力、写作等能力只由诊断和真实训练证据生成，不能在设置页手动修改。
+                    </p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={onStartDiagnostic}
+                    className="ui-button ui-button-secondary ui-button-full sm:w-auto"
+                  >
+                    <Activity className="h-4 w-4" />
+                    进行能力诊断
+                  </button>
                 </div>
 
                 {/* Sub-item Right: 目标分数 */}

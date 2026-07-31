@@ -104,25 +104,6 @@ function countDueReviews(reviewItems: ReviewItem[]): number {
   return getDueWrongQuestionReviewItemsOn(reviewItems).length;
 }
 
-function levelToProfileScore(level: number): number {
-  if (level <= 0) return 55;
-  if (level >= 2) return 86;
-  return 72;
-}
-
-function profileScoreToLevel(score: number): number {
-  if (score < 64) return 0;
-  if (score >= 80) return 2;
-  return 1;
-}
-
-function getSavedSettingsLevel(skillProfiles: SkillProfile[], skillArea: SkillProfile['skillArea']): number | undefined {
-  const profile = skillProfiles
-    .filter((item) => item.skillArea === skillArea && item.subSkillId === `settings-${skillArea}`)
-    .sort((left, right) => right.lastUpdatedAt.localeCompare(left.lastUpdatedAt))[0];
-  return profile ? profileScoreToLevel(profile.score) : undefined;
-}
-
 function estimateCetScore(skillProfiles: SkillProfile[]): number | undefined {
   if (skillProfiles.length === 0) return undefined;
   const latestBySkill = new Map<SkillProfile['skillArea'], SkillProfile>();
@@ -158,31 +139,6 @@ function hasRestorableVocabularyDraft() {
 function resetViewportScroll() {
   window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   document.querySelector('main')?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-}
-
-function buildSettingsSkillProfiles(settings: {
-  readingLevel: number;
-  listeningLevel: number;
-  translationLevel: number;
-  writingLevel: number;
-  speakingLevel: number;
-}): SkillProfile[] {
-  const now = new Date().toISOString();
-  return [
-    ['reading', 'settings-reading', settings.readingLevel],
-    ['listening', 'settings-listening', settings.listeningLevel],
-    ['translation', 'settings-translation', settings.translationLevel],
-    ['writing', 'settings-writing', settings.writingLevel],
-    ['speaking', 'settings-speaking', settings.speakingLevel],
-  ].map(([skillArea, subSkillId, level]) => ({
-    id: `cet4-${skillArea}-${subSkillId}`,
-    skillArea: skillArea as SkillProfile['skillArea'],
-    subSkillId: subSkillId as string,
-    score: levelToProfileScore(level as number),
-    confidence: 3,
-    evidenceCount: 1,
-    lastUpdatedAt: now,
-  }));
 }
 
 function buildChoiceQuestionPassage(params: {
@@ -343,13 +299,6 @@ function StudyApp() {
   const estimatedScore = estimateCetScore(persistedSkillProfiles);
   const abilityEvidenceCount = persistedSkillProfiles.reduce((sum, profile) => sum + profile.evidenceCount, 0);
   const reviewGateStatus = buildReviewGateStatus(persistedReviewItems);
-  const savedSettingsLevels = useMemo(() => ({
-    reading: getSavedSettingsLevel(persistedSkillProfiles, 'reading'),
-    listening: getSavedSettingsLevel(persistedSkillProfiles, 'listening'),
-    translation: getSavedSettingsLevel(persistedSkillProfiles, 'translation'),
-    writing: getSavedSettingsLevel(persistedSkillProfiles, 'writing'),
-    speaking: getSavedSettingsLevel(persistedSkillProfiles, 'speaking'),
-  }), [persistedSkillProfiles]);
   const effectiveLearningSyncState: LearningSyncState = learningSyncState === 'pending' || draftSyncState === 'pending'
     ? 'pending'
     : learningSyncState === 'syncing' || draftSyncState === 'syncing'
@@ -485,17 +434,16 @@ function StudyApp() {
     setPersistedAttempts(attempts);
   }, []);
 
-  const confirmLearningEntities = async (ids: LearningEntityIds): Promise<boolean> => {
+  const confirmLearningEntities = async (ids: LearningEntityIds): Promise<void> => {
     setLearningSyncState('syncing');
     try {
       await syncLearningEntityIds(ids);
       setLearningSyncState('synced');
-      return true;
     } catch (error) {
       console.error('Failed to confirm learning data on server:', error);
       trackTelemetry('client_error', { area: 'learning_entity_sync' });
       setLearningSyncState('pending');
-      return false;
+      throw error;
     }
   };
 
@@ -601,7 +549,7 @@ function StudyApp() {
     loadStudyState().catch((error) => {
       console.error('Failed to load local study state:', error);
       trackTelemetry('client_error', { area: 'local_storage_load' });
-      handleTriggerModal('本地学习数据加载失败', '系统暂时无法读取浏览器 IndexedDB，本次练习仍可继续，但刷新后可能不会保留进度。');
+      handleTriggerModal('离线副本读取失败', '系统暂时无法读取当前浏览器的离线副本。已在服务器确认的记录不会丢失；本次尚未确认的新进度请等待连接恢复后再继续。');
     });
 
     return () => {
@@ -692,7 +640,7 @@ function StudyApp() {
       .catch((error) => {
         console.error('Failed to save target score:', error);
         trackTelemetry('client_error', { area: 'target_score_save' });
-        handleTriggerModal('目标保存失败', '目标分数暂时没有写入本地数据库，请稍后重试。');
+        handleTriggerModal('目标保存失败', '目标分数已保留在当前浏览器，但服务器尚未确认。请稍后重试。');
       });
   };
 
@@ -700,11 +648,6 @@ function StudyApp() {
     examType: string;
     examDate: string;
     prepareSpeaking: boolean;
-    readingLevel: number;
-    listeningLevel: number;
-    translationLevel: number;
-    writingLevel: number;
-    speakingLevel: number;
     targetScore: number;
     dailyTargetMinutes: number;
     whisperNoiseReduction: boolean;
@@ -722,20 +665,16 @@ function StudyApp() {
         prioritySkills,
         recordingQualityReminder: settings.whisperNoiseReduction,
       });
-      const settingsProfiles = buildSettingsSkillProfiles(settings);
-      await persistSkillProfiles(settingsProfiles);
       await confirmLearningEntities({
         studyGoalIds: [goal.id],
-        skillProfileIds: settingsProfiles.map((profile) => profile.id),
       });
       setActiveGoal(goal);
       setTargetScoreLimit(goal.targetScore);
-      setPersistedSkillProfiles(settingsProfiles);
       await refreshStudyState();
     } catch (error) {
       console.error('Failed to save study settings:', error);
       trackTelemetry('client_error', { area: 'study_settings_save' });
-      handleTriggerModal('学习计划保存失败', '设置已在当前页面生效，但没有成功写入本地数据库。');
+      handleTriggerModal('学习计划保存失败', '设置已保留在当前浏览器，但服务器尚未确认。请保持页面打开，等待自动重试后再离开。');
       throw error;
     }
   };
@@ -796,7 +735,7 @@ function StudyApp() {
     } catch (error) {
       console.error('Failed to save onboarding diagnostic:', error);
       trackTelemetry('client_error', { area: 'onboarding_diagnostic_save' });
-      handleTriggerModal('入门诊断保存失败', '诊断结果已在当前页面生成，但没有成功写入本地能力画像。');
+      handleTriggerModal('入门诊断保存失败', '诊断结果仍保留在当前页面，但服务器尚未确认能力证据。请重试保存后再离开。');
       throw error;
     }
   };
@@ -910,7 +849,7 @@ function StudyApp() {
       () => setIsPracticing(false),
       'choice_practice_persist',
       '作答记录保存失败',
-      '本次作答没有成功写入本地数据库，页面暂不退出。请稍后重试或先导出本地数据。',
+      '本次作答仍保留在当前页面，但服务器尚未确认训练记录。页面不会退出或清除草稿，请稍后重试。',
     );
   };
 
@@ -921,7 +860,7 @@ function StudyApp() {
       () => setSubjectivePracticeMode(null),
       `${report.session.moduleId}_practice_persist`,
       '主观题记录保存失败',
-      '本次反馈已生成，但错因和能力画像没有成功写入本地数据库。页面暂不退出。',
+      '本次反馈和草稿仍保留在当前页面，但服务器尚未确认错因和能力证据。请稍后重试。',
     );
   };
 
@@ -932,7 +871,7 @@ function StudyApp() {
       () => setIsVocabularyPracticing(false),
       'vocabulary_practice_persist',
       '词汇练习保存失败',
-      '本次词汇记录没有成功写入本地数据库，页面暂不退出。请稍后重试。',
+      '本次词汇作答仍保留在当前页面，但服务器尚未确认训练记录。请稍后重试。',
     );
   };
 
@@ -965,7 +904,7 @@ function StudyApp() {
       () => undefined,
       'mock_exam_persist',
       '阶段模考保存失败',
-      '本次模考报告没有成功写入本地数据库，页面暂不退出。请稍后重试。',
+      '本次模考报告和草稿仍保留在当前页面，但服务器尚未确认阶段证据。请稍后重试。',
     );
   };
 
@@ -1075,6 +1014,7 @@ function StudyApp() {
             reviewGateStatus={reviewGateStatus}
             onCompleteReviewItem={handleCompleteReviewItem}
             onStartVariantPractice={handleStartVariantPractice}
+            onViewPractice={() => setActiveTab('practice')}
           />
         );
       case 'speaking':
@@ -1092,6 +1032,7 @@ function StudyApp() {
             persistedPracticeSessions={persistedPracticeSessions}
             persistedAttempts={visiblePracticeAttempts}
             persistedReviewItems={persistedReviewItems}
+            onStartDiagnostic={() => setShowOnboarding(true)}
           />
         );
       case 'import':
@@ -1111,13 +1052,13 @@ function StudyApp() {
             initialExamDate={activeGoal?.examDate}
             initialDailyMinutes={activeGoal?.dailyMinutes}
             initialPrepareSpeaking={activeGoal?.prioritySkills.includes('speaking') ?? true}
-            initialSkillLevels={savedSettingsLevels}
             initialRecordingQualityReminder={activeGoal?.recordingQualityReminder ?? true}
             onSave={handleSaveSettings}
             onSetScoreLimit={handleSetGoalTarget}
             onTriggerModal={handleTriggerModal}
             onDataRestored={handleDataRestored}
             onServerDataRestored={handleServerDataRestored}
+            onStartDiagnostic={() => setShowOnboarding(true)}
           />
         );
       default:
@@ -1212,7 +1153,7 @@ function StudyApp() {
                   () => setIsListeningPracticing(false),
                 'listening_practice_persist',
                 '听力记录保存失败',
-                '本次听力记录没有成功写入本地数据库，页面暂不退出。请稍后重试。',
+                '本次听力记录仍保留在当前页面，但服务器尚未确认训练记录。页面不会退出或清除草稿，请稍后重试。',
               );
             }}
           />
@@ -1267,7 +1208,6 @@ function StudyApp() {
           <Sidebar
             activeTab={activeTab}
             setActiveTab={handleSetActiveTab}
-            examCountdown={examCountdown}
             onTriggerModal={handleTriggerModal}
           />
           <main className="app-page-surface flex-1 min-w-0 flex flex-col min-h-0 lg:h-screen lg:overflow-hidden relative">

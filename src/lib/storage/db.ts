@@ -72,6 +72,10 @@ export const db = new EnglishTrainingDb();
 
 export const DEFAULT_GOAL_ID = 'goal-cet4-primary';
 
+export function isSettingsBaselineSkillProfile(profile: SkillProfile): boolean {
+  return profile.subSkillId.startsWith('settings-');
+}
+
 const LEARNING_TABLES = [
   db.studyGoals,
   db.practiceSessions,
@@ -81,13 +85,14 @@ const LEARNING_TABLES = [
 ] as const;
 
 async function exportLearningDataFromOpenTransaction(exportedAt: string): Promise<LearningDataBackup> {
-  const [studyGoals, practiceSessions, attempts, reviewItems, skillProfiles] = await Promise.all([
+  const [studyGoals, practiceSessions, attempts, reviewItems, storedSkillProfiles] = await Promise.all([
     db.studyGoals.toArray(),
     db.practiceSessions.toArray(),
     db.attempts.toArray(),
     db.reviewItems.toArray(),
     db.skillProfiles.toArray(),
   ]);
+  const skillProfiles = storedSkillProfiles.filter((profile) => !isSettingsBaselineSkillProfile(profile));
 
   return {
     app: 'english-training-cabin',
@@ -240,7 +245,8 @@ export async function loadReviewItems(): Promise<ReviewItem[]> {
 }
 
 export async function loadSkillProfiles(): Promise<SkillProfile[]> {
-  return db.skillProfiles.orderBy('lastUpdatedAt').reverse().toArray();
+  const profiles = await db.skillProfiles.orderBy('lastUpdatedAt').reverse().toArray();
+  return profiles.filter((profile) => !isSettingsBaselineSkillProfile(profile));
 }
 
 export async function loadPracticeSessions(): Promise<PracticeSession[]> {
@@ -265,8 +271,9 @@ export async function loadAttempts(): Promise<Attempt[]> {
 }
 
 export async function persistSkillProfiles(skillProfiles: SkillProfile[]): Promise<void> {
-  if (skillProfiles.length === 0) return;
-  await db.skillProfiles.bulkPut(skillProfiles);
+  const evidenceProfiles = skillProfiles.filter((profile) => !isSettingsBaselineSkillProfile(profile));
+  if (evidenceProfiles.length === 0) return;
+  await db.skillProfiles.bulkPut(evidenceProfiles);
 }
 
 function buildFallbackReviewEvidence(item: ReviewItem, now: string): ReviewCompletionEvidence {
@@ -321,13 +328,14 @@ function assertBackupArray(value: unknown, label: string): Record<string, unknow
 }
 
 export async function exportLearningData(): Promise<LearningDataBackup> {
-  const [studyGoals, practiceSessions, attempts, reviewItems, skillProfiles] = await Promise.all([
+  const [studyGoals, practiceSessions, attempts, reviewItems, storedSkillProfiles] = await Promise.all([
     db.studyGoals.toArray(),
     db.practiceSessions.toArray(),
     db.attempts.toArray(),
     db.reviewItems.toArray(),
     db.skillProfiles.toArray(),
   ]);
+  const skillProfiles = storedSkillProfiles.filter((profile) => !isSettingsBaselineSkillProfile(profile));
 
   return {
     app: 'english-training-cabin',
@@ -369,7 +377,8 @@ export async function mergeLearningData(value: unknown): Promise<{
   const practiceSessions = assertBackupArray(backup.data.practiceSessions, 'practiceSessions') as unknown as PracticeSession[];
   const attempts = assertBackupArray(backup.data.attempts, 'attempts') as unknown as Attempt[];
   const reviewItems = assertBackupArray(backup.data.reviewItems, 'reviewItems') as unknown as ReviewItem[];
-  const skillProfiles = assertBackupArray(backup.data.skillProfiles, 'skillProfiles') as unknown as SkillProfile[];
+  const skillProfiles = (assertBackupArray(backup.data.skillProfiles, 'skillProfiles') as unknown as SkillProfile[])
+    .filter((profile) => !isSettingsBaselineSkillProfile(profile));
 
   await db.transaction('rw', [db.studyGoals, db.practiceSessions, db.attempts, db.reviewItems, db.skillProfiles], async () => {
     const [currentGoals, currentSessions, currentReviewItems, currentSkillProfiles] = await Promise.all([

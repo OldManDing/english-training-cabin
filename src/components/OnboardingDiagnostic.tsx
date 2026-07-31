@@ -669,7 +669,7 @@ export default function OnboardingDiagnostic({
       setStep(4);
     } catch (error) {
       console.error('Failed to save diagnostic result:', error);
-      setSaveError('诊断已经完成，但保存到本地能力画像失败。请重试一次。');
+      setSaveError('诊断已经完成，但服务器尚未确认能力证据。请保持页面打开并重试一次。');
     } finally {
       setIsSaving(false);
     }

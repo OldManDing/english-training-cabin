@@ -365,7 +365,7 @@ export default function SubjectiveTraining({ mode, initialPromptId, replayAttemp
 
           {!analysis ? (
             <div className="flex-1 rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-4 sm:p-6 text-sm font-bold leading-relaxed text-slate-400">
-              提交作答后，这里会显示错因标签、具体修改建议和参考版本。完成训练会自动写入本地复习队列与能力地图。
+              提交作答后，这里会显示错因标签、具体修改建议和参考版本。完成训练会保存记录并同步到服务器。
             </div>
           ) : (
             <div className="flex-1 space-y-5 overflow-y-auto pr-1">

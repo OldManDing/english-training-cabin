@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
@@ -399,7 +400,13 @@ export default function MockExam({ onComplete, skillProfiles = [], dailyPlan }: 
         </header>
 
         {!result && pageMode === 'standard-mock' && (
-          <PracticeMethodGuide moduleId="mock" compact />
+          <details className="ui-panel-soft group">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-black text-[#003178] [&::-webkit-details-marker]:hidden">
+              查看阶段模考方法
+              <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
+            </summary>
+            <PracticeMethodGuide moduleId="mock" compact className="mt-4 border-0 bg-transparent p-0 shadow-none" />
+          </details>
         )}
 
         {!result && (

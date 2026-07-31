@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   BookOpen,
+  ChevronDown,
   ChevronRight,
   ClipboardCheck,
   FileText,
@@ -426,7 +427,6 @@ export default function PracticeHub({
     return rank(left) - rank(right);
   });
   const recommendedModuleId = orderedModules[0]?.id ?? 'vocabulary';
-  const recommendedModule = orderedModules[0];
   const selectedModule = orderedModules.find((module) => module.id === selectedModuleId) ?? orderedModules[0];
   const selectedQuestionStatuses = useMemo(() => buildPracticeQuestionStatusList({
     attempts: mergedPracticeAttempts,
@@ -554,23 +554,6 @@ export default function PracticeHub({
             </button>
           </div>
 
-          {isCet4 && recommendedModule && (
-            <div className="mt-5 rounded-2xl border border-[#cfe6f2] bg-[#f8fbff] px-4 py-3">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <div className="text-xs font-black text-[#003178]">推荐：{recommendedModule.label}</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => recommendedModule.onStart()}
-                  className="ui-button ui-button-primary shrink-0"
-                >
-                  开始推荐专项
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          )}
         </header>
 
         {!isCet4 && (
@@ -691,7 +674,13 @@ export default function PracticeHub({
         )}
 
         {isCet4 && (
-          <PracticeMethodGuide moduleId={selectedModule.id} compact />
+          <details className="ui-panel-soft group">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-black text-[#003178] [&::-webkit-details-marker]:hidden">
+              查看 {selectedModule.label} 解题方法
+              <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
+            </summary>
+            <PracticeMethodGuide moduleId={selectedModule.id} compact className="mt-4 border-0 bg-transparent p-0 shadow-none" />
+          </details>
         )}
 
         {isCet4 && selectedModule.id === 'grammar' && grammarTopicSummaries.length > 0 && (
@@ -759,14 +748,6 @@ export default function PracticeHub({
                   训练重点
                 </span>
               </div>
-              <button
-                type="button"
-                onClick={() => selectedModule.onStart()}
-                className="ui-button ui-button-primary shrink-0"
-              >
-                开始训练
-                <ChevronRight className="h-4 w-4" />
-              </button>
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-3">
               {selectedTrainingCamps.map((camp) => (

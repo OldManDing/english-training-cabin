@@ -21,6 +21,14 @@ import {
 } from 'lucide-react';
 import { PracticeCompletionReport } from '../types';
 import { buildSpeakingPracticeReport } from '../domain/practice/reports';
+import {
+  clearPracticeDraftAfterCompletion,
+  loadPracticeDraft,
+  practiceDraftKeys,
+  savePracticeDraft,
+  type SpeakingPracticeAnalysis,
+  type SpeakingPracticeDraft,
+} from '../domain/practice/draftProgress';
 import { trackTelemetry } from '../lib/telemetry';
 import { apiRequest } from '../lib/api';
 import { pausePracticeSpeech, playPracticeSpeech, resumePracticeSpeech, stopPracticeSpeech } from '../lib/practiceSpeech';
@@ -31,27 +39,17 @@ interface SpeakingTrainingProps {
   onCompletePractice?: (report: PracticeCompletionReport) => Promise<void> | void;
 }
 
-interface SpeechAnalysis {
-  originalTextWithMarkings: string;
-  improvedTextWithConnectors: string;
-  fillerCount: number;
-  fluencyAnalysis: string;
-  logicAnalysis: string;
-  vocabularyAnalysis: string;
-  scoreImprovementFrom: number;
-  scoreImprovementTo: number;
-}
-
 const DEFAULT_SPEECH_DRAFT =
   'In the picture, I can see many wind turbines and solar panels. They are good for environment because they make clean energy. I think people should use them more, but some places maybe have cost problem.';
 
 export default function SpeakingTraining({ onUpdateProgress, onCompletePractice }: SpeakingTrainingProps) {
+  const [restoredDraft] = useState(() => loadPracticeDraft<SpeakingPracticeDraft>(practiceDraftKeys.speaking));
   // Current active step corresponding to the 4 screens:
   // 1: 准备开始 (Task Prep & Device Testing)
   // 2: 正在录音 (Active Recording / Speech Transcription)
   // 3: AI 反馈与改写 (AI Evaluation & Annotated Suggestions)
   // 4: 训练对比报告 (Improvement Comparison Report)
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(restoredDraft?.step ?? 1);
 
   // States for interactive simulations
   const [isTestingMic, setIsTestingMic] = useState(false);
@@ -62,18 +60,18 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
   const [isSpeakingPaused, setIsSpeakingPaused] = useState(false);
   const [addedToQueue, setAddedToQueue] = useState(false); // Step 4複習队列 state
   const [toast, setToast] = useState<string | null>(null); // Custom premium toast notification
-  const [speechStartedAt] = useState(() => new Date().toISOString());
-  const [speechDraft, setSpeechDraft] = useState(DEFAULT_SPEECH_DRAFT);
-  const [speechAnalysis, setSpeechAnalysis] = useState<SpeechAnalysis | null>(null);
+  const [speechStartedAt] = useState(() => restoredDraft?.startedAt ?? new Date().toISOString());
+  const [speechDraft, setSpeechDraft] = useState(restoredDraft?.speechDraft ?? DEFAULT_SPEECH_DRAFT);
+  const [speechAnalysis, setSpeechAnalysis] = useState<SpeakingPracticeAnalysis | null>(restoredDraft?.speechAnalysis ?? null);
   const [isAnalyzingSpeech, setIsAnalyzingSpeech] = useState(false);
   const [isPersistingReport, setIsPersistingReport] = useState(false);
-  const [analysisMode, setAnalysisMode] = useState<'live' | 'fallback' | null>(null);
+  const [analysisMode, setAnalysisMode] = useState<'live' | 'fallback' | null>(restoredDraft?.analysisMode ?? null);
   const [reportPersisted, setReportPersisted] = useState(false);
   const [isRecordingLive, setIsRecordingLive] = useState(false);
   const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
   const [recordingStatus, setRecordingStatus] = useState('可使用浏览器录音；录音仅本地回放，不上传。');
-  const [secondAttemptDraft, setSecondAttemptDraft] = useState('');
-  const [isSecondAttemptStarted, setIsSecondAttemptStarted] = useState(false);
+  const [secondAttemptDraft, setSecondAttemptDraft] = useState(restoredDraft?.secondAttemptDraft ?? '');
+  const [isSecondAttemptStarted, setIsSecondAttemptStarted] = useState(restoredDraft?.isSecondAttemptStarted ?? false);
 
   // Canvas ref for dynamic sound waveforms in Step 2
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -138,6 +136,27 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
       mediaRecorderRef.current?.stream.getTracks().forEach((track) => track.stop());
     };
   }, [recordedAudioUrl]);
+
+  useEffect(() => {
+    const hasMeaningfulDraft = step !== 1
+      || speechDraft !== DEFAULT_SPEECH_DRAFT
+      || Boolean(speechAnalysis)
+      || Boolean(secondAttemptDraft)
+      || isSecondAttemptStarted;
+    if (!hasMeaningfulDraft || reportPersisted) return;
+
+    savePracticeDraft<SpeakingPracticeDraft>(practiceDraftKeys.speaking, {
+      version: 1,
+      step,
+      startedAt: speechStartedAt,
+      speechDraft,
+      speechAnalysis: speechAnalysis ?? undefined,
+      analysisMode: analysisMode ?? undefined,
+      secondAttemptDraft,
+      isSecondAttemptStarted,
+      updatedAt: new Date().toISOString(),
+    });
+  }, [analysisMode, isSecondAttemptStarted, reportPersisted, secondAttemptDraft, speechAnalysis, speechDraft, speechStartedAt, step]);
 
   const handleTTS = async (text: string, id: string) => {
     if (isSpeakingSample === id) {
@@ -250,7 +269,7 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
     setIsAnalyzingSpeech(true);
     const startedAt = performance.now();
     try {
-      const result = await apiRequest<SpeechAnalysis>('/api/ai/analyze-speech', {
+      const result = await apiRequest<SpeakingPracticeAnalysis>('/api/ai/analyze-speech', {
         method: 'POST',
         body: JSON.stringify({ originalSpeech: speechDraft }),
       });
@@ -266,7 +285,7 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
       });
     } catch (error) {
       console.error(error);
-      const fallbackResult: SpeechAnalysis = {
+      const fallbackResult: SpeakingPracticeAnalysis = {
         originalTextWithMarkings: speechDraft,
         improvedTextWithConnectors:
           'In my opinion, renewable energy is meaningful because it can reduce pollution and support long-term development. However, we also need to consider cost and local conditions before using it widely.',
@@ -291,8 +310,8 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
     }
   };
 
-  const persistSpeakingReport = async (analysis: SpeechAnalysis, secondSpeech: string) => {
-    if (reportPersisted) return;
+  const persistSpeakingReport = async (analysis: SpeakingPracticeAnalysis, secondSpeech: string): Promise<boolean> => {
+    if (reportPersisted) return true;
 
     const report = buildSpeakingPracticeReport({
       examId: 'cet4',
@@ -306,15 +325,23 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
 
     setIsPersistingReport(true);
     try {
-      await onCompletePractice?.(report);
+      const completed = await clearPracticeDraftAfterCompletion(
+        practiceDraftKeys.speaking,
+        async () => {
+          await onCompletePractice?.(report);
+        },
+      );
+      if (!completed) return false;
       setReportPersisted(true);
       setAddedToQueue(report.reviewItems.length > 0);
       triggerToast(report.reviewItems.length > 0
-        ? '口语训练证据已写入能力画像和复习队列。'
-        : '口语训练证据已写入能力画像。');
+        ? '口语训练证据已写入复习队列。'
+        : '口语训练证据已保存。');
+      return true;
     } catch (error) {
       console.error(error);
       triggerToast('口语训练记录保存失败，请稍后在本页重试。');
+      return false;
     } finally {
       setIsPersistingReport(false);
     }
@@ -346,10 +373,12 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
       from: speechAnalysis.scoreImprovementFrom,
       to: speechAnalysis.scoreImprovementTo,
     });
-    await persistSpeakingReport(speechAnalysis, secondAttemptDraft.trim());
-    setTimeout(() => {
-      setStep(4);
-    }, 600);
+    const persisted = await persistSpeakingReport(speechAnalysis, secondAttemptDraft.trim());
+    if (persisted) {
+      setTimeout(() => {
+        setStep(4);
+      }, 600);
+    }
   };
 
   const handleAddToReviewQueue = () => {
@@ -364,7 +393,7 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
       return;
     }
 
-    persistSpeakingReport(speechAnalysis, secondAttemptDraft.trim() || speechAnalysis.improvedTextWithConnectors);
+    void persistSpeakingReport(speechAnalysis, secondAttemptDraft.trim() || speechAnalysis.improvedTextWithConnectors);
   };
 
   const handleRunMicTest = () => {
@@ -415,7 +444,7 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
     }
   };
 
-  const currentAnalysis: SpeechAnalysis = speechAnalysis ?? {
+  const currentAnalysis: SpeakingPracticeAnalysis = speechAnalysis ?? {
     originalTextWithMarkings: speechDraft,
     improvedTextWithConnectors: DEFAULT_SPEECH_DRAFT,
     fillerCount: 0,
@@ -1035,7 +1064,7 @@ export default function SpeakingTraining({ onUpdateProgress, onCompletePractice 
             {/* Top Right Action - Added to revision database */}
             <div className="flex flex-col gap-3 bg-slate-100/50 p-4 border border-slate-200 rounded-3xl sm:flex-row sm:justify-between sm:items-center">
               <span className="text-xs font-bold text-slate-500">
-                {reportPersisted ? '本轮口语证据已写入本地能力画像，复习队列会在今日任务中自动调度。' : '点击右侧按钮将此高频典型对比语料直接入库'}
+                {reportPersisted ? '本轮口语证据已保存并同步到服务器，复习队列会在今日任务中自动调度。' : '点击右侧按钮将此高频典型对比语料直接入库'}
               </span>
               <button
                 onClick={handleAddToReviewQueue}
