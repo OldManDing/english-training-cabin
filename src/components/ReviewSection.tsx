@@ -341,7 +341,7 @@ export default function ReviewSection({
       triggerToast(`已按“${outcomeLabels[reviewOutcome]}”更新掌握度与下次间隔。`);
     } catch (error) {
       console.error('Failed to save review completion:', error);
-      triggerToast('复习记录保存失败，本次尚未计入完成，请稍后重试。');
+      triggerToast('复习记录未能写入本地，本次未计入完成，请检查浏览器存储后重试。');
     } finally {
       setIsSaving(false);
     }

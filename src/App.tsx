@@ -615,14 +615,29 @@ function StudyApp() {
 
   const handleCompleteReviewItem = async (reviewItemId: string, evidence: ReviewCompletionEvidence) => {
     const records = await completeReviewItem(reviewItemId, evidence);
-    if (!records) return;
-    await confirmLearningEntities({
-      practiceSessionIds: [records.session.id],
-      attemptIds: [records.attempt.id],
-      reviewItemIds: [records.reviewItem.id],
-      skillProfileIds: records.skillProfile ? [records.skillProfile.id] : [],
-    });
-    await refreshStudyState();
+    if (!records) {
+      throw new Error(`Review item ${reviewItemId} was not found in local storage.`);
+    }
+
+    try {
+      await confirmLearningEntities({
+        practiceSessionIds: [records.session.id],
+        attemptIds: [records.attempt.id],
+        reviewItemIds: [records.reviewItem.id],
+        skillProfileIds: records.skillProfile ? [records.skillProfile.id] : [],
+      });
+    } catch (error) {
+      // The local transaction already committed. Keep the UI idempotent and let the pending sync retry.
+      console.warn('Review completion is saved locally and awaiting server confirmation:', error);
+    }
+
+    try {
+      await refreshStudyState();
+    } catch (error) {
+      // The local transaction already committed. Keep the completed card hidden and retry state refresh later.
+      console.error('Review completion saved, but local study state refresh failed:', error);
+      trackTelemetry('client_error', { area: 'review_state_refresh' });
+    }
     trackTelemetry('practice_completed', {
       mode: 'scheduled-review',
       moduleId: 'review',
