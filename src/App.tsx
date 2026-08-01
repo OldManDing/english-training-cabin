@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Sidebar from './components/Sidebar';
 import TodayDashboard from './components/TodayDashboard';
 import AuthGate from './components/AuthGate';
@@ -22,7 +22,7 @@ import {
   orderGrammarStructureQuestions,
   type GrammarStructureTopicId,
 } from './domain/practice/grammarStructureGuides';
-import { Cloud, CloudOff, LoaderCircle, Sparkles, X } from 'lucide-react';
+import { Cloud, CloudOff, LoaderCircle, RefreshCw, Sparkles, X } from 'lucide-react';
 import {
   completeReviewItem,
   getOrCreateActiveGoal,
@@ -283,6 +283,7 @@ function StudyApp() {
   const [learningSyncState, setLearningSyncState] = useState<LearningSyncState>('syncing');
   const [draftSyncState, setDraftSyncState] = useState<PracticeDraftSyncState>('syncing');
   const [learningRecoveryNotice, setLearningRecoveryNotice] = useState<string | null>(null);
+  const retryInFlightRef = useRef(false);
 
   const handleTriggerModal = (title: string, body: string) => {
     setModalContent({ title, body });
@@ -557,32 +558,34 @@ function StudyApp() {
     };
   }, []);
 
+  const retryPendingLearningData = useCallback(async () => {
+    if (retryInFlightRef.current || !navigator.onLine) return;
+    const token = getStoredAuthToken();
+    if (!token) return;
+
+    retryInFlightRef.current = true;
+    setLearningSyncState('syncing');
+    setDraftSyncState('syncing');
+    try {
+      const results = await Promise.allSettled([
+        synchronizeAuthoritativeLearningData(token),
+        synchronizePracticeDrafts(token),
+      ]);
+      const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+      if (failure) throw failure.reason;
+      setLearningSyncState('synced');
+      setDraftSyncState('synced');
+    } catch (error) {
+      console.error('Failed to retry pending learning data:', error);
+      setLearningSyncState('pending');
+      setDraftSyncState('pending');
+    } finally {
+      retryInFlightRef.current = false;
+    }
+  }, []);
+
   useEffect(() => {
     if (learningSyncState !== 'pending' && draftSyncState !== 'pending') return;
-
-    let retrying = false;
-    const retryPendingLearningData = async () => {
-      if (retrying || !navigator.onLine) return;
-      const token = getStoredAuthToken();
-      if (!token) return;
-      retrying = true;
-      setLearningSyncState('syncing');
-      setDraftSyncState('syncing');
-      try {
-        await Promise.all([
-          synchronizeAuthoritativeLearningData(token),
-          synchronizePracticeDrafts(token),
-        ]);
-        setLearningSyncState('synced');
-        setDraftSyncState('synced');
-      } catch (error) {
-        console.error('Failed to retry pending learning data:', error);
-        setLearningSyncState('pending');
-        setDraftSyncState('pending');
-      } finally {
-        retrying = false;
-      }
-    };
 
     window.addEventListener('online', retryPendingLearningData);
     const retryTimer = window.setInterval(retryPendingLearningData, 30_000);
@@ -590,7 +593,7 @@ function StudyApp() {
       window.removeEventListener('online', retryPendingLearningData);
       window.clearInterval(retryTimer);
     };
-  }, [draftSyncState, learningSyncState]);
+  }, [draftSyncState, learningSyncState, retryPendingLearningData]);
 
   const persistCompletionReport = async (report: PracticeCompletionReport) => {
     await persistPracticeCompletion(report);
@@ -1142,6 +1145,17 @@ function StudyApp() {
               ? '正在保存到服务器'
               : learningRecoveryNotice ?? '学习记录与草稿已保存到服务器'}
         </span>
+        {effectiveLearningSyncState === 'pending' && (
+          <button
+            type="button"
+            onClick={() => void retryPendingLearningData()}
+            aria-label="立即重试服务器同步"
+            title="立即重试服务器同步"
+            className="pointer-events-auto grid h-7 w-7 shrink-0 place-items-center rounded-md text-amber-800 transition-colors hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+          >
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />
+          </button>
+        )}
       </div>
       {showOnboarding ? (
         <Suspense fallback={<WorkspaceLoadingFallback />}>

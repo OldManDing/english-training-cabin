@@ -227,7 +227,7 @@ test('review completion stays idempotent while cloud confirmation is pending', a
   expect(pendingEvidence.item).toMatchObject({ masteryScore: 60, retrievalCount: 1 });
 
   await page.unroute('**/api/cloud/learning-entities');
-  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.getByRole('button', { name: '立即重试服务器同步' }).click();
   await expect(page.getByRole('status')).toContainText('学习记录与草稿已保存到服务器', { timeout: 10_000 });
 
   const token = await page.evaluate(() => localStorage.getItem('english-training-cabin:saas-token'));
