@@ -4,6 +4,7 @@ import { buildReviewCompletionRecords, type ReviewCompletionRecords } from '../.
 import { sortReviewItems } from '../../domain/review/reviewQueue';
 import { Attempt, PracticeSession, ReviewCompletionEvidence, ReviewItem, SkillProfile, StudyGoal } from '../../types';
 import { getSuggestedExamDate } from '../../domain/planner/defaultExamDate';
+import { isSettingsBaselineSkillProfile } from '../../domain/progress/skillProfileEvidence';
 
 export interface LearningDataBackup {
   app: 'english-training-cabin';
@@ -71,10 +72,6 @@ class EnglishTrainingDb extends Dexie {
 export const db = new EnglishTrainingDb();
 
 export const DEFAULT_GOAL_ID = 'goal-cet4-primary';
-
-export function isSettingsBaselineSkillProfile(profile: SkillProfile): boolean {
-  return profile.subSkillId.startsWith('settings-');
-}
 
 const LEARNING_TABLES = [
   db.studyGoals,

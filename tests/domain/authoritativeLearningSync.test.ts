@@ -4,6 +4,7 @@ import {
   learningBackupToEntities,
   learningEntitiesToBackup,
   mergeLearningEntities,
+  type CloudLearningEntity,
   type LearningEntity,
 } from '../../src/lib/storage/authoritativeLearningSync';
 import type { LearningDataBackup } from '../../src/lib/storage/db';
@@ -71,5 +72,33 @@ describe('authoritative learning sync', () => {
     };
 
     expect(filterAuthoritativeLearningEntities([goal, practiceDraft])).toEqual([goal]);
+  });
+
+  it('ignores legacy settings baselines in snapshots and entity responses', () => {
+    const legacySettingsProfile: LearningDataBackup['data']['skillProfiles'][number] = {
+      id: 'cet4-reading-settings-reading',
+      skillArea: 'reading',
+      subSkillId: 'settings-reading',
+      score: 72,
+      confidence: 3,
+      evidenceCount: 1,
+      lastUpdatedAt: '2026-07-27T09:30:00.000Z',
+    };
+    const legacyBackup = {
+      ...backup,
+      data: {
+        ...backup.data,
+        skillProfiles: [legacySettingsProfile],
+      },
+    } satisfies LearningDataBackup;
+    const legacyEntity: CloudLearningEntity = {
+      entityType: 'skillProfile',
+      entityId: legacySettingsProfile.id,
+      payload: { ...legacySettingsProfile },
+      updatedAt: legacySettingsProfile.lastUpdatedAt,
+    };
+
+    expect(learningBackupToEntities(legacyBackup)).toHaveLength(1);
+    expect(filterAuthoritativeLearningEntities([legacyEntity])).toEqual([]);
   });
 });

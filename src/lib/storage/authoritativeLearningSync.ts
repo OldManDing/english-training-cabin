@@ -2,6 +2,7 @@ import { Attempt, PracticeSession, ReviewItem, SkillProfile, StudyGoal } from '.
 import { apiRequest, getStoredAuthToken } from '../api';
 import { exportLearningData, mergeLearningData, type LearningDataBackup } from './db';
 import { getLearningBackupCounts, type LearningDataCounts } from './learningDataSummary';
+import { isSettingsBaselineSkillProfile } from '../../domain/progress/skillProfileEvidence';
 
 export type LearningEntityType = 'studyGoal' | 'practiceSession' | 'attempt' | 'reviewItem' | 'skillProfile';
 
@@ -99,7 +100,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function isAuthoritativeLearningEntity(entity: CloudLearningEntity): entity is LearningEntity {
   return COLLECTIONS.some((collection) => collection.entityType === entity.entityType)
     && Boolean(entity.entityId)
-    && isRecord(entity.payload);
+    && isRecord(entity.payload)
+    && !(entity.entityType === 'skillProfile' && isSettingsBaselineSkillProfile(entity.payload));
 }
 
 export function filterAuthoritativeLearningEntities(entities: CloudLearningEntity[]): LearningEntity[] {
@@ -115,6 +117,7 @@ export function learningBackupToEntities(
   return COLLECTIONS.flatMap(({ entityType, backupKey }) => {
     return backup.data[backupKey].flatMap((item) => {
       if (!isRecord(item) || typeof item.id !== 'string' || !item.id.trim()) return [];
+      if (entityType === 'skillProfile' && isSettingsBaselineSkillProfile(item)) return [];
       return [{
         entityType,
         entityId: item.id,

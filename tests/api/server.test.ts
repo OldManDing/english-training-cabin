@@ -11,6 +11,7 @@ import {
   createInMemorySaasStore,
   LOCAL_REGISTRATION_INVITE_CODE,
   signBillingWebhookPayload,
+  type LearningBackupSnapshot,
 } from '../../src/server/saas';
 
 const MOCK_WRITING_ESSAY =
@@ -516,6 +517,58 @@ describe('server API', () => {
       .send({ backup: firstBackup })
       .expect(409);
     expect(blocked.body.error).toBe('learning_snapshot_regression_blocked');
+  });
+
+  it('migrates legacy settings baselines without blocking the canonical snapshot', async () => {
+    const saasStore = createInMemorySaasStore();
+    const saasApp = createApp({
+      saasStore,
+      saasSessionSecret: 'legacy-settings-migration-secret',
+    });
+    const registerResponse = await request(saasApp)
+      .post('/api/auth/register')
+      .send({
+        email: `legacy-settings-${Date.now()}@example.com`,
+        inviteCode: LOCAL_REGISTRATION_INVITE_CODE,
+        password: 'secure-password-1',
+        name: 'Legacy Settings Learner',
+        organizationName: 'Legacy Settings Team',
+      })
+      .expect(201);
+    const token = registerResponse.body.token as string;
+    const account = registerResponse.body.account as {
+      organization: { id: string };
+      user: { id: string };
+    };
+    const canonicalBackup = createSmokeLearningBackup('legacy-settings-migration') as LearningBackupSnapshot;
+    const legacyBackup = structuredClone(canonicalBackup);
+    legacyBackup.data.skillProfiles.push({
+      id: 'cet4-reading-settings-reading',
+      skillArea: 'reading',
+      subSkillId: 'settings-reading',
+      score: 72,
+      confidence: 3,
+      evidenceCount: 1,
+      lastUpdatedAt: canonicalBackup.exportedAt,
+    });
+    await saasStore.saveLearningSnapshot({
+      organizationId: account.organization.id,
+      userId: account.user.id,
+      backup: legacyBackup,
+    });
+
+    const saved = await request(saasApp)
+      .put('/api/cloud/learning-data')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ backup: canonicalBackup })
+      .expect(200);
+    expect(saved.body.snapshot.counts.skillProfiles).toBe(1);
+
+    const restored = await request(saasApp)
+      .get('/api/cloud/learning-data')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(restored.body.snapshot.backup.data.skillProfiles).toEqual(canonicalBackup.data.skillProfiles);
   });
 
   it('allows repeated organization names without blocking public self-service signup', async () => {

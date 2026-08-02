@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import { isDeepStrictEqual } from 'node:util';
+import { isSettingsBaselineSkillProfile } from '../domain/progress/skillProfileEvidence';
 
 export type SubscriptionTier = 'free' | 'pro' | 'team' | 'enterprise';
 export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'canceled';
@@ -1807,6 +1808,9 @@ export function validateLearningBackup(value: unknown): LearningBackupSnapshot {
     throw new SaasApiError(400, 'invalid_learning_backup', '学习数据格式不正确。');
   }
 
+  const skillProfiles = assertArray(data.skillProfiles, 'skillProfiles')
+    .filter((profile) => !isSettingsBaselineSkillProfile(profile));
+
   return {
     app: 'english-training-cabin',
     schemaVersion: 1,
@@ -1816,7 +1820,7 @@ export function validateLearningBackup(value: unknown): LearningBackupSnapshot {
       practiceSessions: assertArray(data.practiceSessions, 'practiceSessions'),
       attempts: assertArray(data.attempts, 'attempts'),
       reviewItems: assertArray(data.reviewItems, 'reviewItems'),
-      skillProfiles: assertArray(data.skillProfiles, 'skillProfiles'),
+      skillProfiles,
     },
   };
 }
@@ -1830,7 +1834,9 @@ export function summarizeLearningSnapshot(snapshot: CloudLearningSnapshotRecord)
       practiceSessions: snapshot.backup.data.practiceSessions.length,
       attempts: snapshot.backup.data.attempts.length,
       reviewItems: snapshot.backup.data.reviewItems.length,
-      skillProfiles: snapshot.backup.data.skillProfiles.length,
+      skillProfiles: snapshot.backup.data.skillProfiles.filter(
+        (profile) => !isSettingsBaselineSkillProfile(profile),
+      ).length,
     },
   };
 }
@@ -1857,11 +1863,17 @@ export function shouldBlockLearningSnapshotRegression(
   if (!existingSnapshot) return false;
   const current = existingSnapshot.backup.data;
   const incoming = incomingBackup.data;
+  const currentSkillProfileCount = current.skillProfiles.filter(
+    (profile) => !isSettingsBaselineSkillProfile(profile),
+  ).length;
+  const incomingSkillProfileCount = incoming.skillProfiles.filter(
+    (profile) => !isSettingsBaselineSkillProfile(profile),
+  ).length;
   return (
     incoming.studyGoals.length < current.studyGoals.length ||
     incoming.practiceSessions.length < current.practiceSessions.length ||
     incoming.attempts.length < current.attempts.length ||
     incoming.reviewItems.length < current.reviewItems.length ||
-    incoming.skillProfiles.length < current.skillProfiles.length
+    incomingSkillProfileCount < currentSkillProfileCount
   );
 }
