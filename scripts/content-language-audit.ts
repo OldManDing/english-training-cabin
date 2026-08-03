@@ -39,6 +39,39 @@ const outputPhraseSupport = CET4_OUTPUT_PHRASE_BANK.map((item) => ({
   item,
   support: getVocabularySentenceSupport(item),
 }));
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+}
+
+function getMeaningAtoms(meaning: string) {
+  return meaning
+    .replace(/[（(][^）)]*[）)]/gu, '')
+    .split(/[；;,，、/]/u)
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .flatMap((value) => value.endsWith('的') && value.length > 2 ? [value, value.slice(0, -1)] : [value]);
+}
+
+function findMisplacedCoreMeaning(
+  entries: typeof vocabularySupport,
+) {
+  return entries.filter(({ item, support }) => {
+    if (support.chunks.length < 2) return false;
+    const targetPattern = new RegExp(`\\b${escapeRegExp(item.word)}\\b`, 'iu');
+    const targetChunkIndex = support.chunks.findIndex((chunk) => targetPattern.test(chunk.sourceText));
+    if (targetChunkIndex < 0) return false;
+    const atoms = getMeaningAtoms(item.meaning);
+    if (atoms.some((atom) => support.chunks[targetChunkIndex].chineseMeaning.includes(atom))) return false;
+    return support.chunks.some((chunk, index) => (
+      index !== targetChunkIndex
+      && atoms.some((atom) => chunk.chineseMeaning.includes(atom))
+    ));
+  });
+}
+
+const misplacedVocabularyCoreMeanings = findMisplacedCoreMeaning(vocabularySupport);
+const misplacedOutputPhraseCoreMeanings = findMisplacedCoreMeaning(outputPhraseSupport);
 const readingQuestions = CET4_READING_BANK.flatMap((passage) =>
   passage.questions.map((question) => ({ passage, question })),
 );
@@ -121,6 +154,8 @@ const report = {
     outputPhrasePlaceholderMeaning: outputPhraseSupport.filter(({ support }) =>
       forbiddenChineseMeaning.some((pattern) => pattern.test(support.chineseMeaning)),
     ).length,
+    vocabularyMisplacedCoreMeaning: misplacedVocabularyCoreMeanings.length,
+    outputPhraseMisplacedCoreMeaning: misplacedOutputPhraseCoreMeanings.length,
     duplicateEnglishWords: learnerFacingEnglish.filter((text) => /\b([A-Za-z]+)\s+\1\b/iu.test(text)).length,
     clozeAnswerLeaks: clozeAnswerLeaks.length,
     readingChineseFallbacks: readingChineseFallbacks.length,

@@ -740,7 +740,7 @@ test('unfinished vocabulary and listening practice resume from saved drafts', as
     await page.getByRole('button', { name: '提交词汇答案' }).click();
     await expect(page.getByTestId('vocabulary-post-answer-support')).toBeVisible();
     await expect(page.getByTestId('vocabulary-question-translation')).toBeVisible();
-    await expect(page.getByTestId('vocabulary-question-translation')).toContainText('听单词和例句后，选择最准确的英文释义');
+    await expect(page.getByTestId('vocabulary-question-translation')).toContainText('听完单词和例句后，选择最准确的英文释义');
     await expect(page.getByTestId('vocabulary-option-translation-A')).toBeVisible();
     await expect(page.getByRole('button', { name: /^A\. / })).toContainText('中文：');
     await expect(page.getByTestId('vocabulary-sentence-translation')).toBeVisible();
@@ -1830,6 +1830,26 @@ test('vocabulary translations render natural collocation examples in the browser
     '学生学习心理学，以理解人们如何学习和表现。',
   );
   await expect(page.getByTestId('vocabulary-sentence-translation')).not.toContainText('必须心理学');
+
+  await page.getByTestId('vocabulary-back-to-practice').click();
+  const decisionItem = await openVocabularyItem(page, 'decision');
+  await expect(page.getByText(
+    'Many students remembered the important decision made during the study-plan meeting.',
+  )).toBeVisible();
+  await page.getByRole('button', { name: new RegExp(`^${decisionItem.correctAnswer}\\. `) }).click();
+  await page.getByRole('button', { name: '有把握' }).click();
+  await page.getByRole('button', { name: '提交词汇答案' }).click();
+  await expect(page.getByTestId('vocabulary-sentence-translation')).toContainText(
+    '许多学生记住了学习计划会议上做出的重要决定。',
+  );
+  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('Many students remembered');
+  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText('许多学生记住了');
+  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText(
+    'the important decision made during the study-plan meeting',
+  );
+  await expect(page.getByTestId('vocabulary-sentence-chunks')).toContainText(
+    '学习计划会议上做出的重要决定',
+  );
 });
 
 test('vocabulary practice keeps a visible message when browser speech synthesis fails', async ({ page }) => {

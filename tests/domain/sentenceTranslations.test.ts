@@ -23,6 +23,7 @@ describe('practice sentence and vocabulary Chinese support', () => {
     const correctOption = support.optionTranslations.find((option) => option.key === adapt!.correctAnswer);
 
     expect(support.prompt.sourceText).toContain('Choose the most accurate English definition');
+    expect(support.prompt.chineseMeaning).toContain('听完单词和例句后，选择最准确的英文释义。');
     expect(support.prompt.chineseMeaning).toContain('adapt');
     expect(support.prompt.chineseMeaning).toContain(adapt!.meaning);
     expect(support.optionTranslations).toHaveLength(4);
@@ -151,7 +152,7 @@ describe('practice sentence and vocabulary Chinese support', () => {
     expect(support.chunks.every((chunk) => chunk.sourceText && chunk.chineseMeaning)).toBe(true);
   });
 
-  it('keeps most vocabulary examples split into visible sentence chunks', () => {
+  it('uses sentence chunks only when the translation boundary is reliable', () => {
     const supports = CET4_VOCABULARY_BANK.map((item) => ({
       word: item.word,
       example: item.example,
@@ -162,7 +163,7 @@ describe('practice sentence and vocabulary Chinese support', () => {
       support.chunks.some((chunk) => !chunk.sourceText.trim() || !chunk.chineseMeaning.trim()),
     );
 
-    expect(singleChunkItems.length).toBeLessThanOrEqual(90);
+    expect(singleChunkItems.length).toBeGreaterThan(0);
     expect(invalidChunks).toEqual([]);
   });
 
@@ -378,6 +379,34 @@ describe('practice sentence and vocabulary Chinese support', () => {
     expect(decision!.example).toBe(
       'Many students remembered the important decision made during the study-plan meeting.',
     );
+    expect(getVocabularySentenceSupport(decision!).chunks).toEqual([
+      {
+        sourceText: 'Many students remembered',
+        chineseMeaning: '许多学生记住了',
+      },
+      {
+        sourceText: 'the important decision made during the study-plan meeting',
+        chineseMeaning: '学习计划会议上做出的重要决定',
+      },
+    ]);
+  });
+
+  it('keeps vocabulary prompt chunks aligned with English word order', () => {
+    const support = getVocabularyQuestionSupport(CET4_VOCABULARY_BANK[0]).prompt;
+
+    expect(support.chineseMeaning).toContain('听完单词和例句后，选择最准确的英文释义。');
+    expect(support.chineseMeaning).toContain(CET4_VOCABULARY_BANK[0].word);
+    expect(support.chineseMeaning).toContain(CET4_VOCABULARY_BANK[0].meaning);
+    expect(support.chunks).toEqual([
+      {
+        sourceText: 'Choose the most accurate English definition',
+        chineseMeaning: `选择最准确的英文释义。目标词/语块：“${CET4_VOCABULARY_BANK[0].word}”；中文义：${CET4_VOCABULARY_BANK[0].meaning}`,
+      },
+      {
+        sourceText: 'after listening to the word and example sentence',
+        chineseMeaning: '听完单词和例句后',
+      },
+    ]);
   });
 
   it('keeps representative generated vocabulary examples natural and accurately translated', () => {

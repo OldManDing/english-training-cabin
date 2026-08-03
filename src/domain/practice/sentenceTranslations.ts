@@ -450,6 +450,8 @@ const KNOWN_SENTENCE_TRANSLATIONS: Record<string, string> = {
     '办公室不应无故更改截止日期。',
   'Many students remembered the important decision made during the study-plan meeting.':
     '许多学生记住了学习计划会议上做出的重要决定。',
+  'A computer virus damaged several files before the technician removed it.':
+    '电脑病毒在技术人员清除它之前损坏了几个文件。',
   'Throughout history, people have used stories to share values.':
     '纵观历史，人们一直用故事来传递价值观。',
   'Students followed the latest news before the discussion.':
@@ -916,8 +918,6 @@ const KNOWN_SENTENCE_TRANSLATIONS: Record<string, string> = {
     '会议讨论了校园暴力以及保护学生的方法。',
   'Honesty is a traditional virtue that appears often in Chinese stories.':
     '诚实是中国故事中经常出现的传统美德。',
-  'A computer virus damaged several files before the technician removed it.':
-    '技术人员清除电脑病毒前，它已经损坏了几个文件。',
   'Clear communication plays a vital role in group projects.':
     '清晰沟通在小组项目中发挥重要作用。',
   'Residents can witness change when public services respond to feedback.':
@@ -1190,6 +1190,29 @@ const KNOWN_SENTENCE_TRANSLATIONS: Record<string, string> = {
     '团队用调查结果解决宿舍里的一个问题。',
   'Clear rules can build trust between students and teachers.':
     '清晰的规则可以在师生之间建立信任。',
+};
+
+const KNOWN_SENTENCE_CHUNKS: Record<string, PracticeSentenceChunk[]> = {
+  'Many students remembered the important decision made during the study-plan meeting.': [
+    {
+      sourceText: 'Many students remembered',
+      chineseMeaning: '许多学生记住了',
+    },
+    {
+      sourceText: 'the important decision made during the study-plan meeting',
+      chineseMeaning: '学习计划会议上做出的重要决定',
+    },
+  ],
+  'A computer virus damaged several files before the technician removed it.': [
+    {
+      sourceText: 'A computer virus damaged several files',
+      chineseMeaning: '电脑病毒损坏了几个文件',
+    },
+    {
+      sourceText: 'before the technician removed it',
+      chineseMeaning: '在技术人员清除它之前',
+    },
+  ],
 };
 
 const KNOWN_OPTION_TRANSLATIONS: Record<string, string> = {
@@ -2432,8 +2455,8 @@ function splitChineseByClausePunctuation(value: string) {
     .filter(Boolean);
 }
 
-function alignSentenceChunks(sourceChunks: string[], chineseChunks: string[]): PracticeSentenceChunk[] | null {
-  if (sourceChunks.length < 2 || sourceChunks.length !== chineseChunks.length) return null;
+function alignSentenceChunks(sourceChunks: string[], chineseChunks: string[] | null): PracticeSentenceChunk[] | null {
+  if (!chineseChunks || sourceChunks.length < 2 || sourceChunks.length !== chineseChunks.length) return null;
   return sourceChunks.map((sourceChunk, index) => ({
     sourceText: sourceChunk,
     chineseMeaning: chineseChunks[index],
@@ -2443,6 +2466,7 @@ function alignSentenceChunks(sourceChunks: string[], chineseChunks: string[]): P
 type SourceChunkSplit = {
   chunks: string[];
   connector?: string;
+  kind: 'context' | 'connector';
 };
 
 function splitSourceByTrailingContext(sourceText: string) {
@@ -2452,6 +2476,7 @@ function splitSourceByTrailingContext(sourceText: string) {
   return {
     chunks: [mainClause.trim(), contextClause.trim()].filter(Boolean),
     connector: 'context',
+    kind: 'context',
   };
 }
 
@@ -2478,158 +2503,11 @@ function splitSourceByConnector(sourceText: string): SourceChunkSplit | null {
     const canUseSingleWordSubject = /^(?:can|may|must|should|will|would|could|need to|needs to|is|are|was|were|has|have|remains?|helps?|combines?|demonstrates?|focuses?|creates?|makes?|plays?|provides?|gives?|gave|supports?|improves?|uses?|offers?|explains?|shows?|includes?|contains?|becomes?|appears?|raises?|conducted|conduct|examines?|saves?|encouraged|encourage|informed|inform|made|make)$/iu.test(connectorLower);
     if (match.index < (canUseSingleWordSubject ? 3 : 8)) continue;
     if (beforeWordCount >= (canUseSingleWordSubject ? 1 : 2) && afterWordCount >= 2) {
-      return { chunks: [before, after], connector: connectorLower };
+      return { chunks: [before, after], connector: connectorLower, kind: 'connector' };
     }
   }
 
   return null;
-}
-
-function splitSourceAtBalancedBoundary(sourceText: string): SourceChunkSplit | null {
-  const words = sourceText.split(/\s+/u).filter(Boolean);
-  if (words.length < 5) return null;
-
-  const preferredBoundaryWords = new Set([
-    'is',
-    'are',
-    'was',
-    'were',
-    'has',
-    'have',
-    'gave',
-    'seems',
-    'seem',
-    'remains',
-    'remain',
-    'needs',
-    'need',
-    'helps',
-    'help',
-    'can',
-    'may',
-    'must',
-    'should',
-    'combines',
-    'combine',
-    'demonstrates',
-    'demonstrate',
-    'focuses',
-    'focus',
-    'creates',
-    'create',
-    'makes',
-    'make',
-    'made',
-    'plays',
-    'play',
-    'provides',
-    'provide',
-    'gives',
-    'give',
-    'supports',
-    'support',
-    'improves',
-    'improve',
-    'uses',
-    'use',
-    'offers',
-    'offer',
-    'explains',
-    'explain',
-    'shows',
-    'show',
-    'includes',
-    'include',
-    'contains',
-    'contain',
-    'becomes',
-    'become',
-    'appears',
-    'appear',
-    'raises',
-    'raise',
-    'conducted',
-    'conduct',
-    'asks',
-    'ask',
-    'changed',
-    'change',
-    'collected',
-    'collect',
-    'decided',
-    'decide',
-    'displays',
-    'display',
-    'exports',
-    'export',
-    'expresses',
-    'express',
-    'examines',
-    'examine',
-    'indicates',
-    'indicate',
-    'involves',
-    'involve',
-    'lists',
-    'list',
-    'organizes',
-    'organize',
-    'postponed',
-    'postpone',
-    'recommends',
-    'recommend',
-    'reminds',
-    'remind',
-    'summarizes',
-    'summarize',
-    'tests',
-    'test',
-    'saves',
-    'save',
-    'encouraged',
-    'encourage',
-    'informed',
-    'inform',
-    'to',
-    'when',
-    'while',
-    'before',
-    'after',
-    'because',
-    'and',
-    'or',
-    'but',
-    'without',
-    'that',
-    'which',
-    'who',
-  ]);
-  const midpoint = Math.floor(words.length / 2);
-  let bestBoundary = -1;
-  let bestDistance = Number.POSITIVE_INFINITY;
-
-  for (let index = 2; index < words.length - 1; index += 1) {
-    const normalized = words[index].toLowerCase().replace(/[^a-z-]/giu, '');
-    if (!preferredBoundaryWords.has(normalized)) continue;
-    const beforeWordCount = index;
-    const afterWordCount = words.length - index;
-    if (beforeWordCount < 2 || afterWordCount < 2) continue;
-    const distance = Math.abs(index - midpoint);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      bestBoundary = index;
-    }
-  }
-  if (bestBoundary === -1) return null;
-
-  const connector = words[bestBoundary].toLowerCase().replace(/[^a-z-]/giu, '');
-  return {
-    chunks: [
-      words.slice(0, bestBoundary).join(' '),
-      words.slice(bestBoundary).join(' '),
-    ].filter(Boolean),
-    connector,
-  };
 }
 
 function splitChineseAtBalancedBoundary(chineseMeaning: string, targetCount: number) {
@@ -2796,20 +2674,12 @@ function alignChineseChunksForSourceSplit(sourceSplit: SourceChunkSplit, chinese
   const punctuationChunks = splitChineseByClausePunctuation(chineseMeaning);
   const connector = sourceSplit.connector;
 
-  if (punctuationChunks.length === sourceSplit.chunks.length) {
-    if (connector === 'while') {
-      const simultaneousMatch = punctuationChunks[0].match(/^(.+?)在(.+?)的同时$/u);
-      if (simultaneousMatch) {
-        return [
-          `${simultaneousMatch[1]}${punctuationChunks[1]}`,
-          `同时${simultaneousMatch[2]}`,
-        ];
-      }
-    }
+  if (sourceSplit.kind === 'context') {
+    if (punctuationChunks.length !== sourceSplit.chunks.length) return null;
+    const firstChunk = punctuationChunks[0];
     if (
-      connector
-      && ['when', 'even when', 'although', 'unless', 'because'].includes(connector)
-      && (/^(当|即使|虽然|如果|只有|因为)/u.test(punctuationChunks[0]) || punctuationChunks[0].endsWith('时'))
+      /^(?:除非|由于|因为|如果|当|在|于|经过|完成|收到|参加|进入|使用|选择|提交|讨论|没有|即使|虽然)/u.test(firstChunk)
+      || /(?:前|后|时|期间|情况下)$/u.test(firstChunk)
     ) {
       return [...punctuationChunks].reverse();
     }
@@ -2822,7 +2692,37 @@ function alignChineseChunksForSourceSplit(sourceSplit: SourceChunkSplit, chinese
     : null;
   if (connectorChunks?.length === sourceSplit.chunks.length) return connectorChunks;
 
-  return splitChineseAtBalancedBoundary(chineseMeaning, sourceSplit.chunks.length);
+  if (punctuationChunks.length === sourceSplit.chunks.length) {
+    if (connector === 'while') {
+      const simultaneousMatch = punctuationChunks[0].match(/^(.+?)在(.+?)的同时$/u);
+      if (simultaneousMatch) {
+        return [
+          `${simultaneousMatch[1]}${punctuationChunks[1]}`,
+          `同时${simultaneousMatch[2]}`,
+        ];
+      }
+    }
+    if (
+      connector
+      && ['when', 'even when', 'although', 'unless', 'because', 'before', 'after', 'without'].includes(connector)
+      && (
+        /^(当|即使|虽然|如果|只有|因为|由于|除非|没有|无)/u.test(punctuationChunks[0])
+        || /(?:时|前|后)$/u.test(punctuationChunks[0])
+      )
+    ) {
+      return [...punctuationChunks].reverse();
+    }
+    if (
+      connector
+      && ['when', 'even when', 'although', 'unless', 'because', 'before', 'after', 'without'].includes(connector)
+      && /(?:当|时|后|前|期间|情况下)/u.test(punctuationChunks[0])
+    ) {
+      return null;
+    }
+    return punctuationChunks;
+  }
+
+  return null;
 }
 
 function buildSingleSentenceChunk(sourceText: string, chineseMeaning: string): PracticeSentenceChunk[] {
@@ -2840,7 +2740,6 @@ function buildSingleSentenceChunk(sourceText: string, chineseMeaning: string): P
   const sourceSplits = [
     trailingContextSplit,
     splitSourceByConnector(normalizedSource),
-    splitSourceAtBalancedBoundary(normalizedSource),
   ].filter((sourceSplit, index, candidates): sourceSplit is SourceChunkSplit => (
     Boolean(sourceSplit?.chunks.length && sourceSplit.chunks.length >= 2)
     && candidates.findIndex((candidate) => candidate?.chunks.join('\u0000') === sourceSplit?.chunks.join('\u0000')) === index
@@ -2850,15 +2749,6 @@ function buildSingleSentenceChunk(sourceText: string, chineseMeaning: string): P
     const chineseChunks = alignChineseChunksForSourceSplit(sourceSplit, normalizedChinese);
     const alignedChunks = alignSentenceChunks(sourceSplit.chunks, chineseChunks);
     if (alignedChunks && !hasAwkwardChineseChunkBoundary(alignedChunks)) return alignedChunks;
-  }
-  if (trailingContextSplit) {
-    const contextChunks = splitChineseByClausePunctuation(normalizedChinese);
-    if (contextChunks.length === 2) {
-      return trailingContextSplit.chunks.map((chunk, index) => ({
-        sourceText: chunk,
-        chineseMeaning: contextChunks[index],
-      }));
-    }
   }
   return [{ sourceText: normalizedSource, chineseMeaning: normalizedChinese }];
 }
@@ -5277,24 +5167,33 @@ function translateVocabularyOption(item: VocabularyQuestionInput, key: Vocabular
 export function getVocabularySentenceSupport(item: VocabularySentenceInput): PracticeSentenceSupport {
   const sourceText = normalizeText(item.example);
   const known = KNOWN_SENTENCE_TRANSLATIONS[sourceText];
+  const knownChunks = KNOWN_SENTENCE_CHUNKS[sourceText];
   const fallback = known ? null : buildVocabularyFallback(item);
   const chineseMeaning = known ?? fallback?.chineseMeaning ?? '';
   return {
     sourceText,
     chineseMeaning,
-    chunks: fallback?.chunks ?? buildSingleSentenceChunk(sourceText, chineseMeaning),
+    chunks: knownChunks ?? fallback?.chunks ?? buildSingleSentenceChunk(sourceText, chineseMeaning),
   };
 }
 
 export function getVocabularyQuestionSupport(item: VocabularyQuestionInput): VocabularyQuestionSupport {
+  const promptSource = 'Choose the most accurate English definition after listening to the word and example sentence.';
+  const promptMeaning = `听完单词和例句后，选择最准确的英文释义。目标词/语块：“${item.word}”；中文义：${item.meaning}。`;
   return {
     prompt: {
-      sourceText: 'Choose the most accurate English definition after listening to the word and example sentence.',
-      chineseMeaning: `听单词和例句后，选择最准确的英文释义。目标词/语块：“${item.word}”；中文义：${item.meaning}。`,
-      chunks: buildSingleSentenceChunk(
-        'Choose the most accurate English definition after listening to the word and example sentence.',
-        `听单词和例句后，选择最准确的英文释义。目标词/语块：“${item.word}”；中文义：${item.meaning}。`,
-      ),
+      sourceText: promptSource,
+      chineseMeaning: promptMeaning,
+      chunks: [
+        {
+          sourceText: 'Choose the most accurate English definition',
+          chineseMeaning: `选择最准确的英文释义。目标词/语块：“${item.word}”；中文义：${item.meaning}`,
+        },
+        {
+          sourceText: 'after listening to the word and example sentence',
+          chineseMeaning: '听完单词和例句后',
+        },
+      ],
     },
     optionTranslations: (['A', 'B', 'C', 'D'] as VocabularyChoice[]).map((key) => ({
       key,
