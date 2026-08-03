@@ -473,10 +473,10 @@ function StudyApp() {
   }, []);
 
   useEffect(() => {
-    if (!learningRecoveryNotice) return;
+    if (!learningRecoveryNotice || effectiveLearningSyncState !== 'synced') return;
     const timer = window.setTimeout(() => setLearningRecoveryNotice(null), 8_000);
     return () => window.clearTimeout(timer);
-  }, [learningRecoveryNotice]);
+  }, [effectiveLearningSyncState, learningRecoveryNotice]);
 
   useEffect(() => {
     let mounted = true;

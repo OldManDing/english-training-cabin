@@ -20,12 +20,13 @@ describe('practice question Chinese support', () => {
       passage.questions.map((question) => ({ passageId: passage.id, question })),
     ).find(
       (item) =>
-        item.question.question === 'What benefit of campus library services in daily practice is mentioned in the first paragraph?',
+        item.passageId === 'cet-scale-campus-library-practice'
+        && item.question.question === 'What positive effect is mentioned in the first paragraph?',
     );
 
     expect(target).toBeTruthy();
     expect(getReadingChineseSupport(target!.passageId, target!.question)).toMatchObject({
-      question: '第一段提到了“校园图书馆服务在日常实践中的应用”的什么好处？',
+      question: '第一段提到了什么积极作用？',
     });
   });
 
@@ -69,7 +70,7 @@ describe('practice question Chinese support', () => {
           question: question.question,
           support: getReadingChineseSupport(passage.id, question)?.question ?? '',
         }))
-        .filter(({ support }) => support.includes('正确答案和定位译文提交后显示')),
+        .filter(({ support }) => support.includes('正确答案和定位解析提交后显示')),
     );
 
     expect(fallbackQuestions).toEqual([]);

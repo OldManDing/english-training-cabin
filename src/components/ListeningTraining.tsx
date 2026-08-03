@@ -905,7 +905,7 @@ export default function ListeningTraining({
                   <Sparkles className="h-4 w-4" />
                 </div>
                 <h4 className="text-xs font-extrabold text-[#0369a1] uppercase tracking-wider">
-                  答后句子翻译
+                  答后定位解析
                 </h4>
               </div>
 
@@ -914,22 +914,9 @@ export default function ListeningTraining({
                   data-testid="listening-sentence-translation"
                   className="rounded-2xl border border-[#bae6fd] bg-white p-4 text-xs leading-5 text-slate-700"
                 >
-                  <div className="font-extrabold text-[#0369a1]">答后句子翻译</div>
+                  <div className="font-extrabold text-[#0369a1]">答后定位解析</div>
                   <p className="mt-2 font-bold text-slate-900">英文原句：{activeSentenceSupport.sourceText}</p>
-                  <p className="mt-1 font-semibold text-slate-600">中文句意：{activeSentenceSupport.chineseMeaning}</p>
-                  {activeSentenceSupport.chunks.length > 1 ? (
-                    <div data-testid="listening-sentence-chunks" className="mt-3 space-y-2">
-                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                        断句译文
-                      </div>
-                      {activeSentenceSupport.chunks.map((chunk) => (
-                        <div key={chunk.sourceText} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
-                          <p className="font-bold text-slate-800">{chunk.sourceText}</p>
-                          <p className="mt-1 text-[11px] font-semibold text-slate-600">{chunk.chineseMeaning}</p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
+                  <p className="mt-1 font-semibold text-slate-600">定位说明：{activeSentenceSupport.chineseMeaning}</p>
                 </div>
               ) : null}
 

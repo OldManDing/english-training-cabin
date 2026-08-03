@@ -1022,16 +1022,28 @@ const MAIN_PRACTICE_SCALE_TOPICS = CET4_SCALE_TOPIC_CONFIGS.filter(
 const SUBJECTIVE_SCALE_TOPICS = CET4_SCALE_TOPIC_CONFIGS.slice(0, 10);
 
 function lowerFirstEnglishFragment(value: string): string {
-  if (!value) return value;
-  return value.charAt(0).toLowerCase() + value.slice(1);
+  const normalized = value.trim().replace(/[.!?]+$/u, '');
+  if (!normalized) return normalized;
+  return normalized.charAt(0).toLowerCase() + normalized.slice(1);
+}
+
+function capitalizeEnglishFragment(value: string): string {
+  const normalized = value.trim().replace(/[.!?]+$/u, '');
+  if (!normalized) return normalized;
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function blankTargetWord(text: string, word: string): string {
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  return text.replace(new RegExp(`\\b${escaped}\\b`, 'giu'), '_____');
 }
 
 function makeExtendedReadingPassage(config: ExtendedReadingConfig): Passage {
-  const content = `${config.topic} has become a familiar subject in college life and public discussion. Supporters point out that ${config.benefit}. This advantage is especially important when students need to connect classroom knowledge with real situations rather than remember facts mechanically.
+  const content = `Discussion of ${config.topic.toLowerCase()} has become common in college life and public debate. Supporters point out that ${lowerFirstEnglishFragment(config.benefit)}. This advantage is especially important when students need to connect classroom knowledge with real situations rather than remember facts mechanically.
 
-However, the value of ${config.topic.toLowerCase()} depends on how it is used. ${config.concern}. If people focus only on speed or appearance, they may ignore the deeper purpose of learning, service, or communication. This is why a simple change may not lead to a reliable outcome by itself.
+However, achieving useful results in this area depends on how the idea is applied. ${capitalizeEnglishFragment(config.concern)}. If people focus only on speed or appearance, they may ignore the deeper purpose of learning, service, or communication. This is why a simple change may not lead to a reliable outcome by itself.
 
-A more practical solution is to ${config.action}. With this balanced approach, ${config.topic.toLowerCase()} can become a useful resource instead of a temporary trend. The key is to make progress visible, protect fairness, and encourage people to reflect on the result.`;
+A more practical solution is to ${config.action}. With this balanced approach, work in this area can provide lasting value instead of becoming a temporary trend. The key is to make progress visible, protect fairness, and encourage people to reflect on the result.`;
 
   return {
     id: config.id,
@@ -1045,9 +1057,9 @@ A more practical solution is to ${config.action}. With this balanced approach, $
         examId: 'cet4',
         moduleId: 'reading',
         questionTypeId: 'careful-reading',
-        question: `What benefit of ${config.topic.toLowerCase()} is mentioned in the first paragraph?`,
+        question: 'What positive effect is mentioned in the first paragraph?',
         options: {
-          A: config.benefit,
+          A: capitalizeEnglishFragment(config.benefit),
           B: 'It removes the need for all planning and review.',
           C: 'It makes every learner choose the same method.',
           D: 'It prevents people from using classroom knowledge.',
@@ -1058,7 +1070,7 @@ A more practical solution is to ${config.action}. With this balanced approach, $
         tags: [config.themeTag, '细节定位'],
         difficulty: 2,
         sourceType: 'original',
-        correctSentence: `Supporters point out that ${config.benefit}.`,
+        correctSentence: `Supporters point out that ${lowerFirstEnglishFragment(config.benefit)}.`,
       }),
       makeQuestion({
         id: `${config.id}-2`,
@@ -1105,7 +1117,7 @@ A more practical solution is to ${config.action}. With this balanced approach, $
         examId: 'cet4',
         moduleId: 'reading',
         questionTypeId: 'careful-reading',
-        question: `What does the word "${config.keyword}" in the passage mainly refer to?`,
+        question: 'What does the word "approach" in the passage mainly refer to?',
         options: {
           A: 'A helpful source or method that supports a goal.',
           B: 'A rule that prevents all communication.',
@@ -1113,12 +1125,12 @@ A more practical solution is to ${config.action}. With this balanced approach, $
           D: 'A mistake that cannot be corrected.',
         },
         correctAnswer: 'A',
-        explanation: `${config.keyword} 在上下文中表示可被利用来支持目标的资源或方式。`,
+        explanation: 'approach 在上下文中表示为实现目标而采用的方法。',
         type: '词义猜测',
         tags: [config.themeTag, '上下文猜词'],
         difficulty: 3,
         sourceType: 'original',
-        correctSentence: `With this balanced approach, ${config.topic.toLowerCase()} can become a useful resource instead of a temporary trend.`,
+        correctSentence: 'With this balanced approach, work in this area can provide lasting value instead of becoming a temporary trend.',
       }),
     ],
   };
@@ -1129,8 +1141,8 @@ const READING_EXPANSION_ANGLES = [
     slug: 'case-study',
     title: 'Case Study',
     keyword: 'application',
-    topic: (topic: Cet4ScaleTopicConfig) => `${topic.topic} in a local case`,
-    benefit: (topic: Cet4ScaleTopicConfig) => `a local example can show how ${topic.topic.toLowerCase()} works in real life`,
+    topic: (topic: Cet4ScaleTopicConfig) => `a local case involving ${topic.topic.toLowerCase()}`,
+    benefit: (topic: Cet4ScaleTopicConfig) => `a local example can show how related efforts work in real life`,
     concern: (topic: Cet4ScaleTopicConfig) => topic.concern,
     action: (topic: Cet4ScaleTopicConfig) => `compare one local case with the expected benefit of ${topic.topic.toLowerCase()}`,
   },
@@ -1138,8 +1150,8 @@ const READING_EXPANSION_ANGLES = [
     slug: 'data-feedback',
     title: 'Data and Feedback',
     keyword: 'evidence',
-    topic: (topic: Cet4ScaleTopicConfig) => `${topic.topic} and feedback`,
-    benefit: (topic: Cet4ScaleTopicConfig) => `feedback data can help people judge whether ${topic.topic.toLowerCase()} is improving`,
+    topic: (topic: Cet4ScaleTopicConfig) => `the use of feedback in ${topic.topic.toLowerCase()}`,
+    benefit: (topic: Cet4ScaleTopicConfig) => `feedback data can help people judge whether related efforts are improving`,
     concern: (topic: Cet4ScaleTopicConfig) => 'Numbers may be misleading if people collect them without understanding the real situation',
     action: (topic: Cet4ScaleTopicConfig) => `collect simple feedback and connect it with practical changes in ${topic.topic.toLowerCase()}`,
   },
@@ -1147,7 +1159,7 @@ const READING_EXPANSION_ANGLES = [
     slug: 'student-role',
     title: 'The Student Role',
     keyword: 'responsibility',
-    topic: (topic: Cet4ScaleTopicConfig) => `students and ${topic.topic.toLowerCase()}`,
+    topic: (topic: Cet4ScaleTopicConfig) => `the role of students in ${topic.topic.toLowerCase()}`,
     benefit: (topic: Cet4ScaleTopicConfig) => `students can turn ${topic.topic.toLowerCase()} into a chance to practice communication and responsibility`,
     concern: (topic: Cet4ScaleTopicConfig) => 'Participation may become shallow if students only complete the task for a record',
     action: (topic: Cet4ScaleTopicConfig) => `ask students to explain what they learned from ${topic.topic.toLowerCase()} after practice`,
@@ -1156,17 +1168,17 @@ const READING_EXPANSION_ANGLES = [
     slug: 'policy-balance',
     title: 'Policy and Balance',
     keyword: 'policy',
-    topic: (topic: Cet4ScaleTopicConfig) => `${topic.topic} policy`,
-    benefit: (topic: Cet4ScaleTopicConfig) => `a balanced policy can make ${topic.topic.toLowerCase()} fairer and more reliable`,
+    topic: (topic: Cet4ScaleTopicConfig) => `policies related to ${topic.topic.toLowerCase()}`,
+    benefit: () => 'balanced policies can support useful work while protecting fairness and practical needs',
     concern: (topic: Cet4ScaleTopicConfig) => topic.concern,
-    action: (topic: Cet4ScaleTopicConfig) => `adjust rules for ${topic.topic.toLowerCase()} after listening to different groups`,
+    action: () => 'adjust rules and support measures after listening to different groups',
   },
   {
     slug: 'long-term-impact',
     title: 'Long-Term Impact',
     keyword: 'impact',
-    topic: (topic: Cet4ScaleTopicConfig) => `the long-term impact of ${topic.topic.toLowerCase()}`,
-    benefit: (topic: Cet4ScaleTopicConfig) => `${topic.topic} can create lasting value when its results are reviewed regularly`,
+    topic: (topic: Cet4ScaleTopicConfig) => `the long-term effects of ${topic.topic.toLowerCase()}`,
+    benefit: (topic: Cet4ScaleTopicConfig) => `${topic.topic} can create lasting value when people review the results regularly`,
     concern: (topic: Cet4ScaleTopicConfig) => 'Short-term success may hide costs that appear later',
     action: (topic: Cet4ScaleTopicConfig) => `review the long-term impact of ${topic.topic.toLowerCase()} instead of judging only quick results`,
   },
@@ -1174,17 +1186,17 @@ const READING_EXPANSION_ANGLES = [
     slug: 'community-access',
     title: 'Community Access',
     keyword: 'accessible',
-    topic: (topic: Cet4ScaleTopicConfig) => `community access to ${topic.topic.toLowerCase()}`,
-    benefit: (topic: Cet4ScaleTopicConfig) => `${topic.topic} becomes more useful when different groups can access it easily`,
-    concern: (topic: Cet4ScaleTopicConfig) => 'Older residents and busy learners may be left behind if access is too complicated',
-    action: (topic: Cet4ScaleTopicConfig) => `make ${topic.topic.toLowerCase()} easier to reach through clear guidance and offline support`,
+    topic: (topic: Cet4ScaleTopicConfig) => `community participation in work related to ${topic.topic.toLowerCase()}`,
+    benefit: () => 'broader participation can help useful efforts reach different groups',
+    concern: () => 'Older residents and busy learners may be left behind if participation is too complicated',
+    action: () => 'make participation easier through clear guidance and offline support',
   },
   {
     slug: 'exam-relevance',
     title: 'Exam Relevance',
     keyword: 'context',
-    topic: (topic: Cet4ScaleTopicConfig) => `${topic.topic} in exam contexts`,
-    benefit: (topic: Cet4ScaleTopicConfig) => `the topic helps learners practice common CET-4 ideas about ${topic.themeTag}`,
+    topic: (topic: Cet4ScaleTopicConfig) => `how ${topic.topic.toLowerCase()} appears in CET-4 tasks`,
+    benefit: () => 'the topic helps learners practice common CET-4 ideas and useful English expressions',
     concern: (topic: Cet4ScaleTopicConfig) => 'Learners may know the topic in Chinese but lack English expressions for it',
     action: (topic: Cet4ScaleTopicConfig) => `learn key phrases about ${topic.topic.toLowerCase()} through reading, listening, writing, and translation`,
   },
@@ -1285,8 +1297,8 @@ const EXTENDED_READING_PASSAGES: Passage[] = [
     {
       id: `cet-scale-${topic.slug}-practice`,
       title: `${topic.title}: A Practical Approach`,
-      topic: `${topic.topic} in daily practice`,
-      benefit: topic.action,
+      topic: `Practical action related to ${topic.topic.toLowerCase()}`,
+      benefit: `practical action can help people ${topic.action}`,
       concern: topic.concern,
       action: `compare the expected result with real evidence from ${topic.topic.toLowerCase()}`,
       keyword: topicIndex % 2 === 0 ? 'approach' : 'evidence',
@@ -1295,10 +1307,10 @@ const EXTENDED_READING_PASSAGES: Passage[] = [
     {
       id: `cet-scale-${topic.slug}-evidence`,
       title: `${topic.title}: Evidence and Improvement`,
-      topic: `${topic.topic} improvement`,
-      benefit: `clear evidence can show whether ${topic.topic.toLowerCase()} is producing useful results`,
+      topic: `Evidence related to ${topic.topic.toLowerCase()}`,
+      benefit: `clear evidence can show whether related efforts are producing useful results`,
       concern: topic.concern,
-      action: `collect feedback, identify weak points, and adjust ${topic.topic.toLowerCase()} step by step`,
+      action: `collect feedback, identify weak points, and improve related work step by step`,
       keyword: topicIndex % 2 === 0 ? 'visible' : 'reliable',
       themeTag: topic.themeTag,
     },
@@ -1944,8 +1956,8 @@ const LISTENING_EXPANSION_SCENARIOS = [
     questionTypeId: 'short-news' as const,
     title: '短篇新闻补充',
     prompt: (topic: Cet4ScaleTopicConfig) => `What benefit of ${topic.topic.toLowerCase()} is mentioned?`,
-    correctOption: (topic: Cet4ScaleTopicConfig) => topic.benefit,
-    correctSentence: (topic: Cet4ScaleTopicConfig) => `The speaker says that ${topic.benefit}.`,
+    correctOption: (topic: Cet4ScaleTopicConfig) => capitalizeEnglishFragment(topic.benefit),
+    correctSentence: (topic: Cet4ScaleTopicConfig) => `The speaker says that ${lowerFirstEnglishFragment(topic.benefit)}.`,
     explanation: (topic: Cet4ScaleTopicConfig) => `听到 says that 后定位积极作用：${topic.benefit}`,
     trapType: '关键信息漏听',
   },
@@ -1954,8 +1966,8 @@ const LISTENING_EXPANSION_SCENARIOS = [
     questionTypeId: 'short-news' as const,
     title: '短篇新闻补充',
     prompt: (topic: Cet4ScaleTopicConfig) => `What concern is reported about ${topic.topic.toLowerCase()}?`,
-    correctOption: (topic: Cet4ScaleTopicConfig) => topic.concern,
-    correctSentence: (topic: Cet4ScaleTopicConfig) => `The report also notes that ${topic.concern}.`,
+    correctOption: (topic: Cet4ScaleTopicConfig) => capitalizeEnglishFragment(topic.concern),
+    correctSentence: (topic: Cet4ScaleTopicConfig) => `The report also notes that ${lowerFirstEnglishFragment(topic.concern)}.`,
     explanation: (topic: Cet4ScaleTopicConfig) => `also notes that 后面是限制信息：${topic.concern}`,
     trapType: '转折信息漏听',
   },
@@ -1974,8 +1986,8 @@ const LISTENING_EXPANSION_SCENARIOS = [
     questionTypeId: 'long-conversation' as const,
     title: '长对话补充',
     prompt: (topic: Cet4ScaleTopicConfig) => `What does the student worry about in relation to ${topic.topic.toLowerCase()}?`,
-    correctOption: (topic: Cet4ScaleTopicConfig) => topic.concern,
-    correctSentence: (topic: Cet4ScaleTopicConfig) => `The student says, "I am worried that ${topic.concern}."`,
+    correctOption: (topic: Cet4ScaleTopicConfig) => capitalizeEnglishFragment(topic.concern),
+    correctSentence: (topic: Cet4ScaleTopicConfig) => `The student says, "I am worried that ${lowerFirstEnglishFragment(topic.concern)}."`,
     explanation: (topic: Cet4ScaleTopicConfig) => `学生的 worry 直接对应：${topic.concern}`,
     trapType: '低信心',
   },
@@ -2024,8 +2036,8 @@ const LISTENING_EXPANSION_SCENARIOS = [
     questionTypeId: 'listening-passage' as const,
     title: '听力篇章补充',
     prompt: () => 'What risk does the speaker mention?',
-    correctOption: (topic: Cet4ScaleTopicConfig) => topic.concern,
-    correctSentence: (topic: Cet4ScaleTopicConfig) => `The speaker warns that ${topic.concern}.`,
+    correctOption: (topic: Cet4ScaleTopicConfig) => capitalizeEnglishFragment(topic.concern),
+    correctSentence: (topic: Cet4ScaleTopicConfig) => `The speaker warns that ${lowerFirstEnglishFragment(topic.concern)}.`,
     explanation: (topic: Cet4ScaleTopicConfig) => `warns that 后面是风险：${topic.concern}`,
     trapType: '细节偷换',
   },
@@ -2393,8 +2405,8 @@ const EXTENDED_LISTENING_ITEMS: Array<{
         title: `短篇新闻扩展 ${topicIndex + 1}`,
         prompt: `What benefit of ${topic.topic.toLowerCase()} is reported?`,
         correctAnswer: newsAnswer,
-        correctOption: topic.benefit,
-        correctSentence: `The report says that ${topic.benefit}.`,
+        correctOption: capitalizeEnglishFragment(topic.benefit),
+        correctSentence: `The report says that ${lowerFirstEnglishFragment(topic.benefit)}.`,
         explanation: `短篇新闻定位 says that 后面的核心信息：${topic.benefit}`,
         trapType: '关键信息漏听',
       },
@@ -2404,8 +2416,8 @@ const EXTENDED_LISTENING_ITEMS: Array<{
         title: `长对话扩展 ${topicIndex + 1}`,
         prompt: `What concern does the student mention about ${topic.topic.toLowerCase()}?`,
         correctAnswer: conversationAnswerA,
-        correctOption: topic.concern,
-        correctSentence: `The student mentions that ${topic.concern}.`,
+        correctOption: capitalizeEnglishFragment(topic.concern),
+        correctSentence: `The student mentions that ${lowerFirstEnglishFragment(topic.concern)}.`,
         explanation: `长对话 concern 定位：${topic.concern}`,
         trapType: '转折信息漏听',
       },
@@ -2437,8 +2449,8 @@ const EXTENDED_LISTENING_ITEMS: Array<{
         title: `听力篇章扩展 ${topicIndex + 1}`,
         prompt: 'What risk does the speaker warn against?',
         correctAnswer: passageAnswerB,
-        correctOption: topic.concern,
-        correctSentence: `The speaker warns that ${topic.concern}.`,
+        correctOption: capitalizeEnglishFragment(topic.concern),
+        correctSentence: `The speaker warns that ${lowerFirstEnglishFragment(topic.concern)}.`,
         explanation: `warns that 后面是风险信息：${topic.concern}`,
         trapType: '细节偷换',
       },
@@ -2609,7 +2621,7 @@ const WORD_BANK_EXPANSION_FRAMES = [
     slug: 'collocation-clue',
     title: '选词填空搭配线索',
     prompt: (item: VocabularyPracticeItem) =>
-      `Choose the best word or phrase for the collocation "${item.collocation}". Use the context to avoid a meaning-only guess.`,
+      `Choose the word that best completes this collocation: ${blankTargetWord(item.collocation, item.word)}.`,
     correctSentence: (item: VocabularyPracticeItem) => item.example,
     explanation: (item: VocabularyPracticeItem) =>
       `${item.collocation} 是本题搭配线索；不要只看中文意思，要判断词性和上下文是否匹配。`,
@@ -4251,7 +4263,7 @@ const BASE_GRAMMAR_STRUCTURE_FRAMES: readonly GrammarStructureFrame[] = [
   {
     slug: 'now-that',
     focus: '原因状语从句|now that',
-    prompt: (context) => `___ ${context.learners} know the rule, they can finish the exercise faster.`,
+    prompt: (context) => `___ ${lowerFirst(context.learners)} know the rule, they can finish the exercise faster.`,
     options: { A: 'Now that', B: 'Even though', C: 'Unless', D: 'In case' },
     answer: 'A',
     explanation: 'now that 表示“既然”，引导原因状语从句。',
@@ -4374,7 +4386,7 @@ const SUPPLEMENTAL_GRAMMAR_STRUCTURE_FRAMES: readonly GrammarStructureFrame[] = 
   {
     slug: 'be-going-to-plan',
     focus: '时态|be going to',
-    prompt: (context) => `${capitalizeFirst(context.learners)} ___ the ${context.actionObject} after ${context.event}.`,
+    prompt: (context) => `${capitalizeFirst(context.learners)} ___ ${context.actionObject} after ${context.event}.`,
     options: { A: 'are going to review', B: 'reviewed', C: 'have reviewed', D: 'were reviewing' },
     answer: 'A',
     explanation: '表示已经计划好的将来动作，可用 be going to do。',
@@ -4406,7 +4418,7 @@ const SUPPLEMENTAL_GRAMMAR_STRUCTURE_FRAMES: readonly GrammarStructureFrame[] = 
   {
     slug: 'past-continuous-passive',
     focus: '被动语态|过去进行时',
-    prompt: (context) => `The ${context.resource} ___ when ${context.learners} entered the room.`,
+    prompt: (context) => `The ${context.resource} ___ when ${lowerFirst(context.learners)} entered the room.`,
     options: { A: 'was being updated', B: 'updated', C: 'has updated', D: 'is updating' },
     answer: 'A',
     explanation: '过去某时正在被更新，用 was being done。',
@@ -4566,7 +4578,7 @@ const SUPPLEMENTAL_GRAMMAR_STRUCTURE_FRAMES: readonly GrammarStructureFrame[] = 
   {
     slug: 'that-appositive-clause',
     focus: '同位语从句|that',
-    prompt: (context) => `The news ___ the ${context.event} had been canceled surprised ${lowerFirst(context.learners)}.`,
+    prompt: (context) => `The news ___ ${context.event} had been canceled surprised ${lowerFirst(context.learners)}.`,
     options: { A: 'what', B: 'that', C: 'which', D: 'where' },
     answer: 'B',
     explanation: 'that 引导同位语从句，说明 news 的具体内容。',
@@ -4782,7 +4794,7 @@ const SUPPLEMENTAL_GRAMMAR_STRUCTURE_FRAMES: readonly GrammarStructureFrame[] = 
   {
     slug: 'in-charge-of',
     focus: '介词搭配|in charge of',
-    prompt: (context) => `${capitalizeFirst(context.coach)} was in charge ___ the ${context.event}.`,
+    prompt: (context) => `${capitalizeFirst(context.coach)} was in charge ___ ${context.event}.`,
     options: { A: 'of', B: 'for', C: 'with', D: 'to' },
     answer: 'A',
     explanation: 'in charge of 表示“负责”。',
@@ -4854,7 +4866,7 @@ const SUPPLEMENTAL_GRAMMAR_STRUCTURE_FRAMES: readonly GrammarStructureFrame[] = 
   {
     slug: 'should-you-need',
     focus: '倒装结构|should条件倒装',
-    prompt: (context) => `Should you need more details, ___ the ${context.coach}.`,
+    prompt: (context) => `Should you need more details, ___ ${context.coach}.`,
     options: { A: 'ask', B: 'asked', C: 'asking', D: 'to ask' },
     answer: 'A',
     explanation: 'Should you need... 是 if you should need 的倒装形式，主句用祈使句或 will do。',
@@ -4966,7 +4978,7 @@ const SUPPLEMENTAL_GRAMMAR_STRUCTURE_FRAMES: readonly GrammarStructureFrame[] = 
   {
     slug: 'hardly-when',
     focus: '倒装结构|hardly...when',
-    prompt: (context) => `Hardly ___ the ${context.event} begun when the first question was raised.`,
+    prompt: (context) => `Hardly ___ ${context.event} begun when the first question was raised.`,
     options: { A: 'had', B: 'did', C: 'has', D: 'will' },
     answer: 'A',
     explanation: 'hardly 位于句首时用部分倒装，常见结构为 hardly had...when...',
@@ -5094,7 +5106,7 @@ const SUPPLEMENTAL_GRAMMAR_STRUCTURE_FRAMES: readonly GrammarStructureFrame[] = 
   {
     slug: 'so-that-can',
     focus: '目的状语从句|so that',
-    prompt: (context) => `${capitalizeFirst(context.coach)} repeated the rule so that ${context.learners} ___ remember it.`,
+    prompt: (context) => `${capitalizeFirst(context.coach)} repeated the rule so that ${lowerFirst(context.learners)} ___ remember it.`,
     options: { A: 'can', B: 'could', C: 'must have', D: 'had' },
     answer: 'B',
     explanation: '主句是过去时 repeated，so that 从句常用 could 表示目的。',
@@ -5166,7 +5178,7 @@ const SUPPLEMENTAL_GRAMMAR_STRUCTURE_FRAMES: readonly GrammarStructureFrame[] = 
   {
     slug: 'be-made-of',
     focus: '介词搭配|be made of',
-    prompt: (context) => `The model in the ${context.event} was made ___ recycled paper.`,
+    prompt: (context) => `The model in ${context.event} was made ___ recycled paper.`,
     options: { A: 'of', B: 'from', C: 'by', D: 'with' },
     answer: 'A',
     explanation: 'be made of 表示看得出原材料的“由……制成”。',
@@ -5366,7 +5378,7 @@ export const CET4_GRAMMAR_PRACTICE_QUESTIONS: Cet4MockChoiceQuestion[] =
     prompt,
     correctAnswer: answer,
     correctOption: ({ A: optionA, B: optionB, C: optionC, D: optionD } as Record<Choice, string>)[answer],
-    correctSentence: `${fillGrammarBlank(prompt, ({ A: optionA, B: optionB, C: optionC, D: optionD } as Record<Choice, string>)[answer])} (${focus})`,
+    correctSentence: fillGrammarBlank(prompt, ({ A: optionA, B: optionB, C: optionC, D: optionD } as Record<Choice, string>)[answer]),
     explanation,
     trapType: focus,
     wrongOptions: {
@@ -5390,7 +5402,7 @@ const CLOZE_CONTEXT_FRAMES = [
     slug: 'collocation',
     title: '完形填空搭配线索',
     prompt: (item: VocabularyPracticeItem) =>
-      `Choose the word that best completes this collocation in context: ${item.collocation}.`,
+      `Choose the word that best completes this collocation in context: ${blankTargetWord(item.collocation, item.word)}.`,
     explanation: (item: VocabularyPracticeItem) => `该空依赖固定搭配和语块记忆：${item.collocation}。`,
     trapType: '完形填空|搭配错误',
   },
@@ -5398,7 +5410,7 @@ const CLOZE_CONTEXT_FRAMES = [
     slug: 'sentence-logic',
     title: '完形填空句际逻辑',
     prompt: (item: VocabularyPracticeItem) =>
-      `The sentence before the blank says: "${item.example}" Which word best keeps the meaning consistent?`,
+      `Complete the sentence with the word that best preserves its meaning: "${blankTargetWord(item.example, item.word)}"`,
     explanation: (item: VocabularyPracticeItem) => `完形题不能只背中文释义，要根据前句语义保持一致。正确词是 ${item.word}。`,
     trapType: '完形填空|上下文逻辑',
   },
@@ -5668,7 +5680,7 @@ const WRITING_EXPANSION_FRAMES = [
     prompt: (topic: Cet4ScaleTopicConfig) => `the advantages and possible limits of ${topic.topic.toLowerCase()}`,
     instruction: 'You should discuss one benefit, one possible problem, and your own suggestion.',
     sample: (topic: Cet4ScaleTopicConfig) =>
-      `The topic of ${topic.topic.toLowerCase()} has clear advantages because ${lowerFirstEnglishFragment(topic.benefit)}. However, we should also notice that ${lowerFirstEnglishFragment(topic.concern)}. In my view, a practical way forward is to ${topic.action}. Only when benefits and limits are both considered can this topic create lasting value.`,
+      `There are clear benefits to ${topic.topic.toLowerCase()} because ${lowerFirstEnglishFragment(topic.benefit)}. However, ${lowerFirstEnglishFragment(topic.concern)}. In my view, a practical way forward is to ${topic.action}. Only when both benefits and limits are considered can progress in this area create lasting value.`,
   },
   {
     slug: 'personal-action',
@@ -5677,7 +5689,7 @@ const WRITING_EXPANSION_FRAMES = [
     prompt: (topic: Cet4ScaleTopicConfig) => `what college students can do about ${topic.topic.toLowerCase()}`,
     instruction: 'You should give two practical actions and explain their value.',
     sample: (topic: Cet4ScaleTopicConfig) =>
-      `College students can take practical action in relation to ${topic.topic.toLowerCase()}. First, they can learn key information and explain it clearly to others. Second, they can ${topic.action}. These actions matter because ${topic.benefit}, and they also help students build responsibility.`,
+      `College students can take practical action to support ${topic.topic.toLowerCase()}. First, they can learn key information and explain it clearly to others. Second, they can help local groups ${topic.action}. These actions also support the main benefit: ${capitalizeEnglishFragment(topic.benefit)}. They can help students develop a sense of responsibility as well.`,
   },
   {
     slug: 'public-awareness',
@@ -5686,7 +5698,7 @@ const WRITING_EXPANSION_FRAMES = [
     prompt: (topic: Cet4ScaleTopicConfig) => `the importance of public awareness in ${topic.topic.toLowerCase()}`,
     instruction: 'You should explain why awareness matters and how it can be improved.',
     sample: (topic: Cet4ScaleTopicConfig) =>
-      `Public awareness is important in ${topic.topic.toLowerCase()} because people make better choices when they understand the reason behind an action. Without awareness, ${topic.concern}. Therefore, schools and communities should use clear examples and feedback to help people take part.`,
+      `Public awareness is important to ${topic.topic.toLowerCase()} because people make better choices when they understand the reasons behind an action. A key concern is that ${lowerFirstEnglishFragment(topic.concern)}. Therefore, schools and communities should use clear examples and feedback to help people participate effectively.`,
   },
   {
     slug: 'technology-role',
@@ -5695,7 +5707,7 @@ const WRITING_EXPANSION_FRAMES = [
     prompt: (topic: Cet4ScaleTopicConfig) => `how technology can support ${topic.topic.toLowerCase()}`,
     instruction: 'You should mention one useful function and one risk.',
     sample: (topic: Cet4ScaleTopicConfig) =>
-      `Technology can support ${topic.topic.toLowerCase()} by making information easier to collect, share, and review. For example, digital tools can show whether ${topic.benefit}. The risk is that users may focus only on speed and ignore real needs. Technology should serve thinking, not replace it.`,
+      `Technology can support ${topic.topic.toLowerCase()} by making information easier to collect, share, and review. For example, digital tools can help organizations measure whether a program is producing useful results. The risk is that users may focus only on speed and ignore real needs. Technology should support sound judgment rather than replace it.`,
   },
   {
     slug: 'problem-solution-extended',
@@ -5704,7 +5716,7 @@ const WRITING_EXPANSION_FRAMES = [
     prompt: (topic: Cet4ScaleTopicConfig) => `a realistic solution to a problem in ${topic.topic.toLowerCase()}`,
     instruction: 'You should describe the problem, propose a solution, and explain how to check the result.',
     sample: (topic: Cet4ScaleTopicConfig) =>
-      `A realistic problem in ${topic.topic.toLowerCase()} is that ${topic.concern}. This problem cannot be solved by slogans alone. A better solution is to ${topic.action}. After that, the result should be checked with feedback so that the solution can be adjusted in time.`,
+      `A realistic problem in ${topic.topic.toLowerCase()} is this: ${lowerFirstEnglishFragment(topic.concern)}. This problem cannot be solved by slogans alone. A better solution is to ${topic.action}. The result should then be checked through feedback so that the solution can be adjusted in time.`,
   },
   {
     slug: 'community-benefit',
@@ -5713,7 +5725,7 @@ const WRITING_EXPANSION_FRAMES = [
     prompt: (topic: Cet4ScaleTopicConfig) => `how ${topic.topic.toLowerCase()} can benefit a community`,
     instruction: 'You should explain the benefit and give an example.',
     sample: (topic: Cet4ScaleTopicConfig) =>
-      `${topic.topic} can benefit a community when it is planned according to real needs. The main benefit is that ${topic.benefit}. For example, a local project can invite residents to give feedback and then improve the service step by step. This makes the benefit visible and reliable.`,
+      `Work related to ${topic.topic.toLowerCase()} can benefit a community when it is planned around real needs. ${capitalizeEnglishFragment(topic.benefit)}. For example, a local project can invite residents to give feedback and then improve its services step by step. This makes the benefit visible and reliable.`,
   },
   {
     slug: 'student-example',
@@ -5722,7 +5734,7 @@ const WRITING_EXPANSION_FRAMES = [
     prompt: (topic: Cet4ScaleTopicConfig) => `a student example related to ${topic.topic.toLowerCase()}`,
     instruction: 'You should describe one example and explain what it shows.',
     sample: (topic: Cet4ScaleTopicConfig) =>
-      `A student example can show the value of ${topic.topic.toLowerCase()}. If a student joins a project and helps to ${topic.action}, he or she can connect classroom knowledge with real practice. This example shows that learning becomes deeper when students test ideas in real situations.`,
+      `A student project can show the value of ${topic.topic.toLowerCase()}. If a student joins a local team that plans to ${topic.action}, the student can connect classroom knowledge with practical work. This example shows that learning becomes deeper when students test ideas in real situations.`,
   },
   {
     slug: 'balanced-view',
@@ -5731,7 +5743,7 @@ const WRITING_EXPANSION_FRAMES = [
     prompt: (topic: Cet4ScaleTopicConfig) => `a balanced view of ${topic.topic.toLowerCase()}`,
     instruction: 'You should avoid a one-sided answer and support your opinion with reasons.',
     sample: (topic: Cet4ScaleTopicConfig) =>
-      `A balanced view of ${topic.topic.toLowerCase()} should include both value and risk. On the one hand, ${topic.benefit}. On the other hand, ${topic.concern}. I believe the key is to ${topic.action}, because careful action can turn a familiar idea into real improvement.`,
+      `A balanced view of ${topic.topic.toLowerCase()} should include both value and risk. On the one hand, ${lowerFirstEnglishFragment(topic.benefit)}. On the other hand, ${lowerFirstEnglishFragment(topic.concern)}. I believe the key is to ${topic.action}, because careful action can turn a familiar idea into real improvement.`,
   },
 ] as const;
 
@@ -5982,7 +5994,7 @@ export const CET4_WRITING_PROMPT_BANK: Cet4SubjectivePrompt[] = [
       keywords: topic.keywords,
       syllabusFocus: [topic.themeTag, '观点表达', '原因论证'],
       sampleAnswer:
-        `The topic of ${topic.topic.toLowerCase()} is valuable because ${lowerFirstEnglishFragment(topic.benefit)}. However, this value cannot be achieved automatically. ${lowerFirstEnglishFragment(topic.concern)}. In my view, students and communities should ${topic.action}. In this way, the topic can create practical and measurable improvement.`,
+        `The value of ${topic.topic.toLowerCase()} lies in the fact that ${lowerFirstEnglishFragment(topic.benefit)}. However, this value cannot be achieved automatically. ${capitalizeEnglishFragment(topic.concern)}. In my view, students and communities should support efforts to ${topic.action}. In this way, progress can become practical and measurable.`,
     },
     {
       id: `writing-scale-${topic.slug}-problem-solution`,
@@ -5995,7 +6007,7 @@ export const CET4_WRITING_PROMPT_BANK: Cet4SubjectivePrompt[] = [
       keywords: topic.keywords,
       syllabusFocus: [topic.themeTag, '问题解决', '建议表达'],
       sampleAnswer:
-        `One problem related to ${topic.topic.toLowerCase()} is that ${lowerFirstEnglishFragment(topic.concern)}. This problem matters because it may weaken the real value of a useful idea. A practical solution is to ${topic.action}. If the result is checked regularly, the solution will be more reliable.`,
+        `One problem related to ${topic.topic.toLowerCase()} is that ${lowerFirstEnglishFragment(topic.concern)}. This problem matters because it may weaken the real value of the work. A practical solution is to ${topic.action}. If the result is checked regularly, the solution will be more reliable.`,
     },
     {
       id: `writing-scale-${topic.slug}-example`,
@@ -6008,7 +6020,7 @@ export const CET4_WRITING_PROMPT_BANK: Cet4SubjectivePrompt[] = [
       keywords: topic.keywords,
       syllabusFocus: [topic.themeTag, '举例说明', '影响表达'],
       sampleAnswer:
-        `The topic of ${topic.topic.toLowerCase()} can influence students and local communities in a practical way. For example, when people ${topic.action}, they can see whether the activity really helps. The main benefit is that ${lowerFirstEnglishFragment(topic.benefit)}. This example shows that careful planning is more useful than a temporary slogan.`,
+        `${topic.topic} can influence students and local communities in practical ways. For example, people can work together to ${topic.action}. They can then use feedback to see whether the activity really helps. The main benefit is that ${lowerFirstEnglishFragment(topic.benefit)}. This example shows that careful planning is more useful than a temporary slogan.`,
     },
     ...WRITING_EXPANSION_FRAMES.slice(0, 2).map((frame) => ({
       id: `writing-scale-${topic.slug}-${frame.slug}`,
@@ -6032,18 +6044,18 @@ const TRANSLATION_EXPANSION_FRAMES = [
     suffix: '公共服务',
     focus: '公共服务',
     prompt: (topic: Cet4ScaleTopicConfig) =>
-      `请将下面这段中文翻译成英文：${topic.cnTitle}正在成为公共服务和日常生活中的重要话题。它可以帮助人们更方便地获得资源，也能促进不同群体之间的交流。为了发挥长期作用，相关服务需要清晰的规则和持续的反馈。`,
+      `请将下面这段中文翻译成英文：与${topic.cnTitle}相关的工作在公共服务和日常生活中越来越受关注。相关工作能够回应现实需求，也能促进不同群体之间的交流。为了产生长期效果，实施过程需要清晰的规则和持续的反馈。`,
     sample: (topic: Cet4ScaleTopicConfig) =>
-      `${topic.topic} is becoming an important topic in public services and daily life. It can help people obtain resources more conveniently and promote communication among different groups. To play a long-term role, related services need clear rules and continuous feedback.`,
+      `Work related to ${topic.topic.toLowerCase()} is receiving increasing attention in public services and daily life. These efforts can respond to practical needs and promote communication among different groups. To produce lasting results, implementation requires clear rules and continuous feedback.`,
   },
   {
     slug: 'campus-practice',
     suffix: '校园实践',
     focus: '校园生活',
     prompt: (topic: Cet4ScaleTopicConfig) =>
-      `请将下面这段中文翻译成英文：在大学校园里，${topic.cnTitle}不仅是一个学习话题，也是一种可以实践的能力。学生可以通过小组活动、调查和反思记录，把课堂知识转化为真实经验。`,
+      `请将下面这段中文翻译成英文：在大学校园里，${topic.cnTitle}不仅可以成为学习和讨论的内容，也能通过实践活动得到更深入的理解。学生可以借助小组活动、调查和反思记录，把课堂知识转化为真实经验。`,
     sample: (topic: Cet4ScaleTopicConfig) =>
-      `On a college campus, ${topic.topic.toLowerCase()} is not only a learning topic, but also an ability that can be practiced. Through group activities, surveys, and reflection records, students can turn classroom knowledge into real experience.`,
+      `On a college campus, students can study and discuss ${topic.topic.toLowerCase()} and develop a deeper understanding through practical activities. Through group work, surveys, and reflective notes, they can turn classroom knowledge into real experience.`,
   },
   {
     slug: 'culture-society',
@@ -6088,7 +6100,7 @@ const TRANSLATION_EXPANSION_FRAMES = [
     prompt: (topic: Cet4ScaleTopicConfig) =>
       `请将下面这段中文翻译成英文：虽然${topic.cnTitle}有明显价值，但在实践中仍然存在一些问题。例如，${topic.concern}。因此，人们需要采取具体行动，而不是停留在口号上。`,
     sample: (topic: Cet4ScaleTopicConfig) =>
-      `Although ${topic.topic.toLowerCase()} has clear value, there are still some problems in practice. For example, ${topic.concern}. Therefore, people need to take specific action instead of staying at the level of slogans.`,
+      `Although ${topic.topic.toLowerCase()} has clear value, there are still some problems in practice. For example, ${lowerFirstEnglishFragment(topic.concern)}. Therefore, people need to take specific action instead of stopping at slogans.`,
   },
 ] as const;
 
@@ -6315,36 +6327,36 @@ export const CET4_TRANSLATION_PROMPT_BANK: Cet4SubjectivePrompt[] = [
       moduleId: 'translation' as const,
       questionTypeId: 'paragraph-translation' as const,
       title: `${topic.cnTitle}与社会发展`,
-      prompt: `请将下面这段中文翻译成英文：近年来，${topic.cnTitle}受到越来越多人的关注。它可以改善学习、生活或公共服务中的实际问题。不过，如果缺少合理的规划和持续的反馈，相关措施可能难以取得稳定效果。`,
+      prompt: `请将下面这段中文翻译成英文：近年来，${topic.cnTitle}受到越来越多人的关注。相关工作可以回应学习、日常生活或公共服务中的实际需求。不过，如果缺少合理的规划和持续的反馈，相关措施可能难以取得稳定效果。`,
       plannedMinutes: 30,
       keywords: topic.keywords,
       syllabusFocus: [topic.themeTag, '社会发展', '语篇连贯'],
       sampleAnswer:
-        `Interest in ${topic.topic.toLowerCase()} has grown in recent years. Its value lies in practical support for learning, daily life, or public service. However, without reasonable planning and continuous feedback, related measures may fail to achieve stable results.`,
+        `Interest in ${topic.topic.toLowerCase()} has grown in recent years. Related efforts can respond to practical needs in learning, daily life, or public services. However, without reasonable planning and continuous feedback, these measures may fail to achieve stable results.`,
     },
     {
       id: `translation-scale-${topic.slug}-action`,
       moduleId: 'translation' as const,
       questionTypeId: 'paragraph-translation' as const,
       title: `${topic.cnTitle}的实践`,
-      prompt: `请将下面这段中文翻译成英文：为了更好地推进${topic.cnTitle}，人们需要采取更加实际的措施。例如，可以明确目标、收集反馈并逐步改进相关服务。这种做法不仅有助于解决现实问题，也能让公众更清楚地看到变化。`,
+      prompt: `请将下面这段中文翻译成英文：为了让${topic.cnTitle}产生更好的实际效果，人们需要采取更加具体的措施。例如，可以明确目标、收集反馈并逐步改进相关工作。这种做法不仅有助于解决现实问题，也能让公众更清楚地看到变化。`,
       plannedMinutes: 30,
       keywords: topic.keywords,
       syllabusFocus: [topic.themeTag, '措施表达', '结果表达'],
       sampleAnswer:
-        `To improve the practice of ${topic.topic.toLowerCase()}, people need to take more practical measures. For example, they can set clear goals, collect feedback, and improve related services step by step. This approach not only helps solve real problems, but also allows the public to see changes more clearly.`,
+        `To produce better practical results in work related to ${topic.topic.toLowerCase()}, people need to take more specific measures. For example, they can set clear goals, collect feedback, and improve related work step by step. This approach not only helps solve real problems, but also allows the public to see changes more clearly.`,
     },
     {
       id: `translation-scale-${topic.slug}-balance`,
       moduleId: 'translation' as const,
       questionTypeId: 'paragraph-translation' as const,
       title: `${topic.cnTitle}的平衡发展`,
-      prompt: `请将下面这段中文翻译成英文：${topic.cnTitle}的发展不能只追求速度，还应重视公平和长期影响。人们应当关注不同群体的真实需求，避免只看短期效果。只有在发展过程中不断评估结果，才能真正提升公共利益。`,
+      prompt: `请将下面这段中文翻译成英文：推进${topic.cnTitle}不能只追求速度，还应重视公平和长期影响。人们应当关注不同群体的真实需求，避免只看短期效果。只有在推进过程中不断评估结果，才能真正提升公共利益。`,
       plannedMinutes: 30,
       keywords: topic.keywords,
       syllabusFocus: [topic.themeTag, '利弊平衡', '公共利益'],
       sampleAnswer:
-        `The development of ${topic.topic.toLowerCase()} should not focus only on speed, but should also value fairness and long-term influence. People should pay attention to the real needs of different groups and avoid judging only short-term effects. Only by evaluating results continuously during development can public benefit truly be improved.`,
+        `Efforts to advance ${topic.topic.toLowerCase()} should not focus only on speed, but should also give attention to fairness and long-term effects. People should consider the real needs of different groups and avoid judging progress only by short-term results. Only by evaluating outcomes throughout the process can the public interest truly be strengthened.`,
     },
     ...TRANSLATION_EXPANSION_FRAMES.slice(0, 2).map((frame) => ({
       id: `translation-scale-${topic.slug}-${frame.slug}`,

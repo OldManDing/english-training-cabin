@@ -273,6 +273,7 @@ function translateTopicPhrase(text: string): string {
   if (exact) return exact;
 
   const phraseBuilders: Array<[RegExp, (topic: string) => string]> = [
+    [/^using (.+) in daily practice$/i, (topic) => `在日常实践中使用${translateTopicPhrase(topic)}`],
     [/^the long-term impact of (.+)$/i, (topic) => `${translateTopicPhrase(topic)}的长期影响`],
     [/^community access to (.+)$/i, (topic) => `社区获取${translateTopicPhrase(topic)}的机会`],
     [/^students and (.+)$/i, (topic) => `学生与${translateTopicPhrase(topic)}的联系`],
@@ -299,6 +300,10 @@ function translateReadingQuestion(text: string): string | undefined {
   const benefitMatch = normalized.match(/^What benefit of (.+) is mentioned in the first paragraph\?$/i);
   if (benefitMatch) {
     return `第一段提到了“${translateTopicPhrase(benefitMatch[1])}”的什么好处？`;
+  }
+
+  if (/^What positive effect is mentioned in the first paragraph\?$/i.test(normalized)) {
+    return '第一段提到了什么积极作用？';
   }
 
   if (/^What concern does the passage raise\?$/i.test(normalized)) {
@@ -446,7 +451,7 @@ function optionSupport(options: Record<Choice, string>): Partial<Record<Choice, 
 
 export function getReadingChineseSupport(passageId: string, question: Question): QuestionChineseSupport | undefined {
   if (question.chineseSupport) return question.chineseSupport;
-  const fallbackQuestion = `本题考向：${question.type}${question.tags?.length ? `；关键词：${question.tags.join('、')}` : ''}。正确答案和定位译文提交后显示。`;
+  const fallbackQuestion = `本题考向：${question.type}${question.tags?.length ? `；关键词：${question.tags.join('、')}` : ''}。正确答案和定位解析提交后显示。`;
   if (passageId !== 'cet-ai-edu') {
     return {
       question: translateReadingQuestion(question.question) ?? fallbackQuestion,

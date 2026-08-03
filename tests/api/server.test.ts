@@ -10,6 +10,7 @@ import {
   createFileSaasStore,
   createInMemorySaasStore,
   LOCAL_REGISTRATION_INVITE_CODE,
+  replaceFileWithRetry,
   signBillingWebhookPayload,
   type LearningBackupSnapshot,
 } from '../../src/server/saas';
@@ -663,6 +664,23 @@ describe('server API', () => {
     } finally {
       await fs.rm(tempDir, { recursive: true, force: true });
     }
+  });
+
+  it('retries transient Windows file locks while replacing the SaaS store', async () => {
+    let attempts = 0;
+
+    await replaceFileWithRetry('store.tmp', 'store.json', {
+      maxAttempts: 3,
+      sleep: async () => undefined,
+      rename: async () => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw Object.assign(new Error('file is temporarily locked'), { code: 'EPERM' });
+        }
+      },
+    });
+
+    expect(attempts).toBe(2);
   });
 
   it('isolates SaaS cloud snapshots by authenticated user and tenant', async () => {

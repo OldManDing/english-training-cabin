@@ -1,4 +1,5 @@
 import { GENERATED_PHONETIC_OVERRIDES } from './domain/practice/generatedPhonetics';
+import { registerVocabularyTranslationLexicon } from './domain/practice/vocabularyTranslationLexicon';
 import { Passage, ReviewItem, AbilityScore, SkillGap, TimelineLog, SpeakingSession } from './types';
 
 export interface VocabularyPracticeItem {
@@ -427,7 +428,7 @@ const CURATED_CORE_VOCABULARY_SEEDS: readonly CuratedCoreVocabularySeed[] = [
   ['typical', 'adjective', '???', 'showing the usual qualities of something', 'typical mistake'],
   ['update', 'verb/noun', '??', 'to make something more recent', 'update a record'],
   ['urban', 'adjective', '???', 'related to towns or cities', 'urban transport'],
-  ['vehicle', 'noun', '?????', 'a machine for transport or a way to express something', 'public vehicle'],
+  ['vehicle', 'noun', '?????', 'a machine for transport or a way to express something', 'public transport vehicle'],
   ['version', 'noun', '??', 'a form of something that is different from others', 'new version'],
   ['voluntary', 'adjective', '???', 'done by choice, not force', 'voluntary work'],
   ['welfare', 'noun', '?????', 'health, happiness, and safety', 'public welfare'],
@@ -494,7 +495,7 @@ const CET4_HIGH_FREQUENCY_CORE_SEEDS: readonly CuratedCoreVocabularySeed[] = [
   ['allow', 'verb', '允许；使可能', 'to let someone do something or make something possible', 'allow access'],
   ['alter', 'verb', '改变；修改', 'to change something in a small but important way', 'alter a plan'],
   ['ambitious', 'adjective', '有雄心的；目标高的', 'having a strong wish to succeed', 'ambitious goal'],
-  ['amount', 'noun/verb', '数量；总计', 'a quantity or total number', 'large amount'],
+  ['amount', 'noun/verb', '数量；总计', 'a quantity or total number', 'a large amount of data'],
   ['ancient', 'adjective', '古代的', 'belonging to a very old time', 'ancient culture'],
   ['angle', 'noun', '角度；观点', 'a position from which something is seen or discussed', 'different angle'],
   ['anxiety', 'noun', '焦虑；担心', 'a feeling of worry or nervousness', 'test anxiety'],
@@ -508,7 +509,7 @@ const CET4_HIGH_FREQUENCY_CORE_SEEDS: readonly CuratedCoreVocabularySeed[] = [
   ['audience', 'noun', '观众；听众', 'the people who watch, read, or listen', 'target audience'],
   ['average', 'noun/adjective', '平均；普通的', 'usual or calculated by dividing a total', 'average score'],
   ['aware', 'adjective', '意识到的；知道的', 'knowing about a situation or fact', 'be aware'],
-  ['balance', 'noun/verb', '平衡；权衡', 'a steady state between different forces or ideas', 'keep balance'],
+  ['balance', 'noun/verb', '平衡；权衡', 'a steady state between different forces or ideas', 'maintain a balance'],
   ['basic', 'adjective', '基本的；基础的', 'forming the most important or simplest part', 'basic skill'],
   ['behalf', 'noun', '代表；利益', 'the interest or representative role of someone', 'on behalf'],
   ['belief', 'noun', '信念；看法', 'an idea that someone accepts as true', 'strong belief'],
@@ -553,7 +554,7 @@ const CET4_HIGH_FREQUENCY_CORE_SEEDS: readonly CuratedCoreVocabularySeed[] = [
   ['convert', 'verb', '转换；改变', 'to change from one form or use to another', 'convert energy'],
   ['convince', 'verb', '说服；使相信', 'to make someone believe or agree', 'convince readers'],
   ['corporation', 'noun', '公司；企业', 'a large business organization', 'large corporation'],
-  ['cost', 'noun/verb', '费用；花费', 'the money, time, or effort needed', 'living cost'],
+  ['cost', 'noun/verb', '费用；花费', 'the money, time, or effort needed', 'cost of living'],
   ['council', 'noun', '委员会；理事会', 'a group chosen to make decisions', 'student council'],
   ['courage', 'noun', '勇气', 'the ability to act despite fear', 'show courage'],
   ['credit', 'noun', '信用；学分；赞扬', 'trust, course points, or praise', 'course credit'],
@@ -589,7 +590,7 @@ const CET4_HIGH_FREQUENCY_CORE_SEEDS: readonly CuratedCoreVocabularySeed[] = [
   ['element', 'noun', '元素；要素', 'an important part of something', 'key element'],
   ['eliminate', 'verb', '消除；淘汰', 'to remove something completely', 'eliminate errors'],
   ['emotion', 'noun', '情绪；情感', 'a strong feeling such as joy or fear', 'control emotion'],
-  ['emphasis', 'noun', '强调；重点', 'special attention or importance', 'put emphasis'],
+  ['emphasis', 'noun', '强调；重点', 'special attention or importance', 'place emphasis on evidence'],
   ['enable', 'verb', '使能够；使可能', 'to make it possible for someone to do something', 'enable learning'],
   ['encounter', 'verb/noun', '遇到；遭遇', 'to meet a problem or person unexpectedly', 'encounter difficulty'],
   ['entertain', 'verb', '娱乐；招待', 'to amuse people or receive guests', 'entertain guests'],
@@ -612,7 +613,7 @@ const CET4_HIGH_FREQUENCY_CORE_SEEDS: readonly CuratedCoreVocabularySeed[] = [
   ['explore', 'verb', '探索；研究', 'to search or study something carefully', 'explore a topic'],
   ['export', 'verb/noun', '出口；输出', 'to send goods or data to another place', 'export goods'],
   ['expression', 'noun', '表达；表情', 'a word group, look, or way of showing meaning', 'useful expression'],
-  ['extent', 'noun', '程度；范围', 'the size, level, or range of something', 'large extent'],
+  ['extent', 'noun', '程度；范围', 'the size, level, or range of something', 'to a large extent'],
   ['failure', 'noun', '失败；故障', 'lack of success or something not working', 'avoid failure'],
   ['familiar', 'adjective', '熟悉的', 'well known from experience', 'familiar topic'],
   ['favor', 'noun/verb', '帮助；赞成；偏爱', 'support, kindness, or preference', 'favor a choice'],
@@ -692,8 +693,8 @@ const CET4_HIGH_FREQUENCY_CORE_SEEDS: readonly CuratedCoreVocabularySeed[] = [
   ['option', 'noun', '选项；选择', 'one thing that can be chosen', 'better option'],
   ['ordinary', 'adjective', '普通的；平常的', 'normal and not special', 'ordinary people'],
   ['original', 'adjective/noun', '原始的；原创的', 'new, first, or not copied', 'original idea'],
-  ['overcome', 'verb', '克服', 'to succeed in dealing with a problem', 'overcome difficulty'],
-  ['package', 'noun/verb', '包裹；包装', 'a wrapped item or to wrap something', 'package delivery'],
+  ['overcome', 'verb', '克服', 'to succeed in dealing with a problem', 'overcome a difficulty'],
+  ['package', 'noun/verb', '包裹；包装', 'a wrapped item or to wrap something', 'package an order'],
   ['partner', 'noun', '伙伴；合作方', 'a person or group working with another', 'study partner'],
   ['patient', 'noun/adjective', '病人；有耐心的', 'a person receiving medical care or able to wait calmly', 'patient support'],
   ['percentage', 'noun', '百分比', 'an amount expressed out of one hundred', 'high percentage'],
@@ -1003,7 +1004,7 @@ const CET4_FOUNDATIONAL_CORE_EXPANSION_SEEDS: readonly CuratedCoreVocabularySeed
   ['insist', 'verb', '坚持；坚决要求', 'to say firmly that something is true or necessary', 'insist on quality'],
   ['inspect', 'verb', '检查；视察', 'to look at something carefully', 'inspect equipment'],
   ['install', 'verb', '安装；设置', 'to put equipment or software in place', 'install software'],
-  ['instead', 'adverb', '代替；反而', 'in place of someone or something else', 'choose instead'],
+  ['instead', 'adverb', '代替；反而', 'in place of someone or something else', 'choose a simpler option instead'],
   ['instrument', 'noun', '工具；乐器；仪器', 'a tool used for work, music, or measurement', 'musical instrument'],
   ['intellectual', 'adjective/noun', '智力的；知识分子', 'related to thinking and ideas', 'intellectual ability'],
   ['intense', 'adjective', '强烈的；紧张的', 'very strong or serious', 'intense competition'],
@@ -1154,14 +1155,14 @@ const CET4_FOUNDATIONAL_CORE_EXPANSION_SEEDS: readonly CuratedCoreVocabularySeed
   ['progress', 'noun/verb', '进步；进展', 'improvement or movement toward a goal', 'make progress'],
   ['project', 'noun/verb', '项目；预测；投射', 'a planned piece of work', 'group project'],
   ['promise', 'noun/verb', '承诺；保证', 'a statement that one will do something', 'keep a promise'],
-  ['pronounce', 'verb', '发音；宣布', 'to say a word aloud correctly', 'pronounce clearly'],
+  ['pronounce', 'verb', '发音；宣布', 'to say a word aloud correctly', 'pronounce a word clearly'],
   ['proper', 'adjective', '合适的；恰当的', 'right for a situation', 'proper method'],
-  ['proportion', 'noun', '比例；部分', 'a part compared with the whole', 'large proportion'],
+  ['proportion', 'noun', '比例；部分', 'a part compared with the whole', 'a large proportion of students'],
   ['provide', 'verb', '提供；供应', 'to give something needed', 'provide support'],
   ['psychology', 'noun', '心理学；心理', 'the study of mind and behavior', 'study psychology'],
   ['punish', 'verb', '惩罚；处罚', 'to make someone suffer for doing wrong', 'punish cheating'],
   ['qualify', 'verb', '取得资格；使合格', 'to reach the standard needed for something', 'qualify for a job'],
-  ['quantity', 'noun', '数量；量', 'an amount or number of something', 'large quantity'],
+  ['quantity', 'noun', '数量；量', 'an amount or number of something', 'a large quantity of water'],
   ['quarter', 'noun', '四分之一；季度', 'one of four equal parts or a three-month period', 'first quarter'],
   ['racial', 'adjective', '种族的', 'related to race or ethnic groups', 'racial equality'],
   ['radical', 'adjective/noun', '根本的；激进的', 'very new or different from tradition', 'radical change'],
@@ -1190,7 +1191,7 @@ const CET4_FOUNDATIONAL_CORE_EXPANSION_SEEDS: readonly CuratedCoreVocabularySeed
   ['relief', 'noun', '宽慰；缓解', 'a feeling of comfort after worry or pain ends', 'feel relief'],
   ['religious', 'adjective', '宗教的；虔诚的', 'related to religion or belief', 'religious custom'],
   ['remain', 'verb', '仍然；留下', 'to continue to be or stay in a place', 'remain calm'],
-  ['remind', 'verb', '提醒；使想起', 'to make someone remember something', 'remind students'],
+  ['remind', 'verb', '提醒；使想起', 'to make someone remember something', 'remind students about the deadline'],
   ['remote', 'adjective', '遥远的；远程的', 'far away or controlled from a distance', 'remote area'],
   ['remove', 'verb', '移除；脱掉', 'to take something away', 'remove barriers'],
   ['repair', 'verb/noun', '修理；修复', 'to fix something that is broken', 'repair a bike'],
@@ -1747,12 +1748,15 @@ function buildCuratedVocabularyExample(
     'evidence',
     'faith',
     'feedback',
+    'finance',
     'flow',
+    'fortune',
     'information',
     'industry',
     'knowledge',
     'learning',
     'life',
+    'logic',
     'material',
     'meat',
     'pleasure',
@@ -1763,6 +1767,7 @@ function buildCuratedVocabularyExample(
     'reform',
     'respect',
     'service',
+    'security',
     'software',
     'support',
     'technology',
@@ -1792,6 +1797,9 @@ function buildCuratedVocabularyExample(
     'writing',
     'preparation',
     'society',
+    'construction',
+    'existence',
+    'exercise',
     'insurance',
     'literature',
     'property',
@@ -1813,6 +1821,8 @@ function buildCuratedVocabularyExample(
     'improvement',
     'interest',
     'music',
+    'income',
+    'nutrition',
     'pain',
     'panic',
     'safety',
@@ -1942,6 +1952,7 @@ function buildCuratedVocabularyExample(
     'display',
     'divide',
     'draw',
+    'drink',
     'educate',
     'eliminate',
     'embarrass',
@@ -2058,6 +2069,7 @@ function buildCuratedVocabularyExample(
     'qualify',
     'prefer',
     'raise',
+    'read',
     'react',
     'reach',
     'recall',
@@ -2231,6 +2243,100 @@ function buildCuratedVocabularyExample(
     'labor market': 'The report described changes in the labor market after graduation season.',
     'latest news': 'Students followed the latest news before the discussion.',
     'important decision': 'Many students remembered the important decision made during the study-plan meeting.',
+    'annual report': 'The annual report summarized the school\'s progress over the past year.',
+    'a large amount of data': 'The survey collected a large amount of data from local residents.',
+    'a large proportion of students': 'A large proportion of students preferred shorter review tasks.',
+    'a large quantity of water': 'The damaged pipe wasted a large quantity of water.',
+    'cost of living': 'The cost of living is higher in large cities.',
+    'course credit': 'Students can earn course credit by completing the project.',
+    'daily expense': 'The app helps students record each daily expense.',
+    'public transport vehicle': 'The city added a new public transport vehicle to the route.',
+    'recent study': 'A recent study found that short reviews improved long-term memory.',
+    'service industry': 'The service industry creates jobs in tourism, retail, and transport.',
+    'to a large extent': 'The result depends to a large extent on regular feedback.',
+    'close relation': 'The report showed a close relation between sleep and memory.',
+    'fire alarm': 'The fire alarm sounded during the safety drill.',
+    'ancient culture': 'The museum exhibition helped students learn about ancient culture.',
+    'contrary view': 'One student presented a contrary view during the class debate.',
+    'drink beer': 'Some adults choose not to drink beer for health reasons.',
+    'hurry to class': 'Students had to hurry to class when the bus arrived late.',
+    'household income': 'The survey compared household income across several neighborhoods.',
+    'nearly complete': 'The group submitted the report when it was nearly complete.',
+    'none available': 'The student checked the shelf, but there were none available.',
+    'read a novel': 'Students read a novel and discussed its main character in class.',
+    'balanced nutrition': 'Balanced nutrition supports both physical health and concentration.',
+    'adjust a plan': 'The team adjusted its plan after reviewing the new evidence.',
+    'advocate fair access': 'Student leaders advocated fair access to the new learning center.',
+    'admit a mistake': 'A careful learner should admit a mistake and correct it promptly.',
+    'attend a lecture': 'Students attended a lecture on digital privacy last Friday.',
+    'broadcast news': 'The campus station broadcasts news every morning.',
+    'clarify meaning': 'The teacher used a second example to clarify the meaning of the phrase.',
+    'answer a question': 'Students should answer a question with evidence from the passage.',
+    'anticipate change': 'Survey trends can help planners anticipate change in travel demand.',
+    'associate ideas': 'A concept map helps learners associate ideas across a passage.',
+    'compete fairly': 'All teams must compete fairly and follow the same rules.',
+    'confuse readers': 'An unclear reference may confuse readers and weaken the paragraph.',
+    'congratulate a winner': 'The coach congratulated the winner after the final round.',
+    'construct a model': 'Students constructed a model from recycled materials.',
+    'decorate a room': 'Volunteers decorated the room before the welcome event.',
+    'decrease waste': 'Smaller portions can decrease waste in the campus cafeteria.',
+    'define a term': 'The glossary defines each technical term in plain English.',
+    'detect errors': 'A final review can help writers detect errors in a draft.',
+    'display information': 'The screen displays information about bus arrival times.',
+    'embarrass a speaker': 'Laughing at a mistake may embarrass a speaker during a presentation.',
+    'ensure safety': 'Regular equipment checks help ensure safety in the laboratory.',
+    'fasten a seat belt': 'Passengers should fasten a seat belt before the vehicle moves.',
+    'feel guilty': 'Students may feel guilty after copying another person\'s work.',
+    'forgive a mistake': 'A good team can forgive a mistake when a member takes responsibility.',
+    'gather evidence': 'Researchers gathered evidence before drawing a conclusion.',
+    'gain experience': 'Students can gain experience by joining a community project.',
+    'handle pressure': 'Mock exams help candidates learn to handle pressure.',
+    'honor a promise': 'The organization honored its promise to publish the survey results.',
+    'host an event': 'The student union will host an event for new volunteers.',
+    'hunt for evidence': 'Readers should hunt for evidence instead of relying on one keyword.',
+    'include details': 'A useful notice should include details about time and location.',
+    'inquire about fees': 'Applicants can inquire about fees at the service desk.',
+    'insist on quality': 'The editor insisted on quality before approving the final draft.',
+    'install software': 'The technician installed the software before the training session.',
+    'invent a tool': 'The students invented a simple tool to measure water use.',
+    'investigate a case': 'The committee investigated the case before making a decision.',
+    'judge fairly': 'Teachers should judge fairly by using the same rubric for every student.',
+    'link ideas': 'Clear transitions help writers link ideas across a paragraph.',
+    'locate a source': 'The librarian helped students locate a reliable source.',
+    'maintain a balance': 'Students need to maintain a balance between study and rest.',
+    'master a skill': 'Regular practice helps learners master a difficult skill.',
+    'object to a plan': 'Several residents objected to the plan because it reduced bus services.',
+    'obey rules': 'Laboratory users must obey rules for handling equipment.',
+    'overcome a difficulty': 'Peer support helped the learner overcome a difficulty in speaking.',
+    'package an order': 'The worker packaged the order carefully before delivery.',
+    'persuade readers': 'Writers need reliable evidence to persuade readers.',
+    'place emphasis on evidence': 'The teacher placed emphasis on evidence rather than personal guesses.',
+    'press a button': 'Press a button to submit the form after checking your answers.',
+    'prepare carefully': 'Candidates should prepare carefully before the interview.',
+    'provide support': 'The learning center provides support for students who need extra practice.',
+    'punish cheating': 'The school uses clear rules to punish cheating fairly.',
+    'receive praise': 'The student received praise for a clear and well-supported answer.',
+    'rebuild confidence': 'Small successes can help learners rebuild confidence after failure.',
+    'recycle paper': 'The office recycles paper to reduce daily waste.',
+    'remind students about the deadline': 'The teacher reminded students about the deadline before class ended.',
+    'resist pressure': 'Candidates should resist pressure to change a well-supported answer.',
+    'restore order': 'Staff restored order after the fire alarm interrupted the meeting.',
+    'reflect afterward': 'Students should reflect afterward and record what they learned from the activity.',
+    'retain information': 'Spaced review helps learners retain information for longer.',
+    'separate groups': 'The organizer separated the groups before the discussion began.',
+    'settle a dispute': 'A neutral adviser helped the two teams settle a dispute.',
+    'show respect': 'Students show respect by listening when others speak.',
+    'make progress': 'Learners make progress when they practice regularly and review mistakes.',
+    'observe behavior': 'Researchers observe behavior before drawing a conclusion.',
+    'cooperate with teammates': 'Students cooperate with teammates to complete the project on time.',
+    'face reality': 'The committee had to face reality when the budget was reduced.',
+    'simplify a process': 'Clear instructions can simplify a complicated process.',
+    'study pressure': 'The survey measured study pressure among first-year students.',
+    'threaten safety': 'Blocked exits can threaten safety during an emergency.',
+    'tolerate noise': 'Some learners find it difficult to tolerate noise while reading.',
+    'use imagination': 'Creative writing tasks encourage students to use imagination.',
+    'choose a simpler option instead': 'When the first plan proved too costly, the team chose a simpler option instead.',
+    'pronounce a word clearly': 'Learners should pronounce each word clearly during speaking practice.',
     'lower cost': 'Online materials can lower the cost of exam preparation.',
     'marry young': 'Some people marry young, while others wait until they finish their studies.',
     'last minute': 'Last-minute changes can confuse students before an exam.',
@@ -2782,7 +2888,7 @@ function buildCuratedVocabularyExample(
       ];
     };
     const verbExamples = chooseVerbExamples();
-    return withExampleContext(selectExample(verbExamples, 'verb'), 'verb');
+    return selectExample(verbExamples, 'verb');
   }
 
   const objectPhrase = stableObjectPhrase;
@@ -2820,53 +2926,62 @@ function buildCuratedVocabularyExample(
   if (personLikeHeads.has(head)) {
     const personSubject = subjectPhrase(phrase);
     const personExamples = [
-      `${personSubject} asked for help at the service desk during registration.`,
-      `${personSubject} joined the evening review session after work.`,
-      `${personSubject} shared a learning experience during the workshop.`,
-      `${personSubject} chose a realistic study plan with a counselor's help.`,
-      `${personSubject} used campus services more often after the notice changed.`,
-      `${personSubject} appeared in the report on campus services.`,
-      `${personSubject} checked the deadline before submitting the form.`,
-      `${personSubject} needed better support during the first month of study.`,
-      `${personSubject} affected daily study in the school survey.`,
-      `${personSubject} answered the interviewer's question with a clear example.`,
-      `${personSubject} compared two learning plans before choosing one.`,
-      `${personSubject} gave the class a practical example to discuss.`,
-      `${personSubject} returned to the library after receiving feedback.`,
-      `${personSubject} explained why the new rule was difficult to follow.`,
-      `${personSubject} helped the group understand the problem from another view.`,
+      `${personSubject} took part in a short interview about campus life.`,
+      `${personSubject} asked a practical question during the meeting.`,
+      `${personSubject} read the notice before the deadline.`,
+      `${personSubject} described a recent experience in the survey.`,
+      `${personSubject} compared two options before making a decision.`,
+      `${personSubject} reviewed the orientation guide before class.`,
+      `${personSubject} joined a group discussion after class.`,
+      `${personSubject} explained a concern to the course adviser.`,
+      `${personSubject} checked the application details before submitting the form.`,
+      `${personSubject} shared useful feedback after the activity.`,
+      `${personSubject} used the library service during the first week of study.`,
+      `${personSubject} gave a clear answer in the interview.`,
     ];
     return selectExample(personExamples, 'person');
   }
 
-  const nounSubject = subjectPhrase(phrase);
   const nounExamples = [
-    `Students discussed ${objectPhrase}.`,
-    `The class reviewed ${objectPhrase}.`,
-    `The report explained ${objectPhrase}.`,
-    `A short passage described ${objectPhrase}.`,
-    `The teacher introduced ${objectPhrase}.`,
-    `The group compared ${objectPhrase} with another example.`,
-    `The chart showed ${objectPhrase} clearly.`,
-    `The article connected ${objectPhrase} with a real problem.`,
-    `The notice included ${objectPhrase} for readers.`,
-    `Students used ${objectPhrase} to support their answer.`,
-    `The presentation focused on ${objectPhrase}.`,
-    `The reading task asked about ${objectPhrase}.`,
-    `A student example referred to ${objectPhrase}.`,
-    `The paragraph gave a clear description of ${objectPhrase}.`,
-    `The survey asked students about ${objectPhrase}.`,
-    `The lesson used ${objectPhrase} as its discussion topic.`,
-    `The class treated ${objectPhrase} as a useful topic for discussion.`,
-    `The group chose ${objectPhrase} for a short presentation.`,
-    `The report compared ${objectPhrase} with the survey result.`,
-    `The passage used ${objectPhrase} to explain the main idea.`,
-    `Students wrote one sentence about ${objectPhrase}.`,
-    `The teacher asked students to define ${objectPhrase} carefully.`,
-    `The task connected ${objectPhrase} to a familiar situation.`,
+    `The class discussed an example involving ${objectPhrase}.`,
+    `The reading text included a reference to ${objectPhrase}.`,
+    `Students found information related to ${objectPhrase}.`,
+    `The class considered a case involving ${objectPhrase}.`,
+    `The group prepared a short note about ${objectPhrase}.`,
+    `The lesson included a discussion of ${objectPhrase}.`,
+    `Students looked for a reliable source about ${objectPhrase}.`,
+    `The article referred to ${objectPhrase}.`,
+    `The report described an issue related to ${objectPhrase}.`,
+    `The group compared two examples related to ${objectPhrase}.`,
+    `The class reviewed a paragraph about ${objectPhrase}.`,
+    `Students wrote a short explanation of ${objectPhrase}.`,
   ];
+  const nounContexts = [
+    'during a class discussion',
+    'in a reading exercise',
+    'for a short presentation',
+    'in a written assignment',
+    'during a group activity',
+    'in a library task',
+    'for a vocabulary exercise',
+    'during a review session',
+    'in a practice passage',
+    'for a classroom report',
+    'during a research task',
+    'in an exam-preparation lesson',
+  ];
+  const nounVariant = index % (nounExamples.length * nounContexts.length);
+  const nounExample = nounExamples[nounVariant % nounExamples.length];
+  const initialContextIndex = Math.floor(nounVariant / nounExamples.length);
+  const phraseTokens = new Set(lowerPhrase.split(/\s+/u));
+  const nounContext = nounContexts.find((context, contextIndex) => (
+    contextIndex >= initialContextIndex
+    && !context.toLowerCase().split(/\s+/u).some((token) => phraseTokens.has(token))
+  )) ?? nounContexts.find((context) => (
+    !context.toLowerCase().split(/\s+/u).some((token) => phraseTokens.has(token))
+  )) ?? nounContexts[initialContextIndex];
 
-  return withExampleContext(selectExample(nounExamples, 'noun'), 'noun');
+  return nounExample.replace(/\.$/u, ` ${nounContext}.`);
 }
 
 const CET4_CURATED_CORE_EXTENSION_ROWS: VocabularyExtensionRow[] =
@@ -3435,6 +3550,8 @@ export const CET4_VOCABULARY_BANK: VocabularyPracticeItem[] = rebalanceVocabular
   ...CET4_SYLLABUS_EXTENSION_VOCABULARY,
 ]));
 
+registerVocabularyTranslationLexicon(CET4_VOCABULARY_BANK);
+
 function buildOutputPhrasePracticeItem(item: VocabularyPracticeItem, index: number): VocabularyPracticeItem {
   const phrase = item.collocation.trim();
   const correctDefinition = item.options[item.correctAnswer];
@@ -3468,16 +3585,24 @@ export const CET4_OUTPUT_PHRASE_BANK: VocabularyPracticeItem[] = rebalanceVocabu
   dedupeVocabularyItems(CET4_VOCABULARY_BANK.map(buildOutputPhrasePracticeItem)),
 );
 
+const INITIAL_PASSAGE_CONTENT = `The impact of artificial intelligence on modern education is a subject of intense debate among scholars and practitioners. Proponents argue that AI can provide personalized learning experiences, tailoring educational content to the specific needs and pacing of individual students. This adaptability, they claim, can significantly enhance student engagement and academic outcomes.
+
+However, critics raise valid concerns regarding data privacy, the potential for algorithmic bias, and the diminished role of human educators. Some critics argue that the integration of AI tools will inevitably lead to a decline in students' foundational skills, replacing genuine learning with algorithmic shortcuts. One major study recently indicated that while AI tools excel at teaching foundational concepts, they often struggle to foster critical thinking and emotional intelligence, skills traditionally nurtured through complex human interaction. Furthermore, the over-reliance on technology might exacerbate existing inequalities if access to sophisticated AI platforms is disproportionately available only to well-funded institutions.
+
+In conclusion, while the integration of AI into classrooms presents unprecedented opportunities for educational advancement, it requires careful regulation and a balanced approach that preserves the irreplaceable value of human mentorship. Adaptive AI tools can instantly modify the difficulty of subsequent exercises, ensuring the learner remains in the optimal zone of proximal development. As we navigate this digital transformation, the focus must remain on augmenting, rather than replacing, the pedagogical expertise of teachers.`;
+
+function findTextRange(text: string, target: string): [number, number] {
+  const start = text.indexOf(target);
+  if (start < 0) throw new Error(`Reading locator text is missing: ${target}`);
+  return [start, start + target.length];
+}
+
 export const INITIAL_PASSAGE: Passage = {
   id: 'cet-ai-edu',
   examId: 'cet4',
   moduleId: 'reading',
   title: 'Artificial Intelligence in Education',
-  content: `The impact of artificial intelligence on modern education is a subject of intense debate among scholars and practitioners. Proponents argue that AI can provide personalized learning experiences, tailoring educational content to the specific needs and pacing of individual students. This adaptability, they claim, can significantly enhance student engagement and academic outcomes.
-
-However, critics raise valid concerns regarding data privacy, the potential for algorithmic bias, and the diminished role of human educators. Some critics argue that the integration of AI tools will inevitably lead to a decline in students' foundational skills, replacing genuine learning with algorithmic shortcuts. One major study recently indicated that while AI tools excel at teaching foundational concepts, they often struggle to foster critical thinking and emotional intelligence, skills traditionally nurtured through complex human interaction. Furthermore, the over-reliance on technology might exacerbate existing inequalities if access to sophisticated AI platforms is disproportionately available only to well-funded institutions.
-
-In conclusion, while the integration of AI into classrooms presents unprecedented opportunities for educational advancement, it requires careful regulation and a balanced approach that preserves the irreplaceable value of human mentorship. Consequently, the AI can instantly modify the difficulty of subsequent exercises, ensuring the learner remains in the optimal zone of proximal development. As we navigate this digital transformation, the focus must remain on augmenting, rather than replacing, the pedagogical expertise of teachers.`,
+  content: INITIAL_PASSAGE_CONTENT,
   questions: [
     {
       id: 1,
@@ -3498,8 +3623,8 @@ In conclusion, while the integration of AI into classrooms presents unprecedente
       difficulty: 3,
       sourceType: 'original',
       highlightTextIndices: {
-        correct: [498, 680], // One major study... human interaction
-        distractor: [340, 497] // Some critics argue... shortcuts.
+        correct: findTextRange(INITIAL_PASSAGE_CONTENT, 'One major study recently indicated that while AI tools excel at teaching foundational concepts, they often struggle to foster critical thinking and emotional intelligence, skills traditionally nurtured through complex human interaction.'),
+        distractor: findTextRange(INITIAL_PASSAGE_CONTENT, "Some critics argue that the integration of AI tools will inevitably lead to a decline in students' foundational skills, replacing genuine learning with algorithmic shortcuts."),
       }
     },
     {
@@ -3515,14 +3640,14 @@ In conclusion, while the integration of AI into classrooms presents unprecedente
         D: "They standardize the instruction method across all classrooms."
       },
       correctAnswer: 'C',
-      explanation: "定位到最后一段：'Consequently, the AI can instantly modify the difficulty of subsequent exercises, ensuring the learner remains in the optimal zone of proximal development.' 选项 C 完美契合该句表达的‘即时调整后续练习难度以适应个人的最近发展区’。",
+      explanation: "定位到最后一段：'Adaptive AI tools can instantly modify the difficulty of subsequent exercises, ensuring the learner remains in the optimal zone of proximal development.' 选项 C 完美契合该句表达的‘即时调整后续练习难度以适应个人的最近发展区’。",
       type: "细节推理",
       tags: ['细节定位', '功能句'],
       difficulty: 3,
       sourceType: 'original',
       highlightTextIndices: {
-        correct: [864, 1025], // Consequently, the AI... development.
-        distractor: [340, 497] // Some critics argue... shortcuts.
+        correct: findTextRange(INITIAL_PASSAGE_CONTENT, 'Adaptive AI tools can instantly modify the difficulty of subsequent exercises, ensuring the learner remains in the optimal zone of proximal development.'),
+        distractor: findTextRange(INITIAL_PASSAGE_CONTENT, "Some critics argue that the integration of AI tools will inevitably lead to a decline in students' foundational skills, replacing genuine learning with algorithmic shortcuts."),
       }
     },
     {
@@ -3544,8 +3669,8 @@ In conclusion, while the integration of AI into classrooms presents unprecedente
       difficulty: 3,
       sourceType: 'original',
       highlightTextIndices: {
-        correct: [694, 861], // Furthermore, the over-reliance... institutions.
-        distractor: [111, 281] // Proponents argue that... outcomes.
+        correct: findTextRange(INITIAL_PASSAGE_CONTENT, 'Furthermore, the over-reliance on technology might exacerbate existing inequalities if access to sophisticated AI platforms is disproportionately available only to well-funded institutions.'),
+        distractor: findTextRange(INITIAL_PASSAGE_CONTENT, 'Proponents argue that AI can provide personalized learning experiences, tailoring educational content to the specific needs and pacing of individual students.'),
       }
     },
     {
@@ -3567,8 +3692,8 @@ In conclusion, while the integration of AI into classrooms presents unprecedente
       difficulty: 4,
       sourceType: 'original',
       highlightTextIndices: {
-        correct: [740, 863], // while the integration... human mentorship.
-        distractor: [1026, 1144] // As we navigate this... teachers.
+        correct: findTextRange(INITIAL_PASSAGE_CONTENT, 'In conclusion, while the integration of AI into classrooms presents unprecedented opportunities for educational advancement, it requires careful regulation and a balanced approach that preserves the irreplaceable value of human mentorship.'),
+        distractor: findTextRange(INITIAL_PASSAGE_CONTENT, 'As we navigate this digital transformation, the focus must remain on augmenting, rather than replacing, the pedagogical expertise of teachers.'),
       }
     },
     {
@@ -3590,8 +3715,8 @@ In conclusion, while the integration of AI into classrooms presents unprecedente
       difficulty: 4,
       sourceType: 'original',
       highlightTextIndices: {
-        correct: [0, 80], // The impact of... practitioners.
-        distractor: [111, 281]
+        correct: findTextRange(INITIAL_PASSAGE_CONTENT, 'The impact of artificial intelligence on modern education is a subject of intense debate among scholars and practitioners.'),
+        distractor: findTextRange(INITIAL_PASSAGE_CONTENT, 'Proponents argue that AI can provide personalized learning experiences, tailoring educational content to the specific needs and pacing of individual students.'),
       }
     }
   ]

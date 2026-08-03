@@ -1242,22 +1242,9 @@ export default function ReadingTraining({
                       data-testid="reading-sentence-translation"
                       className="rounded-lg border border-[#cfe6f2] bg-white p-3 text-xs leading-5"
                     >
-                      <div className="font-extrabold text-[#003178]">答后句子翻译</div>
+                      <div className="font-extrabold text-[#003178]">答后定位解析</div>
                       <p className="mt-2 font-bold text-slate-900">英文原句：{currentSentenceSupport.sourceText}</p>
-                      <p className="mt-1 font-semibold text-slate-600">中文句意：{currentSentenceSupport.chineseMeaning}</p>
-                      {currentSentenceSupport.chunks.length > 1 ? (
-                        <div data-testid="reading-sentence-chunks" className="mt-3 space-y-2">
-                          <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                            断句译文
-                          </div>
-                          {currentSentenceSupport.chunks.map((chunk) => (
-                            <div key={chunk.sourceText} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
-                              <p className="font-bold text-slate-800">{chunk.sourceText}</p>
-                              <p className="mt-1 text-[11px] font-semibold text-slate-600">{chunk.chineseMeaning}</p>
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
+                      <p className="mt-1 font-semibold text-slate-600">定位说明：{currentSentenceSupport.chineseMeaning}</p>
                     </div>
                   </div>
                 ) : null}

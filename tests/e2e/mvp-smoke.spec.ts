@@ -578,6 +578,7 @@ test('MVP critical reading flow persists local learning evidence', async ({ page
     await expect(page.getByTestId('reading-question-translation')).not.toContainText('正确答案和定位译文提交后显示');
     await expect(page.getByTestId('reading-option-translation-A')).toBeVisible();
     await expect(page.getByTestId('reading-sentence-translation')).toBeVisible();
+    await expect(page.getByTestId('reading-sentence-chunks')).toHaveCount(0);
     await page.getByRole('button', { name: index === 4 ? /完成训练/ : /进入第/ }).click();
   }
 
@@ -763,6 +764,7 @@ test('unfinished vocabulary and listening practice resume from saved drafts', as
   await expect(page.getByTestId('listening-question-translation')).not.toContainText('正确答案和听力原句译文提交后显示');
   await expect(page.getByTestId('listening-option-translation-A')).toBeVisible();
   await expect(page.getByTestId('listening-sentence-translation')).toBeVisible();
+  await expect(page.getByTestId('listening-sentence-chunks')).toHaveCount(0);
   await page.getByRole('button', { name: '下一题' }).click();
   await page.getByRole('button', { name: '返回专项练习' }).click();
 

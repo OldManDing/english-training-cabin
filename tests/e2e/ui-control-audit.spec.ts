@@ -105,12 +105,22 @@ async function chooseComboboxOption(page: Page, label: string, optionName: strin
 async function chooseCalendarDay(page: Page, label: string, expectedValue: string) {
   await expectComboboxHasVisibleChrome(page, label);
   const calendarButton = page.getByRole('combobox', { name: label });
+  const currentValue = (await calendarButton.textContent())?.match(/\d{4}-\d{2}-\d{2}/)?.[0];
   await calendarButton.click();
   await expect(page.getByRole('dialog', { name: `${label} 日历` })).toBeVisible();
   const targetDay = page.locator(`button[title="${expectedValue}"]`);
-  for (let monthOffset = 0; monthOffset < 24 && !await targetDay.isVisible(); monthOffset += 1) {
-    await page.getByRole('button', { name: '下个月' }).click();
+
+  if (currentValue) {
+    const [currentYear, currentMonth] = currentValue.split('-').map(Number);
+    const [targetYear, targetMonth] = expectedValue.split('-').map(Number);
+    const monthOffset = (targetYear - currentYear) * 12 + targetMonth - currentMonth;
+    const navigationLabel = monthOffset < 0 ? '上个月' : '下个月';
+    for (let index = 0; index < Math.abs(monthOffset); index += 1) {
+      await page.getByRole('button', { name: navigationLabel }).click();
+    }
   }
+
+  await expect(targetDay).toBeVisible();
   await targetDay.click();
   await expect(calendarButton).toContainText(expectedValue);
 }

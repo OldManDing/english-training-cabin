@@ -1329,6 +1329,36 @@ function normalizeDatabaseShape(value: unknown): SaasDatabaseShape {
   };
 }
 
+const RETRYABLE_FILE_REPLACE_CODES = new Set(['EACCES', 'EBUSY', 'EPERM']);
+
+export async function replaceFileWithRetry(
+  sourcePath: string,
+  targetPath: string,
+  options: {
+    maxAttempts?: number;
+    rename?: (source: string, target: string) => Promise<void>;
+    sleep?: (milliseconds: number) => Promise<void>;
+  } = {},
+): Promise<void> {
+  const maxAttempts = Math.max(1, options.maxAttempts ?? 7);
+  const rename = options.rename ?? fs.rename.bind(fs);
+  const sleep = options.sleep ?? ((milliseconds: number) =>
+    new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await rename(sourcePath, targetPath);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (!code || !RETRYABLE_FILE_REPLACE_CODES.has(code) || attempt === maxAttempts) {
+        throw error;
+      }
+      await sleep(Math.min(25 * (2 ** (attempt - 1)), 400));
+    }
+  }
+}
+
 export function createFileSaasStore(filePath: string): SaasStore {
   const resolvedPath = path.resolve(filePath);
   return createStoreFromDatabase({
@@ -1348,7 +1378,7 @@ export function createFileSaasStore(filePath: string): SaasStore {
       await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
       const tempPath = `${resolvedPath}.${process.pid}.tmp`;
       await fs.writeFile(tempPath, JSON.stringify(database, null, 2), 'utf8');
-      await fs.rename(tempPath, resolvedPath);
+      await replaceFileWithRetry(tempPath, resolvedPath);
     },
   });
 }
